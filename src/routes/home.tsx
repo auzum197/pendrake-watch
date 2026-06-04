@@ -1,11 +1,10 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import reactLogo from "@/assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
-function App() {
+export function HomePage() {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
 
@@ -15,7 +14,7 @@ function App() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 pt-[10vh] text-center">
+    <div className="flex flex-col items-center justify-center gap-6 px-4 pt-[6vh] text-center">
       <h1 className="font-heading text-4xl font-bold tracking-tight">
         Welcome to Tauri + React
       </h1>
@@ -53,8 +52,6 @@ function App() {
       </form>
 
       {greetMsg && <p className="text-foreground">{greetMsg}</p>}
-    </main>
+    </div>
   );
 }
-
-export default App;
