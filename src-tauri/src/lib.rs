@@ -2,6 +2,7 @@ mod commands;
 mod crypto;
 mod db;
 mod error;
+mod lightwalletd;
 mod models;
 mod state;
 
@@ -35,6 +36,10 @@ pub fn run() {
             commands::auth::unlock_wallet,
             commands::auth::lock_wallet,
             commands::auth::change_password,
+            commands::settings::get_app_settings,
+            commands::settings::set_setting,
+            commands::settings::set_endpoint,
+            commands::settings::list_default_endpoints,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

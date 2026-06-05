@@ -17,6 +17,11 @@ import type {
   WalletBalance,
   WalletStatus,
 } from "@/types/wallet";
+import type {
+  AppSettings,
+  EndpointConfig,
+  NamedEndpoint,
+} from "@/types/settings";
 
 /** Mirror of `AppError` in `src-tauri/src/error.rs`. */
 export interface AppError {
@@ -86,4 +91,12 @@ export const tauri = {
   lockWallet: () => call<void>("lock_wallet"),
   changePassword: (oldPassword: string, newPassword: string) =>
     call<void>("change_password", { oldPassword, newPassword }),
+
+  // --- settings (PW-037/038) ---
+  getAppSettings: () => call<AppSettings>("get_app_settings"),
+  setSetting: (key: string, value: string) =>
+    call<void>("set_setting", { key, value }),
+  setEndpoint: (endpoint: EndpointConfig) =>
+    call<void>("set_endpoint", { endpoint }),
+  listDefaultEndpoints: () => call<NamedEndpoint[]>("list_default_endpoints"),
 };
