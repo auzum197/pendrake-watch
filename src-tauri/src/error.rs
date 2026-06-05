@@ -24,5 +24,25 @@ impl AppError {
     }
 }
 
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for AppError {}
+
+impl From<rusqlite::Error> for AppError {
+    fn from(err: rusqlite::Error) -> Self {
+        AppError::new("db", err.to_string())
+    }
+}
+
+impl From<keyring::Error> for AppError {
+    fn from(err: keyring::Error) -> Self {
+        AppError::new("keychain", err.to_string())
+    }
+}
+
 /// Convenience alias for command results.
 pub type CommandResult<T> = Result<T, AppError>;

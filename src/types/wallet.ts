@@ -7,6 +7,14 @@
  * `src/lib/zec.ts`, never `Number()`.
  */
 
+/** Vault lifecycle status reported by the Rust backend. */
+export interface WalletStatus {
+  /** A viewing key + password have been set up on this device. */
+  initialized: boolean;
+  /** The vault is currently unlocked (DEK held in memory). */
+  unlocked: boolean;
+}
+
 export type Pool = "transparent" | "sapling" | "orchard";
 
 export const POOLS: readonly Pool[] = ["transparent", "sapling", "orchard"];

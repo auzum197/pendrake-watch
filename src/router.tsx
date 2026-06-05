@@ -7,19 +7,20 @@ import {
 import { RootLayout } from "@/routes/root";
 import { AppLayout } from "@/routes/app-layout";
 import { SetupPage } from "@/routes/setup";
+import { LoginPage } from "@/routes/login";
 import { DashboardPage } from "@/routes/dashboard";
 import { TransactionsPage } from "@/routes/transactions";
 import { AccountsPage } from "@/routes/accounts";
 import { AccountDetailPage } from "@/routes/account-detail";
 import { SettingsPage } from "@/routes/settings";
-import { useWalletStore } from "@/stores/walletStore";
+import { tauri } from "@/lib/tauri";
 import type { Pool } from "@/types/wallet";
 
 const rootRoute = createRootRoute({
 	component: RootLayout,
 });
 
-// "/" simply forwards into the app; the layout guard decides setup vs dashboard.
+// "/" forwards into the app; the layout guard decides setup / login / dashboard.
 const indexRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
@@ -28,27 +29,39 @@ const indexRoute = createRoute({
 	},
 });
 
-// Onboarding. If a wallet already exists, bounce to the dashboard.
+// Onboarding. Blocked once a wallet exists.
 const setupRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/setup",
-	beforeLoad: () => {
-		if (useWalletStore.getState().isConfigured) {
-			throw redirect({ to: "/dashboard" });
+	beforeLoad: async () => {
+		const status = await tauri.walletStatus();
+		if (status.initialized) {
+			throw redirect({ to: status.unlocked ? "/dashboard" : "/login" });
 		}
 	},
 	component: SetupPage,
 });
 
-// Pathless layout route: route guard + persistent sidebar for all app screens.
+// Login. Only reachable when initialized but locked.
+const loginRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/login",
+	beforeLoad: async () => {
+		const status = await tauri.walletStatus();
+		if (!status.initialized) throw redirect({ to: "/setup" });
+		if (status.unlocked) throw redirect({ to: "/dashboard" });
+	},
+	component: LoginPage,
+});
+
+// Pathless layout: guards the app + renders the persistent sidebar.
 const appLayoutRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	id: "app",
-	beforeLoad: () => {
-		// Guard: no wallet configured -> redirect to /setup.
-		if (!useWalletStore.getState().isConfigured) {
-			throw redirect({ to: "/setup" });
-		}
+	beforeLoad: async () => {
+		const status = await tauri.walletStatus();
+		if (!status.initialized) throw redirect({ to: "/setup" });
+		if (!status.unlocked) throw redirect({ to: "/login" });
 	},
 	component: AppLayout,
 });
@@ -62,7 +75,6 @@ const dashboardRoute = createRoute({
 const transactionsRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/transactions",
-	// Typed, validated search params: only a known pool survives.
 	validateSearch: (search: Record<string, unknown>): { pool?: Pool } => {
 		const pool = search.pool;
 		if (pool === "transparent" || pool === "sapling" || pool === "orchard") {
@@ -94,6 +106,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	indexRoute,
 	setupRoute,
+	loginRoute,
 	appLayoutRoute.addChildren([
 		dashboardRoute,
 		transactionsRoute,
@@ -118,7 +131,6 @@ function routeOrder(pathname: string | undefined): number {
 export const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",
-	// Animate route changes via the browser View Transitions API.
 	defaultViewTransition: {
 		types: ({ fromLocation, toLocation }) => {
 			const forward =

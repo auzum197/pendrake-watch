@@ -1,68 +1,100 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { tauri, TauriInvokeError } from "@/lib/tauri";
+import { Input } from "@/components/ui/input";
 import { useWalletStore } from "@/stores/walletStore";
+import { TauriInvokeError } from "@/lib/tauri";
 
 /**
- * Onboarding screen. Renders outside the app shell (no sidebar) and is the
- * redirect target of the wallet-config guard.
- *
- * NOTE: the `ping` call below talks to Rust directly from the component on
- * purpose — it's a diagnostics probe, not domain data, and there is no store
- * for it. Wallet *data* always flows through store actions instead.
+ * First-run onboarding (PW-012/PW-029): the user pastes a viewing key and sets a
+ * password. The backend generates a keychain master key, derives the DEK and
+ * stores the viewing key encrypted (PW-006). Rendered without the app sidebar.
  */
 export function SetupPage() {
   const navigate = useNavigate();
-  const setConfigured = useWalletStore((s) => s.setConfigured);
+  const setupWallet = useWalletStore((s) => s.setupWallet);
 
-  const [pingResult, setPingResult] = useState<string | null>(null);
-  const [pingError, setPingError] = useState<string | null>(null);
+  const [viewingKey, setViewingKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function testIpc() {
-    setPingError(null);
-    setPingResult(null);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setBusy(true);
     try {
-      setPingResult(await tauri.ping());
+      await setupWallet(viewingKey.trim(), password);
+      await navigate({ to: "/dashboard" });
     } catch (err) {
-      setPingError(err instanceof TauriInvokeError ? err.message : "IPC failed");
+      setError(err instanceof TauriInvokeError ? err.message : "Error inesperado");
+    } finally {
+      setBusy(false);
     }
   }
 
-  function initWallet() {
-    // Real flow will validate + encrypt a viewing key here. For the scaffold we
-    // just flip the gate flag and enter the app.
-    setConfigured(true);
-    navigate({ to: "/dashboard" });
-  }
-
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-4 text-center">
-      <h1 className="font-heading text-3xl font-bold tracking-tight">
-        Set up your wallet
-      </h1>
-      <p className="text-muted-foreground">
-        Pendrake is a view-only Zcash wallet. In the MVP you'll paste a viewing
-        key and set a password here. For now, initialize a mock wallet to explore
-        the app.
-      </p>
-
-      <div className="flex w-full flex-col gap-3">
-        <Button onClick={initWallet}>Initialize mock wallet</Button>
-
-        <Button variant="outline" onClick={testIpc}>
-          Test IPC (ping)
-        </Button>
-
-        {pingResult && (
-          <p className="text-sm text-foreground">
-            Rust replied: <span className="font-mono">{pingResult}</span>
-          </p>
-        )}
-        {pingError && (
-          <p className="text-sm text-destructive">Error: {pingError}</p>
-        )}
+    <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
+      <div className="text-center">
+        <h1 className="font-heading text-3xl font-bold tracking-tight">
+          Configurar wallet
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Pegá tu viewing key de Zcash y elegí una contraseña. La clave se guarda
+          cifrada en este dispositivo; nunca sale de acá.
+        </p>
       </div>
+
+      <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Viewing key</span>
+          <textarea
+            className="min-h-24 resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="uview1..."
+            value={viewingKey}
+            onChange={(e) => setViewingKey(e.currentTarget.value)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Contraseña</span>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            placeholder="Mínimo 8 caracteres"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Repetir contraseña</span>
+          <Input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.currentTarget.value)}
+          />
+        </label>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <Button type="submit" disabled={busy || !viewingKey.trim()}>
+          {busy ? "Configurando…" : "Crear wallet"}
+        </Button>
+      </form>
     </div>
   );
 }

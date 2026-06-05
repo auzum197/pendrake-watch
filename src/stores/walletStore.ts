@@ -2,26 +2,25 @@
  * Wallet domain state.
  *
  * PATTERN: all Tauri IPC calls live in the *actions* below (via `src/lib/tauri.ts`).
- * Components read state and call actions — they never `invoke()` directly. This
- * keeps data-fetching in one testable place and components purely declarative.
+ * Components read state and call actions — they never `invoke()` directly.
  *
- * Only `isConfigured` is persisted (it gates the router). Balances, sync status
- * and transactions are runtime data and are always re-fetched from Rust.
+ * Vault lifecycle (`status`) is owned by the Rust backend and re-fetched via
+ * `refreshStatus()`; it is NOT persisted client-side. Auth actions throw on
+ * failure so forms can show inline errors; data actions store the error instead.
  */
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 import { tauri, TauriInvokeError } from "@/lib/tauri";
 import type {
   Account,
   SyncStatus,
   TransactionRecord,
   WalletBalance,
+  WalletStatus,
 } from "@/types/wallet";
 
 interface WalletState {
-  /** Whether a viewing key has been set up. Gates access to the app routes. */
-  isConfigured: boolean;
+  status: WalletStatus | null;
 
   balance: WalletBalance | null;
   syncStatus: SyncStatus | null;
@@ -31,17 +30,22 @@ interface WalletState {
   loading: boolean;
   error: string | null;
 
-  // --- actions ---
-  setConfigured: (configured: boolean) => void;
+  // --- vault / auth actions (throw on failure) ---
+  refreshStatus: () => Promise<void>;
+  setupWallet: (viewingKey: string, password: string) => Promise<void>;
+  unlockWallet: (password: string) => Promise<void>;
+  lockWallet: () => Promise<void>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<void>;
+
+  // --- data actions (store error, don't throw) ---
   refreshBalance: () => Promise<void>;
   refreshSyncStatus: () => Promise<void>;
   refreshTransactions: () => Promise<void>;
   refreshAccounts: () => Promise<void>;
   refreshAll: () => Promise<void>;
-  reset: () => void;
 }
 
-/** Helper to run an IPC action with shared loading/error handling. */
+/** Run a data fetch with shared loading/error handling (no throw). */
 async function withErrorHandling(
   set: (partial: Partial<WalletState>) => void,
   fn: () => Promise<void>,
@@ -58,66 +62,66 @@ async function withErrorHandling(
   }
 }
 
-export const useWalletStore = create<WalletState>()(
-  persist(
-    (set) => ({
-      isConfigured: false,
-      balance: null,
-      syncStatus: null,
-      transactions: [],
-      accounts: [],
-      loading: false,
-      error: null,
+export const useWalletStore = create<WalletState>()((set, get) => ({
+  status: null,
+  balance: null,
+  syncStatus: null,
+  transactions: [],
+  accounts: [],
+  loading: false,
+  error: null,
 
-      setConfigured: (configured) => set({ isConfigured: configured }),
+  refreshStatus: async () => {
+    set({ status: await tauri.walletStatus() });
+  },
 
-      refreshBalance: () =>
-        withErrorHandling(set, async () => {
-          set({ balance: await tauri.getBalance() });
-        }),
+  setupWallet: async (viewingKey, password) => {
+    await tauri.setupWallet(viewingKey, password);
+    await get().refreshStatus();
+  },
 
-      refreshSyncStatus: () =>
-        withErrorHandling(set, async () => {
-          set({ syncStatus: await tauri.getSyncStatus() });
-        }),
+  unlockWallet: async (password) => {
+    await tauri.unlockWallet(password);
+    await get().refreshStatus();
+  },
 
-      refreshTransactions: () =>
-        withErrorHandling(set, async () => {
-          set({ transactions: await tauri.getTransactions() });
-        }),
+  lockWallet: async () => {
+    await tauri.lockWallet();
+    await get().refreshStatus();
+  },
 
-      refreshAccounts: () =>
-        withErrorHandling(set, async () => {
-          set({ accounts: await tauri.getAccounts() });
-        }),
+  changePassword: async (oldPassword, newPassword) => {
+    await tauri.changePassword(oldPassword, newPassword);
+  },
 
-      refreshAll: () =>
-        withErrorHandling(set, async () => {
-          const [balance, syncStatus, transactions, accounts] =
-            await Promise.all([
-              tauri.getBalance(),
-              tauri.getSyncStatus(),
-              tauri.getTransactions(),
-              tauri.getAccounts(),
-            ]);
-          set({ balance, syncStatus, transactions, accounts });
-        }),
-
-      reset: () =>
-        set({
-          isConfigured: false,
-          balance: null,
-          syncStatus: null,
-          transactions: [],
-          accounts: [],
-          error: null,
-        }),
+  refreshBalance: () =>
+    withErrorHandling(set, async () => {
+      set({ balance: await tauri.getBalance() });
     }),
-    {
-      name: "pendrake-wallet",
-      storage: createJSONStorage(() => localStorage),
-      // Persist only the gating flag; runtime data is re-fetched from Rust.
-      partialize: (state) => ({ isConfigured: state.isConfigured }),
-    },
-  ),
-);
+
+  refreshSyncStatus: () =>
+    withErrorHandling(set, async () => {
+      set({ syncStatus: await tauri.getSyncStatus() });
+    }),
+
+  refreshTransactions: () =>
+    withErrorHandling(set, async () => {
+      set({ transactions: await tauri.getTransactions() });
+    }),
+
+  refreshAccounts: () =>
+    withErrorHandling(set, async () => {
+      set({ accounts: await tauri.getAccounts() });
+    }),
+
+  refreshAll: () =>
+    withErrorHandling(set, async () => {
+      const [balance, syncStatus, transactions, accounts] = await Promise.all([
+        tauri.getBalance(),
+        tauri.getSyncStatus(),
+        tauri.getTransactions(),
+        tauri.getAccounts(),
+      ]);
+      set({ balance, syncStatus, transactions, accounts });
+    }),
+}));

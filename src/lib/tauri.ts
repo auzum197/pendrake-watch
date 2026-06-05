@@ -15,6 +15,7 @@ import type {
   SyncStatus,
   TransactionRecord,
   WalletBalance,
+  WalletStatus,
 } from "@/types/wallet";
 
 /** Mirror of `AppError` in `src-tauri/src/error.rs`. */
@@ -76,4 +77,13 @@ export const tauri = {
   getSyncStatus: () => call<SyncStatus>("get_sync_status"),
   getTransactions: () => call<TransactionRecord[]>("get_transactions"),
   getAccounts: () => call<Account[]>("get_accounts"),
+
+  // --- vault / auth (PW-012/014/016/017) ---
+  walletStatus: () => call<WalletStatus>("wallet_status"),
+  setupWallet: (viewingKey: string, password: string) =>
+    call<void>("setup_wallet", { viewingKey, password }),
+  unlockWallet: (password: string) => call<void>("unlock_wallet", { password }),
+  lockWallet: () => call<void>("lock_wallet"),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    call<void>("change_password", { oldPassword, newPassword }),
 };
