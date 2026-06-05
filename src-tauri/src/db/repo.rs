@@ -121,7 +121,11 @@ pub fn load_fvk(conn: &Connection, dek: &Dek, account_id: i64) -> Result<Option<
 
 // --- sync_state -------------------------------------------------------------
 
-pub fn init_sync_state(conn: &Connection, account_id: i64, birthday_height: i64) -> Result<(), AppError> {
+pub fn init_sync_state(
+    conn: &Connection,
+    account_id: i64,
+    birthday_height: i64,
+) -> Result<(), AppError> {
     conn.execute(
         "INSERT OR IGNORE INTO sync_state (account_id, last_scanned_height, status)
          VALUES (?1, ?2, 'idle')",
@@ -143,11 +147,9 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), AppE
 }
 
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, AppError> {
-    conn.query_row(
-        "SELECT value FROM settings WHERE key = ?1",
-        [key],
-        |row| row.get(0),
-    )
+    conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+        row.get(0)
+    })
     .optional()
     .map_err(AppError::from)
 }
@@ -199,7 +201,12 @@ mod tests {
     fn settings_upsert() {
         let conn = crate::db::open_in_memory().unwrap();
         set_setting(&conn, "lightwalletd_url", "https://zec.rocks").unwrap();
-        set_setting(&conn, "lightwalletd_url", "https://mainnet.lightwalletd.com").unwrap();
+        set_setting(
+            &conn,
+            "lightwalletd_url",
+            "https://mainnet.lightwalletd.com",
+        )
+        .unwrap();
         assert_eq!(
             get_setting(&conn, "lightwalletd_url").unwrap().as_deref(),
             Some("https://mainnet.lightwalletd.com")

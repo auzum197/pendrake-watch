@@ -24,7 +24,10 @@ fn entry() -> Result<Entry, AppError> {
 
 fn from_bytes(bytes: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, AppError> {
     if bytes.len() != KEY_LEN {
-        return Err(AppError::new("keychain", "stored master key has wrong length"));
+        return Err(AppError::new(
+            "keychain",
+            "stored master key has wrong length",
+        ));
     }
     let mut k = Zeroizing::new([0u8; KEY_LEN]);
     k.copy_from_slice(bytes);

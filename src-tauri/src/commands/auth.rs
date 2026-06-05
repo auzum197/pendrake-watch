@@ -32,7 +32,7 @@ fn validate_viewing_key(vk: &str) -> CommandResult<()> {
     let v = vk.trim();
     let recognized = v.starts_with("uview")        // unified FVK (mainnet/testnet)
         || v.starts_with("zxviews")                // sapling extended FVK (mainnet)
-        || v.starts_with("zxviewtestsapling");     // sapling extended FVK (testnet)
+        || v.starts_with("zxviewtestsapling"); // sapling extended FVK (testnet)
     if recognized && v.len() >= 20 {
         Ok(())
     } else {

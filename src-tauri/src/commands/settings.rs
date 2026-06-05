@@ -69,7 +69,10 @@ pub fn get_app_settings(state: State<'_, AppState>) -> CommandResult<AppSettings
 #[tauri::command]
 pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> CommandResult<()> {
     if !SETTABLE_KEYS.contains(&key.as_str()) {
-        return Err(AppError::new("unknown_setting", format!("Unknown setting: {key}")));
+        return Err(AppError::new(
+            "unknown_setting",
+            format!("Unknown setting: {key}"),
+        ));
     }
     let guard = state
         .inner
@@ -82,8 +85,8 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Co
 #[tauri::command]
 pub fn set_endpoint(state: State<'_, AppState>, endpoint: EndpointConfig) -> CommandResult<()> {
     validate_endpoint(&endpoint)?;
-    let json = serde_json::to_string(&endpoint)
-        .map_err(|e| AppError::new("serialize", e.to_string()))?;
+    let json =
+        serde_json::to_string(&endpoint).map_err(|e| AppError::new("serialize", e.to_string()))?;
     let guard = state
         .inner
         .lock()
