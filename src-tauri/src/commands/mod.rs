@@ -5,6 +5,7 @@
 //! delegate to domain logic, map errors to `AppError`.
 
 pub mod auth;
+pub mod notify;
 pub mod settings;
 pub mod system;
 pub mod wallet;

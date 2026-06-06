@@ -99,4 +99,8 @@ export const tauri = {
   setEndpoint: (endpoint: EndpointConfig) =>
     call<void>("set_endpoint", { endpoint }),
   listDefaultEndpoints: () => call<NamedEndpoint[]>("list_default_endpoints"),
+
+  // --- notifications (PW-051+) ---
+  /** Fire a sample native notification end-to-end. `kind` is "tx" | "sync". */
+  notifyTest: (kind: "tx" | "sync") => call<void>("notify_test", { kind }),
 };

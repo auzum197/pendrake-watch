@@ -69,6 +69,32 @@ Leyenda estado: ✅ real · 🟡 mock (se reemplaza con la integración de zingo
 > Los comandos de settings leen/escriben la tabla `settings` (no cifrada), así que
 > **no requieren el vault desbloqueado** (necesario para el tema en login/setup).
 
+### Notificaciones (PW-051+)
+
+| Comando | Args | Retorno | Errores | Estado |
+|---|---|---|---|---|
+| `notify_test` | `{ kind: "tx" \| "sync" }` | `void` | `string` (kind desconocido / fallo del backend) | 🟡 simulación |
+
+> **Arquitectura (doc de dorianvp).** Las notificaciones siguen el modelo de
+> *daemon residente*: el daemon (de dorianvp, aún no existe) sincroniza con la GUI
+> cerrada y dispara notificaciones nativas. El clic abre una URI
+> `pendrake://tx?account=…&txid=…` o `pendrake://sync?status=…` que el SO rutea de
+> vuelta a la GUI vía `tauri-plugin-deep-link` + `tauri-plugin-single-instance`
+> (`onOpenUrl` → navegación con TanStack Router).
+>
+> El esquema `pendrake://` es **provisional** (lo define dorianvp). Vive en un solo
+> lugar: `URI_SCHEME` en `src-tauri/src/notify/deeplink.rs` y su espejo en
+> `src/lib/deeplink.ts`.
+>
+> `notify_test` es el **hook de simulación** hasta que exista el sync real: dispara
+> una notificación nativa de prueba (toast WinRT en Windows, `org.freedesktop`
+> en Linux, no-op en macOS). El módulo `notify` es **Tauri-free** a propósito, para
+> mudarse al `wallet-daemon` cuando exista.
+
+> **Nota de error:** a diferencia del resto, `notify_test` devuelve `Result<_, String>`
+> (no `AppError`), por ser un comando de diagnóstico. Si se promueve a producción,
+> alinear con `AppError`.
+
 ---
 
 ## Códigos de error (`AppError.code`)

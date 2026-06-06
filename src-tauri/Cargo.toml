@@ -36,3 +36,22 @@ sha2 = "0.10"
 getrandom = "0.2"
 zeroize = "1"
 
+# Notifications (PW-051+): deep-link scheme + single-instance forwarding so a
+# notification click launches/focuses the GUI. The single-instance plugin MUST be
+# registered first; the `deep-link` feature makes it forward the URI to the running
+# instance. Scheme is provisional ("pendrake://"), final value TBD with dorianvp.
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+# Native desktop notification backends. These live behind cfg() so each platform
+# pulls only its own dependency. The `notify` module is kept free of Tauri types
+# so it can be lifted into dorianvp's `wallet-daemon` later (the daemon is the
+# component that will actually fire these once background sync exists).
+[target.'cfg(target_os = "windows")'.dependencies]
+# WinRT toast with protocol activation (launch = "pendrake://...").
+tauri-winrt-notification = "0.7"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# org.freedesktop.Notifications via libnotify; default action opens the URI.
+notify-rust = "4"
+

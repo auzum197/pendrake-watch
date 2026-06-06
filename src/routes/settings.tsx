@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { useUiStore } from "@/stores/uiStore";
 import { useWalletStore } from "@/stores/walletStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { TauriInvokeError } from "@/lib/tauri";
+import { TauriInvokeError, tauri } from "@/lib/tauri";
+import { handleDeepLink, SAMPLE_DEEP_LINKS } from "@/lib/deeplink";
 import type { Currency, Theme } from "@/types/settings";
 
 const THEMES: Theme[] = ["light", "dark", "system"];
@@ -320,6 +321,56 @@ export function SettingsPage() {
             {busy ? "Guardando…" : "Cambiar contraseña"}
           </Button>
         </form>
+      </section>
+
+      {/* Notificaciones (simulación / dev) */}
+      <section className="flex flex-col gap-3 border-t border-border pt-6">
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            Notificaciones (simulación)
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Dispara notificaciones nativas de prueba. El sync real las disparará
+            desde el daemon; esto las simula hasta entonces. Al hacer clic en la
+            notificación se abre <span className="font-mono">pendrake://…</span> y la
+            app navega a la vista correspondiente.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void tauri.notifyTest("tx")}
+          >
+            Notif. nativa: tx recibida
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void tauri.notifyTest("sync")}
+          >
+            Notif. nativa: sync completo
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Probar sólo la navegación del deep-link (sin pasar por el SO):
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleDeepLink(SAMPLE_DEEP_LINKS.tx)}
+          >
+            Simular clic → tx
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleDeepLink(SAMPLE_DEEP_LINKS.sync)}
+          >
+            Simular clic → sync
+          </Button>
+        </div>
       </section>
 
       {/* Cerrar sesión */}
