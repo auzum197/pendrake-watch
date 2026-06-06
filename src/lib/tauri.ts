@@ -105,6 +105,6 @@ export const tauri = {
     call<EndpointInfo>("validate_endpoint_live", { endpoint }),
 
   // --- notifications (PW-051+) ---
-  /** Fire a sample native notification end-to-end. `kind` is "tx" | "sync". */
-  notifyTest: (kind: "tx" | "sync") => call<void>("notify_test", { kind }),
+  /** Fire a sample "transaction received" native notification end-to-end. */
+  notifyTest: () => call<void>("notify_test"),
 };

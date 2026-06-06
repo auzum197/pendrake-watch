@@ -373,45 +373,24 @@ export function SettingsPage() {
             Notificaciones (simulación)
           </h2>
           <p className="text-xs text-muted-foreground">
-            Dispara notificaciones nativas de prueba. El sync real las disparará
-            desde el daemon; esto las simula hasta entonces. Al hacer clic en la
-            notificación se abre <span className="font-mono">pendrake://…</span> y la
-            app navega a la vista correspondiente.
+            Dispara una notificación nativa de prueba de{" "}
+            <strong>transacción recibida</strong> (solo notificamos tx nuevas, no
+            sincronizaciones). El sync real la disparará desde el daemon; esto la
+            simula. Al hacer clic se abre{" "}
+            <span className="font-mono">pendrake://…</span> y la app navega al
+            historial.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void tauri.notifyTest("tx")}
-          >
+          <Button variant="outline" size="sm" onClick={() => void tauri.notifyTest()}>
             Notif. nativa: tx recibida
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void tauri.notifyTest("sync")}
-          >
-            Notif. nativa: sync completo
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Probar sólo la navegación del deep-link (sin pasar por el SO):
-        </p>
-        <div className="flex flex-wrap gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => void handleDeepLink(SAMPLE_DEEP_LINKS.tx)}
           >
             Simular clic → tx
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void handleDeepLink(SAMPLE_DEEP_LINKS.sync)}
-          >
-            Simular clic → sync
           </Button>
         </div>
       </section>

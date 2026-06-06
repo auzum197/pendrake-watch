@@ -9,12 +9,13 @@
 pub const URI_SCHEME: &str = "pendrake";
 
 /// A notification click intent, encoded as `pendrake://<host>?<query>`.
+///
+/// We only notify on a **new transaction** (decision with dorianvp: don't notify on
+/// sync lifecycle events — too noisy). Kept as an enum for forward-compatibility.
 #[derive(Debug, Clone)]
 pub enum DeepLink {
     /// A transaction touched an account → open it in the history view.
     Tx { account: u32, txid: String },
-    /// A sync lifecycle event → open the dashboard.
-    Sync { status: String },
 }
 
 impl DeepLink {
@@ -22,9 +23,6 @@ impl DeepLink {
         match self {
             DeepLink::Tx { account, txid } => {
                 format!("{URI_SCHEME}://tx?account={account}&txid={}", encode(txid))
-            }
-            DeepLink::Sync { status } => {
-                format!("{URI_SCHEME}://sync?status={}", encode(status))
             }
         }
     }

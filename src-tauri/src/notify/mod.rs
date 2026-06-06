@@ -110,12 +110,13 @@ mod tests {
     #[test]
     fn query_values_are_percent_encoded() {
         let n = Notification::new(
-            "Sync",
-            "done",
-            DeepLink::Sync {
-                status: "done now".into(),
+            "Transacción recibida",
+            "Nueva tx",
+            DeepLink::Tx {
+                account: 0,
+                txid: "ab cd".into(),
             },
         );
-        assert_eq!(n.deep_link, "pendrake://sync?status=done%20now");
+        assert_eq!(n.deep_link, "pendrake://tx?account=0&txid=ab%20cd");
     }
 }

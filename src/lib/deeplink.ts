@@ -25,18 +25,12 @@ export async function handleDeepLink(uri: string): Promise<void> {
   }
   if (url.protocol !== `${URI_SCHEME}:`) return;
 
-  // The intent is the host ("tx", "sync"); some platforms surface it as pathname.
+  // The intent is the host ("tx"); some platforms surface it as pathname.
+  // We only notify on new transactions (decision with dorianvp), so "tx" is the only
+  // intent for now; unknown intents are a no-op (forward-compatible).
   const intent = url.host || url.pathname.replace(/^\/+/, "");
-  switch (intent) {
-    case "tx":
-      await router.navigate({ to: "/transactions" });
-      break;
-    case "sync":
-      await router.navigate({ to: "/dashboard" });
-      break;
-    default:
-      // Unknown intent → no-op, so new link types don't break old builds.
-      break;
+  if (intent === "tx") {
+    await router.navigate({ to: "/transactions" });
   }
 }
 
@@ -51,8 +45,7 @@ export async function registerDeepLinks(): Promise<void> {
   }
 }
 
-/** Sample URIs the Settings dev panel uses to exercise navigation locally. */
+/** Sample URI the Settings dev panel uses to exercise navigation locally. */
 export const SAMPLE_DEEP_LINKS = {
   tx: `${URI_SCHEME}://tx?account=0&txid=demo-txid-0001`,
-  sync: `${URI_SCHEME}://sync?status=done`,
 } as const;

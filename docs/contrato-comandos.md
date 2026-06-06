@@ -82,14 +82,18 @@ Leyenda estado: ✅ real · 🟡 mock (se reemplaza con la integración de zingo
 
 | Comando | Args | Retorno | Errores | Estado |
 |---|---|---|---|---|
-| `notify_test` | `{ kind: "tx" \| "sync" }` | `void` | `string` (kind desconocido / fallo del backend) | 🟡 simulación |
+| `notify_test` | — | `void` | `string` (fallo del backend) | 🟡 simulación |
 
+> **Qué se notifica (decisión con dorianvp):** **solo transacciones nuevas**, nunca
+> eventos de sincronización (sería ruidoso). Por eso hay un único tipo de notif/
+> deep-link (`tx`).
+>
 > **Arquitectura (doc de dorianvp).** Las notificaciones siguen el modelo de
 > *daemon residente*: el daemon (de dorianvp, aún no existe) sincroniza con la GUI
-> cerrada y dispara notificaciones nativas. El clic abre una URI
-> `pendrake://tx?account=…&txid=…` o `pendrake://sync?status=…` que el SO rutea de
-> vuelta a la GUI vía `tauri-plugin-deep-link` + `tauri-plugin-single-instance`
-> (`onOpenUrl` → navegación con TanStack Router).
+> cerrada y, al ver una **tx nueva**, dispara una notificación nativa. El clic abre
+> una URI `pendrake://tx?account=…&txid=…` que el SO rutea de vuelta a la GUI vía
+> `tauri-plugin-deep-link` + `tauri-plugin-single-instance` (`onOpenUrl` →
+> navegación al historial con TanStack Router).
 >
 > El esquema `pendrake://` es **provisional** (lo define dorianvp). Vive en un solo
 > lugar: `URI_SCHEME` en `src-tauri/src/notify/deeplink.rs` y su espejo en
