@@ -2,6 +2,7 @@ mod commands;
 mod crypto;
 mod db;
 mod error;
+mod grpc;
 mod lightwalletd;
 mod models;
 mod notify;
@@ -67,6 +68,7 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::set_endpoint,
             commands::settings::list_default_endpoints,
+            commands::settings::validate_endpoint_live,
             commands::notify::notify_test,
         ])
         .run(tauri::generate_context!())

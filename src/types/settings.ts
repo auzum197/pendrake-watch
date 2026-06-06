@@ -18,6 +18,14 @@ export interface NamedEndpoint {
   config: EndpointConfig;
 }
 
+/** Result of a live endpoint probe (`validate_endpoint_live`). */
+export interface EndpointInfo {
+  chainName: string;
+  blockHeight: number;
+  vendor: string;
+  version: string;
+}
+
 export interface AppSettings {
   endpoint: EndpointConfig;
   theme: Theme;

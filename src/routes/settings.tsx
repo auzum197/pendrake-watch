@@ -7,7 +7,7 @@ import { useWalletStore } from "@/stores/walletStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { TauriInvokeError, tauri } from "@/lib/tauri";
 import { handleDeepLink, SAMPLE_DEEP_LINKS } from "@/lib/deeplink";
-import type { Currency, Theme } from "@/types/settings";
+import type { Currency, EndpointInfo, Theme } from "@/types/settings";
 
 const THEMES: Theme[] = ["light", "dark", "system"];
 const CURRENCIES: Currency[] = ["USD", "ARS"];
@@ -57,6 +57,11 @@ export function SettingsPage() {
   const [customTls, setCustomTls] = useState(true);
   const [endpointError, setEndpointError] = useState<string | null>(null);
 
+  // Live connection probe (PW-040)
+  const [probing, setProbing] = useState(false);
+  const [probeInfo, setProbeInfo] = useState<EndpointInfo | null>(null);
+  const [probeError, setProbeError] = useState<string | null>(null);
+
   const isActiveEndpoint = (host: string, port: number) =>
     endpoint?.host === host && endpoint?.port === port;
 
@@ -79,6 +84,22 @@ export function SettingsPage() {
       return;
     }
     await selectEndpoint(customHost.trim(), port, customTls);
+  }
+
+  async function onTestConnection() {
+    if (!endpoint) return;
+    setProbing(true);
+    setProbeInfo(null);
+    setProbeError(null);
+    try {
+      setProbeInfo(await tauri.validateEndpointLive(endpoint));
+    } catch (err) {
+      setProbeError(
+        err instanceof TauriInvokeError ? err.message : "No se pudo conectar",
+      );
+    } finally {
+      setProbing(false);
+    }
   }
 
   async function onChangePassword(e: React.FormEvent<HTMLFormElement>) {
@@ -197,6 +218,28 @@ export function SettingsPage() {
         {endpointError && (
           <p className="text-sm text-destructive">{endpointError}</p>
         )}
+
+        {/* Live connection probe (PW-040) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void onTestConnection()}
+            disabled={probing || !endpoint}
+          >
+            {probing ? "Probando…" : "Probar conexión"}
+          </Button>
+          {probeInfo && (
+            <span className="text-xs text-emerald-500">
+              ✓ {probeInfo.chainName} · bloque{" "}
+              {probeInfo.blockHeight.toLocaleString()} · {probeInfo.vendor}{" "}
+              {probeInfo.version}
+            </span>
+          )}
+          {probeError && (
+            <span className="text-xs text-destructive">{probeError}</span>
+          )}
+        </div>
       </section>
 
       {/* Apariencia */}

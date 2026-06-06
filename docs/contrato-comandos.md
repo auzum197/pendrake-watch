@@ -65,9 +65,18 @@ Leyenda estado: ✅ real · 🟡 mock (se reemplaza con la integración de zingo
 | `set_setting` | `{ key: string, value: string }` | `void` | `unknown_setting`, `db`, `state` | ✅ |
 | `set_endpoint` | `{ endpoint: EndpointConfig }` | `void` | `invalid_endpoint`, `insecure_endpoint`, `serialize`, `db`, `state` | ✅ |
 | `list_default_endpoints` | — | `NamedEndpoint[]` | — | ✅ |
+| `validate_endpoint_live` | `{ endpoint: EndpointConfig }` | `EndpointInfo` | `invalid_endpoint`, `insecure_endpoint`, `endpoint_unreachable` | ✅ (async, red) |
 
 > Los comandos de settings leen/escriben la tabla `settings` (no cifrada), así que
 > **no requieren el vault desbloqueado** (necesario para el tema en login/setup).
+
+> **`validate_endpoint_live` (PW-040, Fase 2 del core).** Validación **en vivo** del
+> endpoint: chequeo estructural + handshake gRPC real `GetLightdInfo` contra el
+> lightwalletd. Confirma que el server es alcanzable, habla el protocolo y qué
+> cadena/altura sirve. Es **async** (red) y no toca la DB. El conector vive en
+> `src-tauri/src/grpc.rs` (adaptado de `zingolib/src/grpc_connector.rs`: TLS webpki +
+> timeout 10s; proveedor cripto rustls = `ring` vía feature `tonic/tls-ring`).
+> `EndpointInfo = { chainName, blockHeight, vendor, version }`.
 
 ### Notificaciones (PW-051+)
 
@@ -106,6 +115,7 @@ Leyenda estado: ✅ real · 🟡 mock (se reemplaza con la integración de zingo
 | `invalid_viewing_key` | Formato de VK no reconocido (chequeo estructural). |
 | `already_initialized` / `not_initialized` | Estado del vault incompatible con la operación. |
 | `invalid_endpoint` / `insecure_endpoint` | Endpoint mal formado / TLS off en host no-local. |
+| `endpoint_unreachable` | El handshake gRPC en vivo (`validate_endpoint_live`) falló: server caído, TLS/DNS, o no habla el protocolo. |
 | `unknown_setting` | Clave de setting fuera de la allowlist. |
 | `keychain` | Error del OS keychain (crate `keyring`). |
 | `db` | Error de SQLite (rusqlite). |
@@ -137,6 +147,7 @@ interface WalletStatus { initialized: boolean; unlocked: boolean; }
 
 interface EndpointConfig { host: string; port: number; useTls: boolean; }
 interface NamedEndpoint { label: string; config: EndpointConfig; }
+interface EndpointInfo { chainName: string; blockHeight: number; vendor: string; version: string; }
 interface AppSettings {
   endpoint: EndpointConfig; theme: "light"|"dark"|"system"; currency: "USD"|"ARS";
   selectedAccountId: number | null; autoSyncOnStartup: boolean;

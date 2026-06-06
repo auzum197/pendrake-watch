@@ -99,3 +99,30 @@ pub fn set_endpoint(state: State<'_, AppState>, endpoint: EndpointConfig) -> Com
 pub fn list_default_endpoints() -> CommandResult<Vec<NamedEndpoint>> {
     Ok(default_endpoints())
 }
+
+/// Server info returned by a live endpoint probe (subset of lightwalletd's `LightdInfo`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EndpointInfo {
+    pub chain_name: String,
+    pub block_height: u64,
+    pub vendor: String,
+    pub version: String,
+}
+
+/// Live endpoint validation (PW-040): structural check, then a real `GetLightdInfo`
+/// gRPC handshake. Confirms the server is reachable, speaks the protocol, and which
+/// chain/height it serves. Async (network); takes no DB state.
+#[tauri::command]
+pub async fn validate_endpoint_live(endpoint: EndpointConfig) -> CommandResult<EndpointInfo> {
+    validate_endpoint(&endpoint)?;
+    let info = crate::grpc::get_lightd_info(&endpoint)
+        .await
+        .map_err(|e| AppError::new("endpoint_unreachable", e))?;
+    Ok(EndpointInfo {
+        chain_name: info.chain_name,
+        block_height: info.block_height,
+        vendor: info.vendor,
+        version: info.version,
+    })
+}

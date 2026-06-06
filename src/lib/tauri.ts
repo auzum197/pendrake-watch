@@ -20,6 +20,7 @@ import type {
 import type {
   AppSettings,
   EndpointConfig,
+  EndpointInfo,
   NamedEndpoint,
 } from "@/types/settings";
 
@@ -99,6 +100,9 @@ export const tauri = {
   setEndpoint: (endpoint: EndpointConfig) =>
     call<void>("set_endpoint", { endpoint }),
   listDefaultEndpoints: () => call<NamedEndpoint[]>("list_default_endpoints"),
+  /** Live probe: structural check + real GetLightdInfo gRPC handshake (PW-040). */
+  validateEndpointLive: (endpoint: EndpointConfig) =>
+    call<EndpointInfo>("validate_endpoint_live", { endpoint }),
 
   // --- notifications (PW-051+) ---
   /** Fire a sample native notification end-to-end. `kind` is "tx" | "sync". */

@@ -57,6 +57,32 @@ zcash_keys = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed
 ] }
 zcash_protocol = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2" }
 
+# --- Zcash core — Fase 2: conector gRPC a lightwalletd (PW-040) ---
+# `zcash_client_backend` aporta el cliente gRPC generado (proto::service) y los
+# tipos de mensaje. `tonic` (misma 0.14 que usa el backend) se necesita directo
+# para construir el `Channel`/TLS (transport). Conector adaptado de
+# zingolib/src/grpc_connector.rs (ver src/grpc.rs).
+zcash_client_backend = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2", features = [
+    "lightwalletd-tonic-transport",
+    "lightwalletd-tonic-tls-webpki-roots",
+    # Must match zcash_keys' enabled pools, or zcb's cfg-gated code (e.g.
+    # data_api/defaults.rs `UnifiedAddress::from_receivers`) mismatches and fails.
+    "orchard",
+    "transparent-inputs",
+] }
+tonic = { version = "0.14", default-features = false, features = [
+    "transport",
+    # `tls-webpki-roots` only sets the root certs; rustls 0.23 also needs a crypto
+    # provider selected, or it panics ("could not determine CryptoProvider"). `tls-ring`
+    # picks ring process-wide (no C toolchain, unlike aws-lc).
+    "tls-ring",
+    "tls-webpki-roots",
+] }
+
+[dev-dependencies]
+# For the #[tokio::test] live gRPC smoke tests in src/grpc.rs (ignored in CI).
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
 # Native desktop notification backends. These live behind cfg() so each platform
 # pulls only its own dependency. The `notify` module is kept free of Tauri types
 # so it can be lifted into dorianvp's `wallet-daemon` later (the daemon is the
