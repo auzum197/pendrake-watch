@@ -70,6 +70,14 @@ zcash_client_backend = { git = "https://github.com/auzum197/librustzcash", rev =
     "orchard",
     "transparent-inputs",
 ] }
+# --- Zcash core — Fase 3: store en memoria + import view-only + sync ---
+# `zcash_client_memory` provee el store (MemoryWalletDb: WalletWrite +
+# WalletCommitmentTrees) y un BlockCache en memoria (MemBlockCache). In-memory por
+# ahora; el snapshot se cifrará con el vault en una sub-fase posterior (3c).
+zcash_client_memory = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2", features = [
+    "orchard",
+    "transparent-inputs",
+] }
 tonic = { version = "0.14", default-features = false, features = [
     "transport",
     # `tls-webpki-roots` only sets the root certs; rustls 0.23 also needs a crypto

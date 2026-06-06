@@ -7,6 +7,7 @@ mod lightwalletd;
 mod models;
 mod notify;
 mod state;
+mod wallet;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]

@@ -318,10 +318,15 @@ dependencies = [
  "bitvec",
  "blake2s_simd",
  "byteorder",
+ "crossbeam-channel",
  "ff",
  "group",
+ "lazy_static",
+ "log",
+ "num_cpus",
  "pairing",
  "rand_core",
+ "rayon",
  "subtle",
 ]
 
@@ -1087,7 +1092,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1318,7 +1323,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2772,6 +2777,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
  "cfg-if",
+ "rayon",
 ]
 
 [[package]]
@@ -2846,7 +2852,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2947,6 +2953,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_cpus"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+dependencies = [
+ "hermit-abi",
+ "libc",
 ]
 
 [[package]]
@@ -3371,6 +3387,7 @@ dependencies = [
  "tokio",
  "tonic",
  "zcash_client_backend",
+ "zcash_client_memory",
  "zcash_keys",
  "zcash_protocol",
  "zeroize",
@@ -3706,7 +3723,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools",
  "log",
  "multimap",
@@ -4057,7 +4074,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4562,7 +4579,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5105,10 +5122,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.2",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5574,7 +5591,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5603,7 +5620,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5925,6 +5942,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm_sync"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cff360cade7fec41ff0e9d2cda57fe58258c5f16def0e21302394659e6bbb0ea"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.244.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6078,7 +6106,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6811,13 +6839,16 @@ name = "zcash_client_backend"
 version = "0.22.0"
 source = "git+https://github.com/auzum197/librustzcash?rev=dad6ebed5c0d8714a095667c7b10df749d5e44d2#dad6ebed5c0d8714a095667c7b10df749d5e44d2"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "bech32",
  "bip32",
  "bls12_381",
  "bs58",
+ "byteorder",
  "crossbeam-channel",
  "document-features",
+ "futures-util",
  "getset",
  "group",
  "hex",
@@ -6853,6 +6884,48 @@ dependencies = [
  "zcash_transparent",
  "zip32",
  "zip321",
+]
+
+[[package]]
+name = "zcash_client_memory"
+version = "0.0.0"
+source = "git+https://github.com/auzum197/librustzcash?rev=dad6ebed5c0d8714a095667c7b10df749d5e44d2#dad6ebed5c0d8714a095667c7b10df749d5e44d2"
+dependencies = [
+ "async-trait",
+ "bip32",
+ "bs58",
+ "byteorder",
+ "bytes",
+ "group",
+ "incrementalmerkletree",
+ "jubjub",
+ "nonempty",
+ "orchard",
+ "prost",
+ "prost-build",
+ "rayon",
+ "sapling-crypto",
+ "secp256k1",
+ "secrecy",
+ "serde",
+ "shardtree",
+ "static_assertions",
+ "subtle",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "tracing",
+ "wasm_sync",
+ "which",
+ "zcash_address",
+ "zcash_client_backend",
+ "zcash_encoding",
+ "zcash_keys",
+ "zcash_primitives",
+ "zcash_protocol",
+ "zcash_script",
+ "zcash_transparent",
+ "zip32",
 ]
 
 [[package]]

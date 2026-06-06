@@ -13,7 +13,7 @@ use std::time::Duration;
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Request;
 use zcash_client_backend::proto::service::compact_tx_streamer_client::CompactTxStreamerClient;
-use zcash_client_backend::proto::service::{ChainSpec, Empty, LightdInfo};
+use zcash_client_backend::proto::service::{BlockId, ChainSpec, Empty, LightdInfo, TreeState};
 
 use crate::lightwalletd::EndpointConfig;
 
@@ -59,7 +59,9 @@ pub async fn get_lightd_info(cfg: &EndpointConfig) -> Result<LightdInfo, String>
     Ok(info)
 }
 
-/// `GetLatestBlock` — current chain tip height as the server sees it.
+/// `GetLatestBlock` — current chain tip height as the server sees it. Used by the
+/// wallet import (birthday) + live tests; wired into sync in 3b.
+#[allow(dead_code)]
 pub async fn get_latest_block_height(cfg: &EndpointConfig) -> Result<u64, String> {
     let mut client = connect(cfg).await?;
     let mut req = Request::new(ChainSpec {});
@@ -70,6 +72,25 @@ pub async fn get_latest_block_height(cfg: &EndpointConfig) -> Result<u64, String
         .map_err(|e| format!("get_latest_block failed: {e}"))?
         .into_inner();
     Ok(block.height)
+}
+
+/// `GetTreeState` at `height` — the note commitment tree frontier, used to build an
+/// `AccountBirthday` when importing a view-only account (Fase 3). Wired into commands
+/// in 3b; used by the wallet import + its live test for now.
+#[allow(dead_code)]
+pub async fn get_tree_state(cfg: &EndpointConfig, height: u64) -> Result<TreeState, String> {
+    let mut client = connect(cfg).await?;
+    let mut req = Request::new(BlockId {
+        height,
+        hash: vec![],
+    });
+    req.set_timeout(DEFAULT_GRPC_TIMEOUT);
+    let tree = client
+        .get_tree_state(req)
+        .await
+        .map_err(|e| format!("get_tree_state failed: {e}"))?
+        .into_inner();
+    Ok(tree)
 }
 
 #[cfg(test)]
