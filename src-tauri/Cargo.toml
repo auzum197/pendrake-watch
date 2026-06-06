@@ -25,7 +25,9 @@ serde_json = "1"
 
 # Local persistence (PW-006). Plain bundled SQLite; confidentiality comes from
 # column-level encryption, so no SQLCipher/OpenSSL toolchain is required.
-rusqlite = { version = "0.32", features = ["bundled"] }
+# 0.37 to match the core's zcash_client_sqlite: only ONE libsqlite3-sys (links =
+# "sqlite3") may exist in the graph, so the vault's rusqlite must track the core's.
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # Encryption-at-rest (PW-006): keychain master key + Argon2id + XChaCha20-Poly1305.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
@@ -69,6 +71,8 @@ zcash_client_backend = { git = "https://github.com/auzum197/librustzcash", rev =
     # data_api/defaults.rs `UnifiedAddress::from_receivers`) mismatches and fails.
     "orchard",
     "transparent-inputs",
+    # Fase 3b: the reference sync state machine (`zcash_client_backend::sync::run`).
+    "sync",
 ] }
 # --- Zcash core — Fase 3: store en memoria + import view-only + sync ---
 # `zcash_client_memory` provee el store (MemoryWalletDb: WalletWrite +
@@ -78,6 +82,17 @@ zcash_client_memory = { git = "https://github.com/auzum197/librustzcash", rev = 
     "orchard",
     "transparent-inputs",
 ] }
+# zcash_client_memory's MemoryWalletDb (the wallet store) is incomplete (v0.0.0,
+# many todo!()), so for the real wallet store we use the production-grade
+# `zcash_client_sqlite::WalletDb` over an in-memory SQLite (":memory:") — complete,
+# handles reorg + transparent. We keep zcash_client_memory only for its MemBlockCache
+# (a complete in-memory BlockCache). Persistence/encryption-at-rest = sub-phase 3c.
+zcash_client_sqlite = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2", features = [
+    "orchard",
+    "transparent-inputs",
+] }
+# ChaChaRng (Clone) for WalletDb's required RngCore param.
+rand_chacha = "0.3"
 tonic = { version = "0.14", default-features = false, features = [
     "transport",
     # `tls-webpki-roots` only sets the root certs; rustls 0.23 also needs a crypto

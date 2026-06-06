@@ -22,7 +22,9 @@ pub const DEFAULT_GRPC_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Open a gRPC channel to the endpoint. TLS (webpki roots) for `https`, plaintext
 /// only when `use_tls` is false (already gated to local hosts by `validate_endpoint`).
-async fn connect(cfg: &EndpointConfig) -> Result<CompactTxStreamerClient<Channel>, String> {
+pub(crate) async fn connect(
+    cfg: &EndpointConfig,
+) -> Result<CompactTxStreamerClient<Channel>, String> {
     let endpoint = Endpoint::from_shared(cfg.uri())
         .map_err(|e| format!("invalid endpoint URI: {e}"))?
         .tcp_nodelay(true)
