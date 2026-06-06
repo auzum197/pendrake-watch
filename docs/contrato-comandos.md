@@ -95,6 +95,42 @@ Leyenda estado: ✅ real · 🟡 mock (se reemplaza con la integración de zingo
 > (no `AppError`), por ser un comando de diagnóstico. Si se promueve a producción,
 > alinear con `AppError`.
 
+#### Decisión: auto-lock ↔ daemon ↔ notificaciones (2026-06-06)
+
+**Las notificaciones deben seguir llegando con la sesión auto-bloqueada.** Para
+detectar tx nuevas hay que seguir sincronizando, y para sincronizar el daemon
+necesita la **viewing key en memoria**. Conclusión: con el modelo daemon, el
+auto-lock **deja de significar "borré la llave de la RAM"**.
+
+Es aceptable porque la wallet es **view-only** (lo peor de un compromiso de la VK
+es pérdida de **privacidad**, nunca robo de fondos) y la llave vive **solo en RAM**
+(nunca en disco en claro).
+
+**Dos niveles de lock:**
+
+| Acción | Vista | Llave (viewing key) | Daemon / sync |
+|---|---|---|---|
+| **Auto-lock** (inactividad, PW-017) | bloqueada (oculta saldos/historial, pide contraseña para volver a ver) | **se mantiene** residente en el daemon | **sigue** sincronizando y notificando |
+| **Cerrar sesión / salir** (explícito) | bloqueada | **se borra** (zeroize) | **se frena** |
+
+**Contenido de la notificación según estado** (privacidad):
+- **Bloqueada:** notificación **genérica, SIN datos sensibles** (ej. "Nueva
+  transacción recibida" / "Sincronización al día"); **sin monto ni dirección**. El
+  detalle se ve al desbloquear. Así el auto-lock sigue cumpliendo su objetivo (que
+  un tercero frente al monitor no vea los saldos en la pantalla bloqueada).
+- **Desbloqueada:** detalle completo.
+
+**Implicación de implementación (cuando exista el daemon — dominio de dorianvp):**
+- Hoy `lock_wallet` (PW-017) **borra el DEK** del estado de la GUI. Bajo el modelo
+  daemon, el auto-lock debe pasar a ser **lock de vista**: NO le ordena al daemon
+  evictar la llave; solo bloquea la UI. Recién **Cerrar sesión/salir** ordena al
+  daemon evictar + frenar.
+- Handoff de la llave: la GUI desbloquea (deriva la KEK de la contraseña, desenvuelve
+  la VK) y se la pasa al daemon por el canal IPC autenticado (token 0600). El daemon
+  pasa a ser el tenedor de la VK en RAM.
+- El daemon debe conocer el estado lock/unlock de la GUI (para decidir el contenido
+  genérico vs. detallado de cada notificación).
+
 ---
 
 ## Códigos de error (`AppError.code`)
