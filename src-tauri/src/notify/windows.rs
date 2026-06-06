@@ -8,6 +8,22 @@
 use super::{open_uri, Notification};
 use tauri_winrt_notification::{Duration, Toast};
 
+/// Escape a string for use inside an XML attribute.
+///
+/// `tauri-winrt-notification` writes button `content`/`arguments` into the toast
+/// XML **without escaping** (`<action content='{}' arguments='{}'/>`). A raw `&` in
+/// the deep link (e.g. `pendrake://tx?account=0&txid=…`) therefore produces invalid
+/// XML and Windows **silently drops the toast** — which is why the `tx` notification
+/// failed while `sync` (no `&`) worked. Windows un-escapes the value before handing
+/// it to `on_activated`, so `open_uri` still receives the original URI.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('\'', "&apos;")
+        .replace('"', "&quot;")
+}
+
 /// AppUserModelID the toast is attributed to. A packaged build must register a
 /// Start Menu shortcut with this AUMID (the NSIS installer does, per the doc),
 /// otherwise the toast is silently suppressed. Under `tauri dev` no such shortcut
@@ -23,7 +39,7 @@ pub fn show(n: &Notification) -> Result<(), String> {
     Toast::new(Toast::POWERSHELL_APP_ID)
         .title(&n.title)
         .text1(&n.body)
-        .add_button("Abrir", &n.deep_link)
+        .add_button("Abrir", &xml_escape(&n.deep_link))
         .duration(Duration::Short)
         .on_activated(move |action| {
             let target = action.unwrap_or_else(|| uri.clone());
