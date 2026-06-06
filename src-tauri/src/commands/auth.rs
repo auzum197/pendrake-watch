@@ -9,6 +9,8 @@
 
 use serde::Serialize;
 use tauri::State;
+use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedIncomingViewingKey};
+use zcash_protocol::consensus::Network;
 
 use crate::crypto::{keychain, vault};
 use crate::db::models::NewAccount;
@@ -25,22 +27,33 @@ pub struct WalletStatus {
     pub unlocked: bool,
 }
 
-/// Lightweight viewing-key format check. Full cryptographic validation against
-/// the network arrives with the zingolib/librustzcash integration (PW-009/010);
-/// here we only reject obviously-wrong input before persisting it.
-fn validate_viewing_key(vk: &str) -> CommandResult<()> {
+/// Real cryptographic validation of a Unified viewing key (PW-009/010).
+///
+/// Backed by `zcash_keys` from the `librustzcash` core: the key must actually
+/// decode as a Unified Full Viewing Key (`uview…`) or Unified Incoming Viewing
+/// Key (`uivk…`) on mainnet or testnet. This rejects malformed/garbage input and
+/// confirms the encoded payload is a structurally valid view-only key — not just
+/// the prefix/length heuristic the mock used.
+///
+/// View-only by construction: we only ever decode *viewing* keys here; spending
+/// keys (USK) are never parsed or accepted.
+///
+/// Returns the network the key belongs to, for later use by sync/account setup.
+fn validate_viewing_key(vk: &str) -> CommandResult<Network> {
     let v = vk.trim();
-    let recognized = v.starts_with("uview")        // unified FVK (mainnet/testnet)
-        || v.starts_with("zxviews")                // sapling extended FVK (mainnet)
-        || v.starts_with("zxviewtestsapling"); // sapling extended FVK (testnet)
-    if recognized && v.len() >= 20 {
-        Ok(())
-    } else {
-        Err(AppError::new(
-            "invalid_viewing_key",
-            "Unrecognized viewing key format",
-        ))
+    // The HRP encodes the network, so we try both and let `decode` reject a
+    // mismatch. A UFVK is the modern standard; a UIVK is also view-only valid.
+    for net in [Network::MainNetwork, Network::TestNetwork] {
+        if UnifiedFullViewingKey::decode(&net, v).is_ok()
+            || UnifiedIncomingViewingKey::decode(&net, v).is_ok()
+        {
+            return Ok(net);
+        }
     }
+    Err(AppError::new(
+        "invalid_viewing_key",
+        "Not a valid Unified viewing key (expected uview… or uivk…)",
+    ))
 }
 
 #[tauri::command]
@@ -61,7 +74,9 @@ pub fn setup_wallet(
     viewing_key: String,
     password: String,
 ) -> CommandResult<()> {
-    validate_viewing_key(&viewing_key)?;
+    // Real crypto validation (PW-009/010). The detected network will drive sync
+    // and account setup in a later phase; for now we only gate on validity.
+    let _network = validate_viewing_key(&viewing_key)?;
     if password.len() < MIN_PASSWORD_LEN {
         return Err(AppError::new(
             "weak_password",
@@ -158,4 +173,49 @@ pub fn change_password(
 
     guard.session = Some(dek);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Real mainnet test vectors from `zcash_keys`' own suite.
+    const VALID_UFVK: &str = "uview1tg6rpjgju2s2j37gkgjq79qrh5lvzr6e0ed3n4sf4hu5qd35vmsh7avl80xa6mx7ryqce9hztwaqwrdthetpy4pc0kce25x453hwcmax02p80pg5savlg865sft9reat07c5vlactr6l2pxtlqtqunt2j9gmvr8spcuzf07af80h5qmut38h0gvcfa9k4rwujacwwca9vu8jev7wq6c725huv8qjmhss3hdj2vh8cfxhpqcm2qzc34msyrfxk5u6dqttt4vv2mr0aajreww5yufpk0gn4xkfm888467k7v6fmw7syqq6cceu078yw8xja502jxr0jgum43lhvpzmf7eu5dmnn6cr6f7p43yw8znzgxg598mllewnx076hljlvynhzwn5es94yrv65tdg3utuz2u3sras0wfcq4adxwdvlk387d22g3q98t5z74quw2fa4wed32escx8dwh4mw35t4jwf35xyfxnu83mk5s4kw2glkgsshmxk";
+    const VALID_UIVK: &str = "uivk1z28yg638vjwusmf0zc9ad2j0mpv6s42wc5kqt004aaqfu5xxxgu7mdcydn9qf723fnryt34s6jyxyw0jt7spq04c3v9ze6qe9gjjc5aglz8zv5pqtw58czd0actynww5n85z3052kzgy6cu0fyjafyp4sr4kppyrrwhwev2rr0awq6m8d66esvk6fgacggqnswg5g9gkv6t6fj9ajhyd0gmel4yzscprpzduncc0e2lywufup6fvzf6y8cefez2r99pgge5yyfuus0r60khgu895pln5e7nn77q6s9kh2uwf6lrfu06ma2kd7r05jjvl4hn6nupge8fajh0cazd7mkmz23t79w";
+
+    #[test]
+    fn accepts_a_real_unified_fvk() {
+        assert_eq!(
+            validate_viewing_key(VALID_UFVK).unwrap(),
+            Network::MainNetwork
+        );
+    }
+
+    #[test]
+    fn accepts_a_real_unified_ivk() {
+        assert_eq!(
+            validate_viewing_key(VALID_UIVK).unwrap(),
+            Network::MainNetwork
+        );
+    }
+
+    #[test]
+    fn trims_surrounding_whitespace() {
+        let padded = format!("  {VALID_UFVK}\n");
+        assert!(validate_viewing_key(&padded).is_ok());
+    }
+
+    #[test]
+    fn rejects_garbage_that_passed_the_old_prefix_check() {
+        // The mock accepted any "uview…" ≥20 chars; real decoding rejects this.
+        let err = validate_viewing_key("uview1thisisnotarealviewingkey").unwrap_err();
+        assert_eq!(err.code, "invalid_viewing_key");
+    }
+
+    #[test]
+    fn rejects_non_unified_and_empty() {
+        assert!(validate_viewing_key("").is_err());
+        assert!(validate_viewing_key("zxviews1qqqqqqq").is_err());
+        assert!(validate_viewing_key("not a key").is_err());
+    }
 }

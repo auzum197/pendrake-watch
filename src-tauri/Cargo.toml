@@ -43,6 +43,20 @@ zeroize = "1"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
+# --- Zcash core (view-only) — Fase 1: validación criptográfica real de la VK ---
+#
+# Stack "Opción A" del blueprint: librustzcash nativo. Dependemos del fork
+# `auzum197/librustzcash` fijado por commit (reproducible + CI-safe; NO `path`,
+# que rompería el CI). Supply-chain verificado 2026-06-06: el commit `dad6ebe`
+# existe idéntico en el canónico `zcash/librustzcash` (byte-a-byte, sin
+# divergencia). View-only estricto: NO se importa UnifiedSpendingKey/USK.
+zcash_keys = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2", features = [
+    "sapling",
+    "orchard",
+    "transparent-inputs",
+] }
+zcash_protocol = { git = "https://github.com/auzum197/librustzcash", rev = "dad6ebed5c0d8714a095667c7b10df749d5e44d2" }
+
 # Native desktop notification backends. These live behind cfg() so each platform
 # pulls only its own dependency. The `notify` module is kept free of Tauri types
 # so it can be lifted into dorianvp's `wallet-daemon` later (the daemon is the
