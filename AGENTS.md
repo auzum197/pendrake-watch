@@ -1,0 +1,80 @@
+# Instruction for LLMs
+
+## Writing & Code Style
+
+Goal: produce prose and code that reads as if written by a specific, competent human, not by a model. The point is naturalness and fit, not looking exhaustive or safe. When in doubt, commit to a choice and keep it short.
+
+### Prose
+
+Punctuation
+- No em dashes. Use commas, parentheses, or separate sentences.
+- No semicolons. Split into two sentences.
+- Don't over-clarify with parentheticals. Cut the aside or fold it into the sentence.
+
+Constructions to avoid
+- The antithesis flip: "not X, but Y", "isn't just X, it's Y", "not only X but also Y". State the claim directly.
+- Defaulting to groups of three (adjectives, clauses, list items). Vary the count.
+- "From X to Y" fake-comprehensive sweeps.
+- "Whether you're X or Y" catch-all wrap-ups.
+- Forced analogies ("think of it like a...").
+
+Openers and closers
+- No throat-clearing: "It's important to note", "It's worth noting", restating the question before answering.
+- No grandiose closers or zoom-outs: "In conclusion", "Ultimately", "At the end of the day", "in an ever-evolving world". Stop when the point is made.
+- Don't chain connectives: "Moreover", "Furthermore", "Additionally", "That said".
+
+Tone
+- No sycophancy: "Great question", "You're absolutely right".
+- Commit to a position. No false balance or manufactured symmetry between unequal options.
+- Assert plainly. Cut reflexive hedging and over-qualification.
+
+Vocabulary to avoid
+- delve, tapestry, realm, landscape, navigate/navigating, leverage, robust, seamless, crucial, vital, pivotal, testament, boasts, nestled, foster, harness, unlock, elevate, embark, showcase, underscore, spearhead, treasure trove, game-changer.
+
+Formatting
+- Don't bold the lead phrase of every bullet.
+- Don't bullet what should be prose.
+- No headers on two-sentence sections.
+- No emoji as section markers.
+- Vary sentence length deliberately.
+
+### Code (all languages)
+
+- Comment why, not what. No line-by-line narration of obvious operations.
+- No tutorial narration ("Now we...", "Step 1:", "First, let's...") and no banner comments (`// ===== HELPERS =====`).
+- No docstrings that just restate the signature.
+- Names: concise and domain-specific. Avoid generic placeholders (`data`, `result`, `output`, `item`, `value`, `temp`, `handleData`, a helper named `helper`) and avoid over-long descriptive names where a short one is idiomatic.
+- No completeness theater: no unrequested demo/usage blocks, no logs narrating execution ("Starting...", "Done!"), no emoji in output, no unprompted complexity analysis in comments.
+- Don't add guards for conditions that can't occur. Don't wrap non-throwing code in try/catch. Don't swallow-and-log errors; let them propagate.
+- Match the surrounding codebase's idioms and conventions over textbook-uniform formatting.
+
+### Rust
+
+- Don't reach for `.clone()` to satisfy the borrow checker. Borrow or restructure first.
+- Use `?` for propagation. Avoid `.unwrap()`/`.expect()` outside tests and throwaway code.
+- Use tail expressions. No explicit `return` on the final line.
+- Don't annotate types the compiler infers (`let x: i32 = 5;`).
+- Prefer `if let` and combinators (`map`, `and_then`, `ok_or`, `unwrap_or_else`) over verbose `match` when clearer.
+- Prefer iterator chains over manual `for` + `push` where idiomatic.
+- Use `&str` where a borrow suffices instead of `String`.
+
+### TypeScript / React
+
+- No `any`. Type precisely. Don't annotate what TS already infers. Don't use `as` to silence the checker.
+- Prefer union/literal types over enums where idiomatic. Prefer named exports.
+- Don't use `React.FC`. Type props directly.
+- Don't wrap everything in `useMemo`/`useCallback`. Use them only for a real identity or perf need.
+- Don't reach for `useEffect` to compute derived state. Derive it during render.
+- No `console.log` narrating execution.
+- Don't over-componentize trivial markup, and don't prop-drill where composition or context fits.
+
+### HTML / CSS
+
+- Use semantic elements. Avoid div soup.
+- Keep class lists purposeful and legible. Don't pad with utilities that don't do anything.
+
+### For agents
+
+- Before finishing a task, scan what you wrote against this file. Focus on the high-signal tells, not a full re-audit: antithesis flips and narrating comments in prose, `.clone()`/`.unwrap()` spam and explicit trailing `return` in Rust, `useEffect` for derived state and `any` in TS.
+- Verify your *new* output fits these rules and the surrounding code's style. The question is "does what I added fit", not "does this whole file now obey CLAUDE.md".
+- Don't reformat, re-comment, or otherwise "correct" existing code you were only asked to touch lightly. Match what's there. Keep diffs scoped to the task.
