@@ -25,27 +25,10 @@ const aboutRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([indexRoute, aboutRoute]);
 
-// Left-to-right ordering of the top-level routes
-const ROUTE_ORDER: Record<string, number> = {
-	"/": 0,
-	"/about": 1,
-};
-
-function routeOrder(pathname: string | undefined): number {
-	return ROUTE_ORDER[pathname ?? "/"] ?? 0;
-}
-
 export const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",
-	// Animate route changes via the browser View Transitions API
-	defaultViewTransition: {
-		types: ({ fromLocation, toLocation }) => {
-			const forward =
-				routeOrder(toLocation.pathname) >= routeOrder(fromLocation?.pathname);
-			return [forward ? "slide-forward" : "slide-back"];
-		},
-	},
+	defaultViewTransition: true,
 });
 
 declare module "@tanstack/react-router" {
