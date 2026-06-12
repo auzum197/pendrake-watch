@@ -1,0 +1,40 @@
+[package]
+name = "pendrake-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pendrake engine: zingolib watch-only wallet construction and wallet-file lifecycle."
+
+[dependencies]
+pendrake-ipc = { path = "../pendrake-ipc" }
+
+# zingolib stable-auz fork: adds the pepper-sync events stream consumed for live
+# progress. A committed Cargo.lock is REQUIRED across this workspace; zcash_keys
+# pulls a yanked core2 ^0.3 that only resolves when the lock pins it.
+zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
+# Same repo/branch as zingolib; the sync event stream and sync_status live here.
+pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
+# Versions track zingolib's workspace so shared types unify (one zcash_protocol).
+zcash_protocol = "0.9"
+# TxId, carried by the sync events and accepted by transaction_summary.
+zcash_primitives = "0.28"
+zip32 = "0.2"
+
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+    "net",
+    "io-util",
+] }
+serde.workspace = true
+serde_json.workspace = true
+# zingolib's address accessors return the json-rust crate's JsonValue.
+json = "0.12"
+http = "1"
+anyhow.workspace = true
+dirs = "5"
+tracing.workspace = true
+rustls = { version = "0.23", features = ["ring"] }
+fs2 = "0.4"

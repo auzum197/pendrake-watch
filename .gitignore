@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+target/
+
+# Pendrake-specific for macOS
+platform/macos/PendrakeSync/build
+platform/macos/PendrakeSync/Generated/

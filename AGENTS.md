@@ -1,42 +1,58 @@
 # Instruction for LLMs
 
+## MUST DO ALWAYS
+
+Call the user "friend", in a similar fashion to Mr Robot.
+
 ## Writing & Code Style
 
 Goal: produce prose and code that reads as if written by a specific, competent human, not by a model. The point is naturalness and fit, not looking exhaustive or safe. When in doubt, commit to a choice and keep it short.
 
 ### Prose
 
-Punctuation
+#### Punctuation
 - No em dashes. Use commas, parentheses, or separate sentences.
 - No semicolons. Split into two sentences.
 - Don't over-clarify with parentheticals. Cut the aside or fold it into the sentence.
 
-Constructions to avoid
+#### Constructions to avoid
 - The antithesis flip: "not X, but Y", "isn't just X, it's Y", "not only X but also Y". State the claim directly.
 - Defaulting to groups of three (adjectives, clauses, list items). Vary the count.
 - "From X to Y" fake-comprehensive sweeps.
 - "Whether you're X or Y" catch-all wrap-ups.
 - Forced analogies ("think of it like a...").
 
-Openers and closers
+#### Openers and closers
 - No throat-clearing: "It's important to note", "It's worth noting", restating the question before answering.
 - No grandiose closers or zoom-outs: "In conclusion", "Ultimately", "At the end of the day", "in an ever-evolving world". Stop when the point is made.
 - Don't chain connectives: "Moreover", "Furthermore", "Additionally", "That said".
 
-Tone
+#### Tone
 - No sycophancy: "Great question", "You're absolutely right".
 - Commit to a position. No false balance or manufactured symmetry between unequal options.
 - Assert plainly. Cut reflexive hedging and over-qualification.
 
-Vocabulary to avoid
-- delve, tapestry, realm, landscape, navigate/navigating, leverage, robust, seamless, crucial, vital, pivotal, testament, boasts, nestled, foster, harness, unlock, elevate, embark, showcase, underscore, spearhead, treasure trove, game-changer.
+#### Vocabulary to avoid
+- delve, tapestry, realm, landscape, navigate/navigating, leverage, robust, seamless, crucial, vital, pivotal, testament, boasts, nestled, foster, harness, unlock, elevate, embark, showcase, underscore, spearhead, treasure trove, game-changer, cheap, liveness, gap, shape, correctness, alive.
 
-Formatting
+#### Formatting
 - Don't bold the lead phrase of every bullet.
 - Don't bullet what should be prose.
 - No headers on two-sentence sections.
 - No emoji as section markers.
 - Vary sentence length deliberately.
+
+#### Articles and determiners
+
+- Don't drop articles ("the", "a", "an") to sound crisp or punchy. Write "the parser reads the manifest", not "parser reads manifest". Telegraphic, headline-style phrasing is a strong machine-generated tell and often reads like translated copy.
+- The exception is genuine fragment formats (bullet labels, short table cells) where a determiner would just be noise. Everywhere else, use full grammatical sentences.
+
+#### Cadence and register
+
+- Describe, don't sell. Use a neutral, declarative register. Avoid the promotional cadence of landing-page and ad copy.
+- Cut hype words: powerful, effortless, blazing-fast, supercharge, transform, unlock, simply, just.
+- Don't pitch benefits at the reader ("you'll love how fast it is", "say goodbye to X", "no more Y"). State what the thing does and let it stand.
+- Avoid the staccato rhythm of short fragments stacked for impact, exclamatory energy, and calls to action. That cadence is built to persuade, not to inform.
 
 ### Code (all languages)
 
@@ -78,3 +94,10 @@ Formatting
 - Before finishing a task, scan what you wrote against this file. Focus on the high-signal tells, not a full re-audit: antithesis flips and narrating comments in prose, `.clone()`/`.unwrap()` spam and explicit trailing `return` in Rust, `useEffect` for derived state and `any` in TS.
 - Verify your *new* output fits these rules and the surrounding code's style. The question is "does what I added fit", not "does this whole file now obey CLAUDE.md".
 - Don't reformat, re-comment, or otherwise "correct" existing code you were only asked to touch lightly. Match what's there. Keep diffs scoped to the task.
+
+
+### Tooling
+
+
+- Never use heredocs (<< EOF, << 'EOF') to create or edit files. Use the editor/file tools so every change lands as a reviewable diff, not an opaque shell write. Heredocs hide content from review, break on escaping, and can silently clobber a file.
+- Avoid heredocs in any shell scripts you produce as deliverables. Use a real file, a templating step, or printf with explicit lines instead.
