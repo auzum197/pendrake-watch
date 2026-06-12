@@ -18,6 +18,7 @@ import {
   importUfvk,
   onSyncEvent,
   type Balance,
+  type BatchPhase,
   type BatchProgress,
   type BatchSummary,
   type Network,
@@ -424,6 +425,15 @@ function useTransitionList<T>(
 
   useEffect(() => {
     const live = new Map(items.map((item) => [getKey(item), item]));
+    // An item that reappeared cancels its pending removal, so a live row is never
+    // yanked by a timer left over from a brief disappearance.
+    for (const key of live.keys()) {
+      const pending = timers.current.get(key);
+      if (pending) {
+        clearTimeout(pending);
+        timers.current.delete(key);
+      }
+    }
     setTracked((prev) => {
       const prevIndex = new Map(prev.map((entry, i) => [entry.key, i]));
       const present = items.map((item) => ({
@@ -455,6 +465,14 @@ function useTransitionList<T>(
       }
     }
   }, [tracked, durationMs]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const id of pending.values()) clearTimeout(id);
+      pending.clear();
+    };
+  }, []);
 
   return tracked;
 }
@@ -488,6 +506,17 @@ const batchKey = (batch: BatchProgress) => batch.id;
 const summaryKey = (batch: BatchSummary) =>
   `${batch.id}:${batch.timing.totalSecs}`;
 
+// The scanner runs several ranges at once and queues them behind the single
+// commit stage, so the daemon legitimately reports many in-flight batches. Show
+// the actively-working ones (committing, then scanning), cap the count, and fold
+// the queued remainder into one line rather than a wall of stalled bars.
+const PHASE_RANK: Record<BatchPhase, number> = {
+  committing: 0,
+  scanning: 1,
+  waiting: 2,
+};
+const MAX_BATCHES = 4;
+
 function BatchList({
   batches,
   now,
@@ -495,11 +524,19 @@ function BatchList({
   batches: BatchProgress[];
   now: number;
 }) {
-  const ordered = useMemo(
-    () => [...batches].sort((a, b) => a.start - b.start),
-    [batches],
-  );
-  const entries = useTransitionList(ordered, batchKey);
+  const visible = useMemo(() => {
+    // Choose the most-active ranges (committing, then scanning, then waiting)...
+    const chosen = [...batches]
+      .sort(
+        (a, b) => PHASE_RANK[a.phase] - PHASE_RANK[b.phase] || a.start - b.start,
+      )
+      .slice(0, MAX_BATCHES);
+    // ...but display them in stable height order, so a row keeps its place when
+    // its phase changes instead of jumping to the top.
+    return chosen.sort((a, b) => a.start - b.start);
+  }, [batches]);
+  const queued = batches.length - visible.length;
+  const entries = useTransitionList(visible, batchKey);
   return (
     <div className="flex flex-col">
       {entries.map((entry) => (
@@ -509,6 +546,11 @@ function BatchList({
           </div>
         </Collapse>
       ))}
+      {queued > 0 && (
+        <p className="pb-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+          +{queued} more queued for commit
+        </p>
+      )}
     </div>
   );
 }
