@@ -99,5 +99,4 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 ### Tooling
 
 
-- Never use heredocs (<< EOF, << 'EOF') to create or edit files. Use the editor/file tools so every change lands as a reviewable diff, not an opaque shell write. Heredocs hide content from review, break on escaping, and can silently clobber a file.
-- Avoid heredocs in any shell scripts you produce as deliverables. Use a real file, a templating step, or printf with explicit lines instead.
+- No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
