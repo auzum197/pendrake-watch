@@ -269,14 +269,22 @@ async fn forget_wallet() -> Result<Value, String> {
 pub fn run() {
     let mut builder = tauri::Builder::default();
 
-    // Single-instance must be registered first. Its deep-link feature forwards a
-    // pendrake:// URL to the already-running window instead of opening a second.
+    // Single-instance must be registered first. When a deep link reaches the
+    // already-running app it arrives here as an argv entry, so focus the window
+    // and forward any pendrake:// URL to the webview for routing.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            use tauri::Manager;
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            use tauri::{Emitter, Manager};
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
+            }
+            let urls: Vec<String> = argv
+                .into_iter()
+                .filter(|a| a.starts_with("pendrake://"))
+                .collect();
+            if !urls.is_empty() {
+                let _ = app.emit("deep-link", urls);
             }
         }));
     }
