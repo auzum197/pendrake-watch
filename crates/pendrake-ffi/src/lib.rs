@@ -41,7 +41,10 @@ pub struct EngineHandle {
 }
 
 #[uniffi::export]
-pub fn start(config: Config, notifier: Box<dyn FfiNotifier>) -> Result<Arc<EngineHandle>, FfiError> {
+pub fn start(
+    config: Config,
+    notifier: Box<dyn FfiNotifier>,
+) -> Result<Arc<EngineHandle>, FfiError> {
     let core_config = CoreConfig {
         data_dir: config.data_dir.map(Into::into),
     };

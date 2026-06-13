@@ -34,11 +34,21 @@ pub struct Response {
 
 impl Response {
     pub fn ok(id: u64, result: Value) -> Self {
-        Self { id, ok: true, result: Some(result), error: None }
+        Self {
+            id,
+            ok: true,
+            result: Some(result),
+            error: None,
+        }
     }
 
     pub fn err(id: u64, error: impl Into<String>) -> Self {
-        Self { id, ok: false, result: None, error: Some(error.into()) }
+        Self {
+            id,
+            ok: false,
+            result: None,
+            error: Some(error.into()),
+        }
     }
 }
 

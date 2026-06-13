@@ -55,7 +55,9 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<EngineHandle> 
         .write(true)
         .open(paths.root.join("daemon.lock"))?;
     if fs2::FileExt::try_lock_exclusive(&lock).is_err() {
-        return Err(anyhow!("another Pendrake engine instance is already running"));
+        return Err(anyhow!(
+            "another Pendrake engine instance is already running"
+        ));
     }
 
     let runtime = tokio::runtime::Builder::new_multi_thread()

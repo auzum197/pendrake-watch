@@ -80,20 +80,26 @@ async fn connect() -> Result<UnixStream, std::io::Error> {
     UnixStream::connect(socket_path().map_err(std::io::Error::other)?).await
 }
 
-/// Launch the background engine. On macOS the Swift `PendrakeSync.app` is
-/// preferred (the only host that delivers clickable deep-linking notifications via
-/// UNUserNotificationCenter), falling back to the `pendraked` binary when no app
-/// is built. The app's embedded engine is frozen at the last
-/// `scripts/build-macos-helper.sh` run, so we log which one we spawn. That keeps a
-/// stale app from silently standing in for a changed `pendrake-core`.
+/// Launch the background engine. On macOS an explicit override wins first
+/// (`PENDRAKE_SYNC_APP`, then `PENDRAKED_BIN`, which lets `just dev` pin the engine
+/// you're editing), then a discovered Swift `PendrakeSync.app` (the only host that
+/// delivers clickable deep-linking notifications), then the `pendraked` binary. The
+/// app's embedded engine is frozen at the last `scripts/build-macos-helper.sh` run,
+/// so we log when we spawn it to keep a stale app from silently standing in for a
+/// changed `pendrake-core`.
 fn spawn_engine() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let app = std::env::var_os("PENDRAKE_SYNC_APP")
+        if let Some(app) = std::env::var_os("PENDRAKE_SYNC_APP")
             .map(PathBuf::from)
             .filter(|p| p.exists())
-            .or_else(pendrake_sync_app);
-        if let Some(app) = app {
+        {
+            return open_app(&app);
+        }
+        if let Some(bin) = std::env::var_os("PENDRAKED_BIN").map(PathBuf::from) {
+            return spawn_bin(&bin);
+        }
+        if let Some(app) = pendrake_sync_app() {
             eprintln!(
                 "pendrake: launching {}. Its engine is only as current as your last \
                  scripts/build-macos-helper.sh run, so rerun that after pendrake-core changes",
@@ -101,8 +107,6 @@ fn spawn_engine() -> Result<(), String> {
             );
             return open_app(&app);
         }
-        // No app built: fall back to the binary. It is always current via
-        // `cargo build`, but its notifications aren't clickable on macOS.
         if let Some(bin) = daemon_bin() {
             eprintln!(
                 "pendrake: PendrakeSync.app not found, spawning {} \
@@ -111,9 +115,11 @@ fn spawn_engine() -> Result<(), String> {
             );
             return spawn_bin(&bin);
         }
-        Err("could not start the background process. Build the macOS helper \
+        Err(
+            "could not start the background process. Build the macOS helper \
              (scripts/build-macos-helper.sh), or set PENDRAKED_BIN to a pendraked binary"
-            .into())
+                .into(),
+        )
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -171,13 +177,19 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     let req = serde_json::json!({ "id": 1, "method": "subscribeEvents", "params": null });
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     line.push(b'\n');
-    write_half.write_all(&line).await.map_err(|e| e.to_string())?;
+    write_half
+        .write_all(&line)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut reader = BufReader::new(read_half);
     let mut buf = String::new();
     loop {
         buf.clear();
-        let n = reader.read_line(&mut buf).await.map_err(|e| e.to_string())?;
+        let n = reader
+            .read_line(&mut buf)
+            .await
+            .map_err(|e| e.to_string())?;
         if n == 0 {
             return Err("daemon closed the event stream".into());
         }
@@ -197,11 +209,17 @@ async fn request(method: &str, params: Value) -> Result<Value, String> {
     let req = serde_json::json!({ "id": 1, "method": method, "params": params });
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     line.push(b'\n');
-    write_half.write_all(&line).await.map_err(|e| e.to_string())?;
+    write_half
+        .write_all(&line)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut reader = BufReader::new(read_half);
     let mut reply = String::new();
-    reader.read_line(&mut reply).await.map_err(|e| e.to_string())?;
+    reader
+        .read_line(&mut reply)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let resp: Value = serde_json::from_str(&reply).map_err(|e| e.to_string())?;
     if resp["ok"].as_bool() == Some(true) {
@@ -265,6 +283,18 @@ async fn forget_wallet() -> Result<Value, String> {
     request("forgetWallet", Value::Null).await
 }
 
+/// Bring the GUI window to the front. The notification open's implicit activation
+/// is unreliable on macOS, so we focus from the app side instead. `unminimize` and
+/// `show` also recover a minimized or hidden window.
+fn raise_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -275,10 +305,8 @@ pub fn run() {
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            use tauri::{Emitter, Manager};
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
-            }
+            use tauri::Emitter;
+            raise_main_window(app);
             let urls: Vec<String> = argv
                 .into_iter()
                 .filter(|a| a.starts_with("pendrake://"))
@@ -293,14 +321,20 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            use tauri_plugin_deep_link::DeepLinkExt;
             // Register the scheme at runtime so non-installed dev builds on
             // Linux/Windows still receive pendrake:// URLs. macOS uses the
             // Info.plist registration from tauri.conf.json.
             #[cfg(any(windows, target_os = "linux"))]
             {
-                use tauri_plugin_deep_link::DeepLinkExt;
                 let _ = app.deep_link().register_all();
             }
+            // Raise the window whenever a deep link reaches the running app. The
+            // OS activation from opening the notification's URL is unreliable, so
+            // we focus from the app side; navigation stays in the frontend.
+            let raise = app.handle().clone();
+            app.deep_link()
+                .on_open_url(move |_event| raise_main_window(&raise));
             // Hold a live subscription to the daemon and re-emit sync events to
             // the webview, so the UI updates on push instead of polling.
             let handle = app.handle().clone();

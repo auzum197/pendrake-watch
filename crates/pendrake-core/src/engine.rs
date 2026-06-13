@@ -240,8 +240,11 @@ impl Engine {
         });
 
         if let Some(meta) = Meta::load(&engine.paths.meta_file)? {
-            let config =
-                engine.client_config(chain_of(meta.network), &meta.indexer_uri, WalletConfig::Read);
+            let config = engine.client_config(
+                chain_of(meta.network),
+                &meta.indexer_uri,
+                WalletConfig::Read,
+            );
             match LightClient::new(config, false, None).await {
                 Ok(mut client) => {
                     tracing::info!("loaded existing wallet from disk");
@@ -313,7 +316,12 @@ impl Engine {
         self.events.subscribe()
     }
 
-    fn client_config(&self, chain: ChainType, indexer_uri: &str, wallet: WalletConfig) -> ClientConfig {
+    fn client_config(
+        &self,
+        chain: ChainType,
+        indexer_uri: &str,
+        wallet: WalletConfig,
+    ) -> ClientConfig {
         let uri: http::Uri = indexer_uri
             .parse()
             .unwrap_or_else(|_| DEFAULT_INDEXER_URI.parse().expect("valid default uri"));
@@ -463,7 +471,9 @@ impl Engine {
                         s.error = Some(e.to_string());
                     })
                     .await;
-                    let _ = self.events.send(SyncEvent::Error { message: e.to_string() });
+                    let _ = self.events.send(SyncEvent::Error {
+                        message: e.to_string(),
+                    });
                     tokio::time::sleep(backoff).await;
                     backoff = (backoff * 2).min(BACKOFF_MAX);
                 }
@@ -686,7 +696,11 @@ impl Engine {
 
         let txid = txid.to_string();
         let received = matches!(summary.kind, TransactionKind::Received);
-        let kind = if received { TxKind::Received } else { TxKind::Sent };
+        let kind = if received {
+            TxKind::Received
+        } else {
+            TxKind::Sent
+        };
 
         // Upsert into the cache so this tx's detail view resolves instantly, even
         // mid-first-sync before any snapshot refresh has run.
@@ -717,11 +731,17 @@ impl Engine {
         if first_seen {
             let amount = format_amount(summary.value);
             let (title, body) = if received {
-                ("Funds received", format!("{amount} arrived in your wallet."))
+                (
+                    "Funds received",
+                    format!("{amount} arrived in your wallet."),
+                )
             } else {
                 ("Funds sent", format!("{amount} sent from your wallet."))
             };
-            tracing::info!("new tx {txid} ({} zat, received={received}), notifying", summary.value);
+            tracing::info!(
+                "new tx {txid} ({} zat, received={received}), notifying",
+                summary.value
+            );
             self.notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"));
         }
