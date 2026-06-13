@@ -66,6 +66,12 @@ pub struct Engine {
     sync: RwLock<SyncStatus>,
     /// Pushed to every subscribed IPC connection as the wallet scans.
     events: broadcast::Sender<SyncEvent>,
+    /// Cached wallet reads served to clients without touching the `client` lock,
+    /// so queries never queue behind the sync loop or a commit's wallet write-lock.
+    /// Refreshed at low-contention points and kept live on transaction discovery.
+    txs: RwLock<Vec<Tx>>,
+    balance: RwLock<Option<Balance>>,
+    addresses: RwLock<Vec<WalletAddress>>,
     /// Received txids already notified, so each transaction notifies exactly once
     /// across sync rounds and restarts.
     seen_txids: Mutex<HashSet<String>>,
@@ -225,6 +231,9 @@ impl Engine {
             meta: RwLock::new(None),
             sync: RwLock::new(SyncStatus::default()),
             events,
+            txs: RwLock::new(Vec::new()),
+            balance: RwLock::new(None),
+            addresses: RwLock::new(Vec::new()),
             seen_txids: Mutex::new(seen),
             generation: AtomicU64::new(0),
             paths,
@@ -241,6 +250,9 @@ impl Engine {
                     client.save_task().await;
                     *engine.client.lock().await = Some(client);
                     *engine.meta.write().await = Some(meta);
+                    // Prime the read cache before the sync loop starts contending
+                    // for the wallet, so the GUI's opening queries are instant.
+                    engine.refresh_snapshot().await;
                     // Reflect "syncing" right away instead of the default idle,
                     // so the GUI doesn't flash "Synced" before the first round.
                     engine.sync.write().await.state = SyncState::Syncing;
@@ -261,9 +273,27 @@ impl Engine {
         match method {
             "getWalletState" => Ok(to_value(self.wallet_state().await)?),
             "getSyncStatus" => Ok(to_value(self.sync.read().await.clone())?),
-            "getBalance" => Ok(to_value(self.balance().await?)?),
-            "getTransactions" => Ok(to_value(self.transactions().await?)?),
-            "getAddresses" => Ok(to_value(self.addresses().await?)?),
+            // Wallet reads are served from the snapshot cache, never the `client`
+            // lock, so they don't queue behind the sync loop.
+            "getBalance" => Ok(to_value(
+                self.balance.read().await.clone().unwrap_or_default(),
+            )?),
+            "getTransactions" => Ok(to_value(self.txs.read().await.clone())?),
+            "getAddresses" => Ok(to_value(self.addresses.read().await.clone())?),
+            "getTransaction" => {
+                let txid = params
+                    .get("txid")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("getTransaction needs a txid"))?;
+                let found = self
+                    .txs
+                    .read()
+                    .await
+                    .iter()
+                    .find(|tx| tx.txid == txid)
+                    .cloned();
+                Ok(to_value(found)?)
+            }
             "importUfvk" => {
                 let args: ImportUfvkArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.import_ufvk(args).await?)?)
@@ -314,17 +344,26 @@ impl Engine {
         }
     }
 
-    async fn addresses(&self) -> Result<Vec<WalletAddress>> {
+    /// Rebuild the read cache (transactions, balance, addresses) from the wallet in
+    /// one client-lock acquisition. Best-effort: a transient read failure leaves
+    /// the previous snapshot in place. Called at low-contention points (load,
+    /// import, end of a sync round), never on a client request path.
+    async fn refresh_snapshot(&self) {
         let guard = self.client.lock().await;
-        let client = guard
-            .as_ref()
-            .ok_or_else(|| anyhow!("no wallet imported"))?;
+        let Some(client) = guard.as_ref() else { return };
+
+        if let Ok(summaries) = client.transaction_summaries(true).await {
+            *self.txs.write().await = summaries.iter().map(map_tx).collect();
+        }
+        if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
+            *self.balance.write().await = Some(map_balance(&bal));
+        }
+
         let unified = client.unified_addresses_json().await;
         let transparent = client.transparent_addresses_json().await;
         let first_t = transparent[0]["encoded_address"]
             .as_str()
             .map(str::to_string);
-
         let addrs = unified
             .members()
             .enumerate()
@@ -335,31 +374,7 @@ impl Engine {
                 })
             })
             .collect();
-        Ok(addrs)
-    }
-
-    async fn balance(&self) -> Result<Balance> {
-        let guard = self.client.lock().await;
-        let client = guard
-            .as_ref()
-            .ok_or_else(|| anyhow!("no wallet imported"))?;
-        let bal = client
-            .account_balance(AccountId::ZERO)
-            .await
-            .map_err(|e| anyhow!("balance error: {e:?}"))?;
-        Ok(map_balance(&bal))
-    }
-
-    async fn transactions(&self) -> Result<Vec<Tx>> {
-        let guard = self.client.lock().await;
-        let client = guard
-            .as_ref()
-            .ok_or_else(|| anyhow!("no wallet imported"))?;
-        let summaries = client
-            .transaction_summaries(true)
-            .await
-            .map_err(|e| anyhow!("summary error: {e:?}"))?;
-        Ok(summaries.iter().map(map_tx).collect())
+        *self.addresses.write().await = addrs;
     }
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
@@ -397,6 +412,9 @@ impl Engine {
         *self.sync.write().await = SyncStatus::default();
         self.seen_txids.lock().await.clear();
         let _ = std::fs::remove_file(&self.paths.notified_file);
+        // Prime the cache (empty history, fixed addresses, zero balance) so the
+        // GUI's post-import queries don't block on the starting sync.
+        self.refresh_snapshot().await;
 
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.spawn_sync_loop();
@@ -409,6 +427,9 @@ impl Engine {
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         *self.sync.write().await = SyncStatus::default();
+        self.txs.write().await.clear();
+        *self.balance.write().await = None;
+        self.addresses.write().await.clear();
         self.seen_txids.lock().await.clear();
         let _ = std::fs::remove_file(&self.paths.meta_file);
         let _ = std::fs::remove_file(&self.paths.notified_file);
@@ -527,6 +548,9 @@ impl Engine {
         };
 
         let status = self.finalize(u32::from(result.sync_end_height)).await;
+        // The round is done, so the wallet lock is free: rebuild the cache before
+        // the GUI reacts to `Finished` and refetches.
+        self.refresh_snapshot().await;
         let _ = self.events.send(SyncEvent::Finished { status });
         Ok(())
     }
@@ -644,13 +668,18 @@ impl Engine {
     /// the user the first time it is seen. The persisted seen-set keeps a later
     /// round or a restart from re-notifying the same txid.
     async fn on_tx_discovered(&self, txid: TxId) {
-        let summary = {
+        // Fetch the summary and refreshed balance under one client lock; funds
+        // changed, so the cached balance is updated alongside.
+        let (summary, bal) = {
             let guard = self.client.lock().await;
-            match guard.as_ref() {
-                Some(client) => client.transaction_summary(txid).await.ok().flatten(),
-                None => return,
-            }
+            let Some(client) = guard.as_ref() else { return };
+            let summary = client.transaction_summary(txid).await.ok().flatten();
+            let bal = client.account_balance(AccountId::ZERO).await.ok();
+            (summary, bal)
         };
+        if let Some(bal) = bal {
+            *self.balance.write().await = Some(map_balance(&bal));
+        }
         // The event is a hint; if the summary hasn't committed yet, a later event
         // or the GUI's own refetch picks it up.
         let Some(summary) = summary else { return };
@@ -658,6 +687,18 @@ impl Engine {
         let txid = txid.to_string();
         let received = matches!(summary.kind, TransactionKind::Received);
         let kind = if received { TxKind::Received } else { TxKind::Sent };
+
+        // Upsert into the cache so this tx's detail view resolves instantly, even
+        // mid-first-sync before any snapshot refresh has run.
+        {
+            let tx = map_tx(&summary);
+            let mut txs = self.txs.write().await;
+            match txs.iter_mut().find(|t| t.txid == txid) {
+                Some(slot) => *slot = tx,
+                None => txs.insert(0, tx),
+            }
+        }
+
         let _ = self.events.send(SyncEvent::Transaction {
             txid: txid.clone(),
             kind,

@@ -31,54 +31,85 @@ fn socket_path() -> Result<PathBuf, String> {
     Ok(root.join("daemon.sock"))
 }
 
-#[cfg(not(target_os = "macos"))]
-fn daemon_bin() -> PathBuf {
+/// The `pendraked` binary to spawn: `PENDRAKED_BIN` if set, otherwise a dev build
+/// from the workspace target dir (release preferred over debug), probed both from
+/// the repo root and from the `src-tauri/` directory Tauri runs in.
+fn daemon_bin() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PENDRAKED_BIN") {
-        return PathBuf::from(path);
+        return Some(PathBuf::from(path));
     }
-    // Dev fallback: the workspace target dir relative to the repo root, tried
-    // both from the repo root and from the `src-tauri/` directory Tauri runs in.
-    for candidate in ["crates/target/debug/pendraked", "../crates/target/debug/pendraked"] {
-        let path = PathBuf::from(candidate);
-        if path.exists() {
-            return path;
-        }
-    }
-    PathBuf::from("pendraked")
+    [
+        "crates/target/release/pendraked",
+        "../crates/target/release/pendraked",
+        "crates/target/debug/pendraked",
+        "../crates/target/debug/pendraked",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|p| p.exists())
+}
+
+#[cfg(target_os = "macos")]
+fn pendrake_sync_app() -> Option<PathBuf> {
+    [
+        "platform/macos/PendrakeSync/build/PendrakeSync.app",
+        "../platform/macos/PendrakeSync/build/PendrakeSync.app",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|p| p.exists())
+}
+
+fn spawn_bin(bin: &PathBuf) -> Result<(), String> {
+    std::process::Command::new(bin)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("failed to spawn {}: {e}", bin.display()))
+}
+
+#[cfg(target_os = "macos")]
+fn open_app(app: &PathBuf) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(app)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("failed to launch {}: {e}", app.display()))
 }
 
 async fn connect() -> Result<UnixStream, std::io::Error> {
     UnixStream::connect(socket_path().map_err(std::io::Error::other)?).await
 }
 
-/// Launch the background engine. On macOS that's the Swift PendrakeSync.app
-/// (UNUserNotificationCenter + uniffi-linked engine), launched via `open` so it
-/// runs as a proper bundle. Elsewhere it's the `pendraked` binary.
+/// Launch the background engine. Preference, in order: an explicit
+/// `PENDRAKE_SYNC_APP`; then the `pendraked` binary you're iterating on (a dev
+/// checkout always has one under `crates/target`, or via `PENDRAKED_BIN`); then a
+/// discovered dev `.app`. A packaged build has no workspace binary, so it falls
+/// through to the Swift `PendrakeSync.app`. This keeps probe-and-spawn from
+/// silently swapping a stale bundled app in for the engine you're developing —
+/// independent of whether the GUI itself was built debug or `--release`.
 fn spawn_engine() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let app = std::env::var_os("PENDRAKE_SYNC_APP")
+        if let Some(app) = std::env::var_os("PENDRAKE_SYNC_APP")
             .map(PathBuf::from)
-            .or_else(|| {
-                ["platform/macos/PendrakeSync/build/PendrakeSync.app",
-                 "../platform/macos/PendrakeSync/build/PendrakeSync.app"]
-                    .into_iter()
-                    .map(PathBuf::from)
-                    .find(|p| p.exists())
-            })
-            .ok_or("PendrakeSync.app not found (build it with scripts/build-macos-helper.sh)")?;
-        std::process::Command::new("open")
-            .arg(&app)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| format!("failed to launch {}: {e}", app.display()))
+            .filter(|p| p.exists())
+        {
+            return open_app(&app);
+        }
+        if let Some(bin) = daemon_bin() {
+            return spawn_bin(&bin);
+        }
+        if let Some(app) = pendrake_sync_app() {
+            return open_app(&app);
+        }
+        Err("could not start the background process — set PENDRAKED_BIN to a \
+             pendraked binary, or build the macOS helper (scripts/build-macos-helper.sh)"
+            .into())
     }
     #[cfg(not(target_os = "macos"))]
     {
-        std::process::Command::new(daemon_bin())
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| format!("failed to spawn daemon: {e}"))
+        let bin = daemon_bin().unwrap_or_else(|| PathBuf::from("pendraked"));
+        spawn_bin(&bin)
     }
 }
 
@@ -216,6 +247,11 @@ async fn get_transactions() -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn get_transaction(txid: String) -> Result<Value, String> {
+    request("getTransaction", serde_json::json!({ "txid": txid })).await
+}
+
+#[tauri::command]
 async fn forget_wallet() -> Result<Value, String> {
     request("forgetWallet", Value::Null).await
 }
@@ -261,6 +297,7 @@ pub fn run() {
             get_sync_status,
             get_balance,
             get_transactions,
+            get_transaction,
             forget_wallet,
         ])
         .run(tauri::generate_context!())

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { getTransactions, onSyncEvent, type Tx } from "@/lib/ipc";
+import { getTransaction, onSyncEvent, type Tx } from "@/lib/ipc";
 
 export function TxDetailPage() {
   const { txid } = useParams({ strict: false }) as { txid: string };
@@ -10,20 +10,25 @@ export function TxDetailPage() {
   useEffect(() => {
     let active = true;
     async function find() {
-      const all = await getTransactions().catch(() => []);
+      const found = await getTransaction(txid).catch(() => null);
       if (!active) return;
-      setTx(all.find((t) => t.txid === txid) ?? null);
+      setTx(found);
       setLoading(false);
+      return found != null;
     }
     find();
-    // The tx may not be scanned yet on a cold deep-link open; refetch as the
-    // daemon discovers transactions, with a slow poll as a safety net.
+    // On a cold open the daemon may still be repopulating its cache, so refetch
+    // on discovery events and a short poll until the tx resolves.
     const unlisten = onSyncEvent((ev) => {
       if (active && (ev.event === "transaction" || ev.event === "finished")) {
         find();
       }
     });
-    const timer = setInterval(find, 15000);
+    const timer = setInterval(() => {
+      find().then((done) => {
+        if (done) clearInterval(timer);
+      });
+    }, 2000);
     return () => {
       active = false;
       clearInterval(timer);

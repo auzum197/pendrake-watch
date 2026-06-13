@@ -1,0 +1,110 @@
+/* Motion for the sync-engine visualizer. Tied to real engine state, restrained,
+   transform/opacity only, and disabled under reduced-motion. */
+
+:root {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* A commit landing: the overall-tree frontier glow flashes once and eases out. */
+@keyframes sync-tree-pulse {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.sync-tree-pulse {
+  animation: sync-tree-pulse 650ms var(--ease-out-strong) forwards;
+}
+
+/* Per-batch scanning: a belt of output squares creeping through the decryptor
+   gate. The row is duplicated, so -50% loops seamlessly. */
+@keyframes sync-belt {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.sync-belt {
+  animation: sync-belt 6s linear infinite;
+}
+
+/* A real match: one square crosses the gate (at 50% of the lane) and turns green.
+   Travels via container-query width so it stays responsive. */
+@keyframes sync-match {
+  0% {
+    transform: translateX(-6px);
+    opacity: 0;
+    background-color: var(--color-muted-foreground, #9ca3af);
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(calc(50cqw - 50%));
+    background-color: var(--color-muted-foreground, #9ca3af);
+  }
+  58% {
+    background-color: #22c55e;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(calc(100cqw - 100%));
+    opacity: 0;
+    background-color: #22c55e;
+  }
+}
+.sync-match {
+  animation: sync-match 1500ms var(--ease-out-strong) forwards;
+}
+
+/* Per-batch committing: a note commitment dropping into the frontier leaf. */
+@keyframes sync-drop {
+  0% {
+    transform: translateY(-20px) scale(0.85);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+.sync-drop {
+  animation: sync-drop 520ms var(--ease-out-strong) infinite;
+}
+
+/* Waiting: scanned outputs parked above the tree, breathing gently. */
+@keyframes sync-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.sync-bob {
+  animation: sync-bob 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-tree-pulse,
+  .sync-belt,
+  .sync-match,
+  .sync-drop,
+  .sync-bob {
+    animation: none;
+  }
+  .sync-tree-pulse,
+  .sync-match {
+    opacity: 0;
+  }
+}

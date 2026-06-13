@@ -96,6 +96,10 @@ export function getTransactions(): Promise<Tx[]> {
   return invoke("get_transactions");
 }
 
+export function getTransaction(txid: string): Promise<Tx | null> {
+  return invoke("get_transaction", { txid });
+}
+
 export function forgetWallet(): Promise<void> {
   return invoke("forget_wallet");
 }

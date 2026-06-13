@@ -5,8 +5,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MerkleTree } from "@/components/sync/MerkleTree";
+import { BatchScanViz } from "@/components/sync/BatchScanViz";
+import { BatchCommitViz } from "@/components/sync/BatchCommitViz";
 import {
   DEFAULT_INDEXER,
   forgetWallet,
@@ -30,17 +34,35 @@ import {
 
 type Ref<T> = { current: T };
 
+// Last-known wallet identity, kept in module scope so a back-navigation remount
+// of HomePage renders the right screen synchronously instead of flashing the
+// import form while `getWalletState` resolves again.
+let walletCache: { state: WalletState | null; addresses: WalletAddress[] } = {
+  state: null,
+  addresses: [],
+};
+
 export function HomePage() {
-  const [wallet, setWallet] = useState<WalletState | null>(null);
-  const [addresses, setAddresses] = useState<WalletAddress[]>([]);
+  const [wallet, setWallet] = useState<WalletState | null>(walletCache.state);
+  const [addresses, setAddresses] = useState<WalletAddress[]>(
+    walletCache.addresses,
+  );
+  const [loaded, setLoaded] = useState(walletCache.state !== null);
+
+  function apply(state: WalletState, addrs: WalletAddress[]) {
+    walletCache = { state, addresses: addrs };
+    setWallet(state);
+    setAddresses(addrs);
+    setLoaded(true);
+  }
 
   useEffect(() => {
     getWalletState()
       .then(async (state) => {
-        setWallet(state);
-        if (state.exists) setAddresses(await getAddresses());
+        const addrs = state.exists ? await getAddresses() : [];
+        apply(state, addrs);
       })
-      .catch(() => setWallet(null));
+      .catch(() => setLoaded(true));
   }, []);
 
   if (wallet?.exists) {
@@ -50,18 +72,20 @@ export function HomePage() {
         addresses={addresses}
         onForget={async () => {
           await forgetWallet();
-          setAddresses([]);
-          setWallet(await getWalletState());
+          apply(await getWalletState(), []);
         }}
       />
     );
   }
 
+  // Wallet state still unknown: hold a neutral frame rather than flashing the
+  // import screen (which would otherwise show on every remount).
+  if (!loaded) return <div className="min-h-screen" />;
+
   return (
     <ImportForm
       onImported={async (state) => {
-        setWallet(state);
-        setAddresses(await getAddresses());
+        apply(state, await getAddresses());
       }}
     />
   );
@@ -173,29 +197,28 @@ function ImportForm({
   );
 }
 
-function WalletView({
-  wallet,
-  addresses,
-  onForget,
-}: {
-  wallet: WalletState;
-  addresses: WalletAddress[];
-  onForget: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
+type CommitPulse = { seq: number; insertSecs: number };
+type TxSpark = { seq: number; valueZat: string; received: boolean };
+
+/// The live sync feed: status, balance, history, batches, plus two transient
+/// signals — `commit` (bumped on each committed batch) and `spark` (bumped on each
+/// discovered transaction) — that the visualizations key their motion off, so the
+/// animation is driven by real engine events rather than timers.
+function useSyncFeed() {
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
   const [batches, setBatches] = useState<BatchProgress[]>([]);
   const [doneLog, setDoneLog] = useState<BatchSummary[]>([]);
   const [pollError, setPollError] = useState<string | null>(null);
-  const syncing = sync?.state === "syncing";
-  const now = useNow(syncing);
-  // Anchors the overall bar so it can be projected forward smoothly between the
-  // discrete jumps that arrive when a batch commits.
+  const [commit, setCommit] = useState<CommitPulse>({ seq: 0, insertSecs: 0 });
+  const [spark, setSpark] = useState<TxSpark>({
+    seq: 0,
+    valueZat: "0",
+    received: true,
+  });
   const anchor = useRef<ProgressAnchor>({ frac: 0, etaSeconds: null, atMs: 0 });
   const shownFrac = useRef(0);
-  const primary = addresses[0];
 
   useEffect(() => {
     let active = true;
@@ -234,8 +257,11 @@ function WalletView({
           reanchor(anchor, shownFrac, ev.status);
           break;
         case "batchDone":
-          // Keep just the last couple of finished batches, not a growing log.
           setDoneLog((log) => [ev.batch, ...log].slice(0, 2));
+          setCommit((c) => ({
+            seq: c.seq + 1,
+            insertSecs: ev.batch.timing.commit.insertTree,
+          }));
           break;
         case "finished":
           setSync(ev.status);
@@ -245,6 +271,11 @@ function WalletView({
           break;
         case "transaction":
           refetch();
+          setSpark((s) => ({
+            seq: s.seq + 1,
+            valueZat: ev.valueZat,
+            received: ev.received,
+          }));
           break;
         case "error":
           setSync((prev) =>
@@ -264,103 +295,264 @@ function WalletView({
     };
   }, []);
 
+  return {
+    sync,
+    balance,
+    txs,
+    batches,
+    doneLog,
+    pollError,
+    commit,
+    spark,
+    anchor,
+    shownFrac,
+  };
+}
+
+function WalletView({
+  wallet,
+  addresses,
+  onForget,
+}: {
+  wallet: WalletState;
+  addresses: WalletAddress[];
+  onForget: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const feed = useSyncFeed();
+  const { sync, balance, txs, batches, doneLog, pollError, commit, spark } = feed;
+  const syncing = sync?.state === "syncing";
+  const now = useNow(!!syncing);
+  const frac = overallFrac(feed.anchor, feed.shownFrac, now);
+
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pt-[6vh]">
+    <div className="mx-auto w-full max-w-5xl px-4 pt-[6vh] pb-12">
+      <div className="grid gap-6 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <StateRail
+          wallet={wallet}
+          sync={sync}
+          balance={balance}
+          txs={txs}
+          address={addresses[0]}
+          busy={busy}
+          onForget={async () => {
+            setBusy(true);
+            await onForget();
+            setBusy(false);
+          }}
+        />
+        <SyncTheater
+          sync={sync}
+          syncing={!!syncing}
+          frac={frac}
+          batches={batches}
+          doneLog={doneLog}
+          now={now}
+          commit={commit}
+          spark={spark}
+          pollError={pollError}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StateRail({
+  wallet,
+  sync,
+  balance,
+  txs,
+  address,
+  busy,
+  onForget,
+}: {
+  wallet: WalletState;
+  sync: SyncStatus | null;
+  balance: Balance | null;
+  txs: Tx[];
+  address: WalletAddress | undefined;
+  busy: boolean;
+  onForget: () => void;
+}) {
+  return (
+    <aside className="flex flex-col gap-5 md:sticky md:top-6 md:self-start">
       <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-3xl font-bold tracking-tight">
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
           Your wallet
         </h1>
-        <p className="text-sm text-muted-foreground">
-          The wallet file is owned by the background process, which keeps syncing
-          and posting notifications while this window is closed.
+        <p className="text-xs text-muted-foreground">
+          Owned by the background process; it keeps syncing while this window is
+          closed.
         </p>
       </header>
 
-      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3">
-        <div className="flex flex-col">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Total balance</span>
-          <span className="font-heading text-2xl font-semibold tabular-nums">
-            {balance ? formatZec(totalConfirmed(balance)) : "…"} ZEC
-          </span>
+          <SyncBadge sync={sync} />
         </div>
-        <SyncBadge sync={sync} />
+        <span className="font-heading text-3xl font-semibold tabular-nums">
+          {balance ? formatZec(totalConfirmed(balance)) : "…"}{" "}
+          <span className="text-base font-normal text-muted-foreground">ZEC</span>
+        </span>
       </div>
 
-      {pollError && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Can't reach the background process: {pollError}
-        </p>
-      )}
-
-      {syncing && (
-        <div className="flex flex-col gap-3">
-          <SyncProgress sync={sync} frac={overallFrac(anchor, shownFrac, now)} />
-          {(batches.length > 0 || doneLog.length > 0) && (
-            <div className="ml-1.5 flex flex-col gap-3 border-l-2 border-border pl-3">
-              <BatchList batches={batches} now={now} />
-              <RecentBatches log={doneLog} />
-            </div>
-          )}
-        </div>
-      )}
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">Transactions</h2>
-        {txs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {sync?.state === "idle"
-              ? "No transactions for this viewing key."
-              : "None yet."}
-          </p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
-            {txs.map((tx) => (
-              <TxRow key={tx.txid} tx={tx} />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted-foreground">Network</dt>
         <dd className="capitalize">{wallet.network}</dd>
-        <dt className="text-muted-foreground">Import type</dt>
+        <dt className="text-muted-foreground">Type</dt>
         <dd className="uppercase">{wallet.importType}</dd>
         <dt className="text-muted-foreground">Birthday</dt>
-        <dd>{wallet.birthdayHeight}</dd>
-        <dt className="text-muted-foreground">Synced height</dt>
+        <dd className="tabular-nums">{wallet.birthdayHeight.toLocaleString()}</dd>
+        <dt className="text-muted-foreground">Height</dt>
         <dd className="tabular-nums">
           {sync?.syncedHeight ? sync.syncedHeight.toLocaleString() : "—"}
           {sync?.chainTip ? ` / ${sync.chainTip.toLocaleString()}` : ""}
         </dd>
       </dl>
 
-      {primary && (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm text-muted-foreground">Unified address</span>
-          <code className="break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
-            {primary.ua}
+      {address && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted-foreground">Unified address</span>
+          <code className="break-all rounded-md border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-[11px]">
+            {address.ua}
           </code>
-          {primary.transparent && (
-            <code className="break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
-              {primary.transparent}
+          {address.transparent && (
+            <code className="break-all rounded-md border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-[11px]">
+              {address.transparent}
             </code>
           )}
         </div>
       )}
 
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-medium text-muted-foreground">Transactions</h2>
+        {txs.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {sync?.state === "idle"
+              ? "No transactions for this key."
+              : "None yet."}
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+            {txs.slice(0, 8).map((tx) => (
+              <TxRow key={tx.txid} tx={tx} />
+            ))}
+          </ul>
+        )}
+      </section>
+
       <Button
         variant="destructive"
         className="self-start"
         disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          await onForget();
-          setBusy(false);
-        }}
+        onClick={onForget}
       >
         Forget wallet
       </Button>
+    </aside>
+  );
+}
+
+function SyncTheater({
+  sync,
+  syncing,
+  frac,
+  batches,
+  doneLog,
+  now,
+  commit,
+  spark,
+  pollError,
+}: {
+  sync: SyncStatus | null;
+  syncing: boolean;
+  frac: number;
+  batches: BatchProgress[];
+  doneLog: BatchSummary[];
+  now: number;
+  commit: CommitPulse;
+  spark: TxSpark;
+  pollError: string | null;
+}) {
+  const synced = sync?.state === "idle";
+  const committing = sync?.phase === "committing";
+
+  return (
+    <section className="flex min-w-0 flex-col gap-5">
+      {pollError && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Can't reach the background process: {pollError}
+        </p>
+      )}
+      {sync?.state === "error" && sync.error && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Sync error: {sync.error}
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-medium">Sync engine</h2>
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            {synced
+              ? "synced"
+              : `${Math.floor(frac * 100)}%${sync?.etaSeconds ? ` · ~${shortDuration(sync.etaSeconds)} left` : ""}`}
+          </span>
+        </div>
+        <Bar frac={synced ? 1 : frac} tone={committing ? "committing" : "scanning"} />
+      </div>
+
+      <Panel title="Note-commitment tree" emphasized={committing} dim={false}>
+        <div className="mx-auto max-w-md">
+          <MerkleTree
+            frac={synced ? 1 : frac}
+            pulseSeq={commit.seq}
+            pulseMs={Math.round(Math.min(700, Math.max(220, commit.insertSecs * 1000)))}
+            active={committing || !!synced}
+            synced={!!synced}
+            total={sync?.totalOutputs}
+            scanned={sync?.scannedOutputs}
+          />
+        </div>
+      </Panel>
+
+      {syncing && (batches.length > 0 || doneLog.length > 0) && (
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <BatchList batches={batches} now={now} sparkSeq={spark.seq} />
+          <RecentBatches log={doneLog} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  emphasized,
+  dim,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  emphasized: boolean;
+  dim: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-lg border p-4 transition-[opacity,border-color] duration-300 ${
+        emphasized ? "border-primary/40 bg-muted/20" : "border-border"
+      } ${dim ? "opacity-55" : "opacity-100"}`}
+    >
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-xs font-medium">{title}</h3>
+        {subtitle && (
+          <span className="text-[11px] text-muted-foreground">{subtitle}</span>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
@@ -385,26 +577,6 @@ const SYNC_LABELS: Record<SyncStatus["state"], string> = {
   syncing: "Syncing…",
   error: "Sync error",
 };
-
-function SyncProgress({ sync, frac }: { sync: SyncStatus; frac: number }) {
-  const phase = sync.phase === "committing" ? "Committing" : "Scanning";
-  const pct = Math.min(100, Math.max(0, Math.floor(frac * 100)));
-  const counts =
-    sync.totalOutputs && sync.totalOutputs > 0
-      ? `${(sync.scannedOutputs ?? 0).toLocaleString()}/${sync.totalOutputs.toLocaleString()} notes`
-      : null;
-  const eta = sync.etaSeconds ? shortDuration(sync.etaSeconds) : null;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Bar frac={frac} />
-      <p className="text-xs text-muted-foreground tabular-nums">
-        {phase} notes since the wallet birthday ({pct}%
-        {counts ? `, ${counts}` : ""}
-        {eta ? `, ~${eta} left` : ""}). The first sync can take a few minutes.
-      </p>
-    </div>
-  );
-}
 
 type Tracked<T> = { key: string; item: T; leaving: boolean };
 
@@ -520,9 +692,11 @@ const MAX_BATCHES = 4;
 function BatchList({
   batches,
   now,
+  sparkSeq,
 }: {
   batches: BatchProgress[];
   now: number;
+  sparkSeq: number;
 }) {
   const visible = useMemo(() => {
     // Choose the most-active ranges (committing, then scanning, then waiting)...
@@ -536,13 +710,20 @@ function BatchList({
     return chosen.sort((a, b) => a.start - b.start);
   }, [batches]);
   const queued = batches.length - visible.length;
+  // A real match flashes green on exactly one lane: the lead scanning batch.
+  const leadScanningId = visible.find((b) => b.phase === "scanning")?.id;
   const entries = useTransitionList(visible, batchKey);
   return (
     <div className="flex flex-col">
       {entries.map((entry) => (
         <Collapse key={entry.key} leaving={entry.leaving}>
           <div className="pb-2">
-            <BatchRow batch={entry.item} now={now} />
+            <BatchRow
+              batch={entry.item}
+              now={now}
+              sparkSeq={sparkSeq}
+              canSpark={entry.item.id === leadScanningId}
+            />
           </div>
         </Collapse>
       ))}
@@ -555,7 +736,17 @@ function BatchList({
   );
 }
 
-function BatchRow({ batch, now }: { batch: BatchProgress; now: number }) {
+function BatchRow({
+  batch,
+  now,
+  sparkSeq,
+  canSpark,
+}: {
+  batch: BatchProgress;
+  now: number;
+  sparkSeq: number;
+  canSpark: boolean;
+}) {
   const elapsed = Math.max(0, (now - batch.phaseStartedAtMs) / 1000);
   const waiting = batch.phase === "waiting";
   const label =
@@ -597,6 +788,18 @@ function BatchRow({ batch, now }: { batch: BatchProgress; now: number }) {
       {/* A waiting batch is done scanning, so it stays full but recolours and
           pulses to read as "parked, not progressing". */}
       <Bar frac={waiting ? 1 : frac} tone={batch.phase} pulse={waiting} />
+      {/* The batch's own graphic: the decryptor gate while scanning, the mini
+          note-tree (queued, then filling) while waiting/committing. */}
+      <div className="mt-1.5 max-w-[260px]">
+        {batch.phase === "scanning" ? (
+          <BatchScanViz active sparkSeq={sparkSeq} canSpark={canSpark} />
+        ) : (
+          <BatchCommitViz
+            committing={batch.phase === "committing"}
+            frac={batch.phase === "committing" ? frac : 0}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -776,24 +979,30 @@ function SyncBadge({ sync }: { sync: SyncStatus | null }) {
 function TxRow({ tx }: { tx: Tx }) {
   const received = tx.kind === "received";
   return (
-    <li className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
-      <div className="flex flex-col">
-        <span className="font-medium">
-          {received ? "Received" : "Sent"}
-          {tx.status === "pending" && (
-            <span className="ml-2 text-xs text-muted-foreground">pending</span>
-          )}
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">
-          {tx.txid.slice(0, 16)}…
-        </span>
-      </div>
-      <span
-        className={`tabular-nums ${received ? "text-green-600 dark:text-green-400" : ""}`}
+    <li>
+      <Link
+        to="/tx/$txid"
+        params={{ txid: tx.txid }}
+        className="flex items-center justify-between gap-4 px-3 py-2 text-sm transition-colors hover:bg-muted/50"
       >
-        {received ? "+" : "−"}
-        {formatZec(BigInt(tx.valueZat))} ZEC
-      </span>
+        <div className="flex flex-col">
+          <span className="font-medium">
+            {received ? "Received" : "Sent"}
+            {tx.status === "pending" && (
+              <span className="ml-2 text-xs text-muted-foreground">pending</span>
+            )}
+          </span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {tx.txid.slice(0, 16)}…
+          </span>
+        </div>
+        <span
+          className={`tabular-nums ${received ? "text-green-600 dark:text-green-400" : ""}`}
+        >
+          {received ? "+" : "−"}
+          {formatZec(BigInt(tx.valueZat))} ZEC
+        </span>
+      </Link>
     </li>
   );
 }
