@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import "./sync-viz.css";
 
 // A schematic of the note-commitment Merkle tree. Shielded outputs are appended
-// as leaves left-to-right; the highlighted frontier is the authentication path
+// as leaves left to right, and the highlighted frontier is the authentication path
 // from the last appended leaf up to the root. The fixed 16-leaf depth is a
-// legible stand-in: the real commitment counts are shown numerically alongside,
-// so the small tree never implies a false scale.
+// legible stand-in. The real commitment counts are shown numerically alongside, so
+// the small tree never implies a false scale.
 
 const LEAVES = 16;
 const LEVELS = 5; // leaves + 4 internal rows up to the root

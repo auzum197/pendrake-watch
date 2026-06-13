@@ -45,11 +45,11 @@ const IDLE_INTERVAL: Duration = Duration::from_secs(2);
 const BACKOFF_MIN: Duration = Duration::from_secs(3);
 const BACKOFF_MAX: Duration = Duration::from_secs(120);
 /// How often to check the background sync task for completion. The event stream
-/// drives progress; this only watches for the round finishing.
+/// drives progress, so this only watches for the round finishing.
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// How often to push a coalesced progress snapshot. A fast scan emits batch
 /// lifecycle events far quicker than the GUI can paint, so the snapshot is
-/// rate-limited to this cadence; discrete events (batch done, transactions) still
+/// rate-limited to this cadence. Discrete events (batch done, transactions) still
 /// go out immediately.
 const PROGRESS_FLUSH: Duration = Duration::from_millis(120);
 /// Committed batches kept for the measured throughput windows.
@@ -302,7 +302,7 @@ impl Engine {
                 self.forget().await?;
                 Ok(serde_json::Value::Null)
             }
-            // The push stream is wired up by the IPC layer; the engine just acks.
+            // The push stream is wired up by the IPC layer, so the engine just acks.
             "subscribeEvents" => Ok(serde_json::Value::Null),
             other => Err(anyhow!("unknown method: {other}")),
         }
@@ -500,7 +500,7 @@ impl Engine {
         let mut stream_open = true;
 
         let result = loop {
-            // A (re)import or forget bumps the generation; this round is now stale.
+            // A (re)import or forget bumps the generation, retiring this round.
             if self.generation.load(Ordering::SeqCst) != generation {
                 return Ok(());
             }
@@ -515,8 +515,8 @@ impl Engine {
                         self.reconcile(&mut view).await;
                         dirty = true;
                     }
-                    // The sender drops when the sync task ends; the poll arm then
-                    // collects the result.
+                    // The sender drops when the sync task ends, and the poll arm
+                    // then collects the result.
                     Err(RecvError::Closed) => stream_open = false,
                 },
 
@@ -556,7 +556,7 @@ impl Engine {
     }
 
     /// Fold one library event into the round view. Batch lifecycle events move the
-    /// active list along; a committed range also emits a `BatchDone`, and a
+    /// active list along. A committed range also emits a `BatchDone`, and a
     /// discovered transaction is looked up and forwarded. The coalesced `Progress`
     /// snapshot is pushed by the flush ticker, not here.
     async fn on_event(&self, event: SequencedSyncEvent, view: &mut RoundView) {
@@ -654,7 +654,7 @@ impl Engine {
             }
             LibSyncEvent::TxDiscovered { txid, .. } => self.on_tx_discovered(txid).await,
             LibSyncEvent::Reorg { reverted_to } => {
-                // A reverted batch never commits; drop any unpaired starts.
+                // A reverted batch never commits, so drop any unpaired starts.
                 view.in_flight.clear();
                 view.synced_height = view.synced_height.min(u32::from(reverted_to));
             }
@@ -668,7 +668,7 @@ impl Engine {
     /// the user the first time it is seen. The persisted seen-set keeps a later
     /// round or a restart from re-notifying the same txid.
     async fn on_tx_discovered(&self, txid: TxId) {
-        // Fetch the summary and refreshed balance under one client lock; funds
+        // Fetch the summary and refreshed balance under one client lock. Funds
         // changed, so the cached balance is updated alongside.
         let (summary, bal) = {
             let guard = self.client.lock().await;
@@ -680,7 +680,7 @@ impl Engine {
         if let Some(bal) = bal {
             *self.balance.write().await = Some(map_balance(&bal));
         }
-        // The event is a hint; if the summary hasn't committed yet, a later event
+        // The event is a hint. If the summary hasn't committed yet, a later event
         // or the GUI's own refetch picks it up.
         let Some(summary) = summary else { return };
 

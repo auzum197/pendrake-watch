@@ -201,9 +201,9 @@ type CommitPulse = { seq: number; insertSecs: number };
 type TxSpark = { seq: number; valueZat: string; received: boolean };
 
 /// The live sync feed: status, balance, history, batches, plus two transient
-/// signals — `commit` (bumped on each committed batch) and `spark` (bumped on each
-/// discovered transaction) — that the visualizations key their motion off, so the
-/// animation is driven by real engine events rather than timers.
+/// signals the visualizations key their motion off, so the animation is driven by
+/// real engine events rather than timers. `commit` bumps on each committed batch,
+/// `spark` on each discovered transaction.
 function useSyncFeed() {
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);

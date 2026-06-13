@@ -80,30 +80,39 @@ async fn connect() -> Result<UnixStream, std::io::Error> {
     UnixStream::connect(socket_path().map_err(std::io::Error::other)?).await
 }
 
-/// Launch the background engine. Preference, in order: an explicit
-/// `PENDRAKE_SYNC_APP`; then the `pendraked` binary you're iterating on (a dev
-/// checkout always has one under `crates/target`, or via `PENDRAKED_BIN`); then a
-/// discovered dev `.app`. A packaged build has no workspace binary, so it falls
-/// through to the Swift `PendrakeSync.app`. This keeps probe-and-spawn from
-/// silently swapping a stale bundled app in for the engine you're developing —
-/// independent of whether the GUI itself was built debug or `--release`.
+/// Launch the background engine. On macOS the Swift `PendrakeSync.app` is
+/// preferred (the only host that delivers clickable deep-linking notifications via
+/// UNUserNotificationCenter), falling back to the `pendraked` binary when no app
+/// is built. The app's embedded engine is frozen at the last
+/// `scripts/build-macos-helper.sh` run, so we log which one we spawn. That keeps a
+/// stale app from silently standing in for a changed `pendrake-core`.
 fn spawn_engine() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        if let Some(app) = std::env::var_os("PENDRAKE_SYNC_APP")
+        let app = std::env::var_os("PENDRAKE_SYNC_APP")
             .map(PathBuf::from)
             .filter(|p| p.exists())
-        {
+            .or_else(pendrake_sync_app);
+        if let Some(app) = app {
+            eprintln!(
+                "pendrake: launching {}. Its engine is only as current as your last \
+                 scripts/build-macos-helper.sh run, so rerun that after pendrake-core changes",
+                app.display()
+            );
             return open_app(&app);
         }
+        // No app built: fall back to the binary. It is always current via
+        // `cargo build`, but its notifications aren't clickable on macOS.
         if let Some(bin) = daemon_bin() {
+            eprintln!(
+                "pendrake: PendrakeSync.app not found, spawning {} \
+                 (macOS notifications won't be clickable, build the helper for those)",
+                bin.display()
+            );
             return spawn_bin(&bin);
         }
-        if let Some(app) = pendrake_sync_app() {
-            return open_app(&app);
-        }
-        Err("could not start the background process — set PENDRAKED_BIN to a \
-             pendraked binary, or build the macOS helper (scripts/build-macos-helper.sh)"
+        Err("could not start the background process. Build the macOS helper \
+             (scripts/build-macos-helper.sh), or set PENDRAKED_BIN to a pendraked binary"
             .into())
     }
     #[cfg(not(target_os = "macos"))]
@@ -152,7 +161,7 @@ async fn run_event_bridge(app: tauri::AppHandle) {
 }
 
 /// Connect, subscribe, and forward events until the connection drops. The leading
-/// ack reply carries `ok`; only lines carrying `event` are real pushes.
+/// ack reply carries `ok`, so only lines carrying `event` are real pushes.
 async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::Emitter;
 
