@@ -7,6 +7,7 @@ mod ipc;
 mod notify;
 mod paths;
 mod run;
+pub mod transport;
 
 pub use engine::Engine;
 pub use notify::{Notifier, NullNotifier};

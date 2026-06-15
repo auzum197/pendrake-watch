@@ -49,6 +49,13 @@ impl Paths {
             .with_context(|| format!("creating data dir {}", self.wallet_dir.display()))?;
         Ok(())
     }
+
+    /// The IPC endpoint the server binds and clients connect to: the `socket` path
+    /// on Unix, a named pipe on Windows. Derived from `root` so a
+    /// `PENDRAKE_DATA_DIR` override keeps client and daemon in agreement.
+    pub fn endpoint(&self) -> String {
+        crate::transport::endpoint(&self.root)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

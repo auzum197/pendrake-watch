@@ -1,9 +1,10 @@
 //! Tauri GUI backend: a thin client over the Pendrake daemon.
 //!
 //! The `pendraked` daemon owns the wallet file. This process never links the
-//! engine. It probes the daemon's Unix socket, spawns it if nothing answers
-//! following the SPEC's probe-and-spawn rule, then forwards request and response
-//! JSON between the webview and the socket.
+//! engine. It probes the daemon's local socket (a Unix socket on Unix, a named
+//! pipe on Windows), spawns it if nothing answers following the SPEC's
+//! probe-and-spawn rule, then forwards request and response JSON between the
+//! webview and the socket.
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -11,24 +12,49 @@ use std::time::Duration;
 
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
 use tokio::sync::Mutex;
+
+/// The daemon connection: a Unix socket stream on Unix, a named-pipe client on
+/// Windows. Both are `AsyncRead + AsyncWrite`, so the JSON-lines code is shared.
+#[cfg(unix)]
+type Conn = tokio::net::UnixStream;
+#[cfg(windows)]
+type Conn = tokio::net::windows::named_pipe::NamedPipeClient;
 
 /// Serializes the connect-or-spawn path so the webview's concurrent requests
 /// (status, balance, history on mount) don't each spawn a daemon.
 static SPAWN_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-/// Mirrors `pendrake_core::Paths`: same `PENDRAKE_DATA_DIR` override, same
-/// default location, so client and daemon agree on the socket path. A spawned
-/// daemon inherits this process's environment, keeping the override in sync.
-fn socket_path() -> Result<PathBuf, String> {
-    let root = match std::env::var_os("PENDRAKE_DATA_DIR") {
-        Some(dir) => PathBuf::from(dir),
+/// Mirrors `pendrake_core::Paths`: same `PENDRAKE_DATA_DIR` override, same default
+/// location, so client and daemon agree on the data root. A spawned daemon inherits
+/// this process's environment, keeping the override in sync.
+fn data_root() -> Result<PathBuf, String> {
+    match std::env::var_os("PENDRAKE_DATA_DIR") {
+        Some(dir) => Ok(PathBuf::from(dir)),
         None => dirs::data_dir()
-            .ok_or("could not determine OS data directory")?
-            .join("pendrake-watch"),
-    };
-    Ok(root.join("daemon.sock"))
+            .ok_or_else(|| "could not determine OS data directory".to_string())
+            .map(|d| d.join("pendrake-watch")),
+    }
+}
+
+/// The IPC endpoint, derived from the data root. Mirrors
+/// `pendrake_core::transport::endpoint` (same FNV-1a pipe name on Windows) so the
+/// client and daemon meet at the same socket without sharing a crate.
+fn endpoint() -> Result<String, String> {
+    let root = data_root()?;
+    #[cfg(unix)]
+    {
+        Ok(root.join("daemon.sock").to_string_lossy().into_owned())
+    }
+    #[cfg(windows)]
+    {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in root.to_string_lossy().as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        Ok(format!(r"\\.\pipe\pendrake-{hash:016x}"))
+    }
 }
 
 /// The `pendraked` binary to spawn: `PENDRAKED_BIN` if set, otherwise a dev build
@@ -38,11 +64,12 @@ fn daemon_bin() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PENDRAKED_BIN") {
         return Some(PathBuf::from(path));
     }
+    let exe = std::env::consts::EXE_SUFFIX;
     [
-        "crates/target/release/pendraked",
-        "../crates/target/release/pendraked",
-        "crates/target/debug/pendraked",
-        "../crates/target/debug/pendraked",
+        format!("crates/target/release/pendraked{exe}"),
+        format!("../crates/target/release/pendraked{exe}"),
+        format!("crates/target/debug/pendraked{exe}"),
+        format!("../crates/target/debug/pendraked{exe}"),
     ]
     .into_iter()
     .map(PathBuf::from)
@@ -76,8 +103,16 @@ fn open_app(app: &PathBuf) -> Result<(), String> {
         .map_err(|e| format!("failed to launch {}: {e}", app.display()))
 }
 
-async fn connect() -> Result<UnixStream, std::io::Error> {
-    UnixStream::connect(socket_path().map_err(std::io::Error::other)?).await
+async fn connect() -> Result<Conn, std::io::Error> {
+    let endpoint = endpoint().map_err(std::io::Error::other)?;
+    #[cfg(unix)]
+    {
+        tokio::net::UnixStream::connect(&endpoint).await
+    }
+    #[cfg(windows)]
+    {
+        tokio::net::windows::named_pipe::ClientOptions::new().open(&endpoint)
+    }
 }
 
 /// Launch the background engine. On macOS an explicit override wins first
@@ -129,7 +164,7 @@ fn spawn_engine() -> Result<(), String> {
 }
 
 /// Connect to the daemon, spawning it and waiting for the socket if nothing answers.
-async fn ensure_daemon() -> Result<UnixStream, String> {
+async fn ensure_daemon() -> Result<Conn, String> {
     if let Ok(stream) = connect().await {
         return Ok(stream);
     }
@@ -172,7 +207,7 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::Emitter;
 
     let stream = ensure_daemon().await?;
-    let (read_half, mut write_half) = stream.into_split();
+    let (read_half, mut write_half) = tokio::io::split(stream);
 
     let req = serde_json::json!({ "id": 1, "method": "subscribeEvents", "params": null });
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
@@ -204,7 +239,7 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
 
 async fn request(method: &str, params: Value) -> Result<Value, String> {
     let stream = ensure_daemon().await?;
-    let (read_half, mut write_half) = stream.into_split();
+    let (read_half, mut write_half) = tokio::io::split(stream);
 
     let req = serde_json::json!({ "id": 1, "method": method, "params": params });
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
