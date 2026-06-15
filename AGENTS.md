@@ -44,8 +44,9 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 #### Articles and determiners
 
-- Don't drop articles ("the", "a", "an") to sound crisp or punchy. Write "the parser reads the manifest", not "parser reads manifest". Telegraphic, headline-style phrasing is a strong machine-generated tell and often reads like translated copy.
-- The exception is genuine fragment formats (bullet labels, short table cells) where a determiner would just be noise. Everywhere else, use full grammatical sentences.
+- Don't drop the definite or indefinite article before a noun to sound terse. Write "the spec was written", not "spec is written"; "the parser reads the manifest", not "parser reads manifest". This zero-article, telegraphic register is a strong machine-generated tell and often reads like translated copy.
+- Watch the related tense slip: the clipped present where the past belongs ("spec is written" for "the spec was written", "add handler" for "we added a handler"). That is commit-message and changelog phrasing leaking into prose. Use natural past tense for things that happened.
+- The exception is genuine fragment formats (bullet labels, short table cells) where an article would just be noise. Everywhere else, use full grammatical sentences with their articles intact.
 
 #### Cadence and register
 
