@@ -101,3 +101,17 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 
 - No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in Linear — project "Pendrake Watch-only", team Auzum197 (AUZ) — managed via the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Hybrid mapping: Linear workflow states for lifecycle plus three labels for agent/human/info distinctions. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
