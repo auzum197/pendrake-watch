@@ -1,4 +1,5 @@
-//! Unix-domain-socket IPC server. Newline-delimited JSON, one task per client.
+//! IPC server. Newline-delimited JSON, one task per client, over the platform
+//! transport (Unix socket or Windows named pipe, see [`crate::transport`]).
 //!
 //! A connection is request/response until it sends `subscribeEvents`; from then
 //! on the daemon also pushes [`SyncEvent`] lines as the wallet scans, interleaved
@@ -8,33 +9,37 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use pendrake_ipc::{Request, Response};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::io::{
+    AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf,
+};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::engine::Engine;
 use crate::paths::Paths;
+use crate::transport::Listener;
 
 pub async fn serve(engine: Arc<Engine>, paths: Paths) -> Result<()> {
-    // A stale socket file blocks bind. The engine is single-instance, so clear it.
-    let _ = std::fs::remove_file(&paths.socket);
-    let listener = UnixListener::bind(&paths.socket)
-        .with_context(|| format!("binding socket {}", paths.socket.display()))?;
-    tracing::info!("listening on {}", paths.socket.display());
+    let endpoint = paths.endpoint();
+    let mut listener =
+        Listener::bind(&endpoint).with_context(|| format!("binding endpoint {endpoint}"))?;
+    tracing::info!("listening on {endpoint}");
 
     loop {
-        let (stream, _addr) = listener.accept().await.context("accept failed")?;
+        let conn = listener.accept().await.context("accept failed")?;
         let engine = Arc::clone(&engine);
         tokio::spawn(async move {
-            if let Err(e) = handle_conn(stream, engine).await {
+            if let Err(e) = handle_conn(conn, engine).await {
                 tracing::debug!("connection closed: {e}");
             }
         });
     }
 }
 
-async fn handle_conn(stream: UnixStream, engine: Arc<Engine>) -> Result<()> {
-    let (read_half, mut write_half) = stream.into_split();
+async fn handle_conn<S>(stream: S, engine: Arc<Engine>) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let (read_half, mut write_half) = tokio::io::split(stream);
     let mut lines = BufReader::new(read_half).lines();
 
     while let Some(line) = lines.next_line().await? {
@@ -64,11 +69,14 @@ async fn handle_conn(stream: UnixStream, engine: Arc<Engine>) -> Result<()> {
 
 /// Drain the engine's event stream onto a subscribed connection, still answering
 /// any requests the client sends alongside the push feed.
-async fn stream_events(
-    mut lines: tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
-    mut write_half: tokio::net::unix::OwnedWriteHalf,
+async fn stream_events<S>(
+    mut lines: Lines<BufReader<ReadHalf<S>>>,
+    mut write_half: WriteHalf<S>,
     engine: Arc<Engine>,
-) -> Result<()> {
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite,
+{
     let mut events = engine.subscribe();
     loop {
         tokio::select! {
@@ -98,10 +106,11 @@ async fn stream_events(
     Ok(())
 }
 
-async fn write_line<T: serde::Serialize>(
-    write_half: &mut tokio::net::unix::OwnedWriteHalf,
-    value: &T,
-) -> Result<()> {
+async fn write_line<W, T>(write_half: &mut W, value: &T) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+    T: serde::Serialize,
+{
     let mut encoded = serde_json::to_vec(value)?;
     encoded.push(b'\n');
     write_half.write_all(&encoded).await?;
