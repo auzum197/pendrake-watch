@@ -12,9 +12,8 @@ mod notify;
 use std::sync::Arc;
 
 use anyhow::Result;
-use pendrake_core::{Config, Paths};
+use pendrake_core::{transport, Config, Paths};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
 
 use crate::notify::DesktopNotifier;
 
@@ -52,8 +51,8 @@ async fn run_client(paths: &Paths, args: &[String]) -> Result<()> {
         None => serde_json::json!({}),
     };
 
-    let stream = UnixStream::connect(&paths.socket).await?;
-    let (read_half, mut write_half) = stream.into_split();
+    let stream = transport::connect(&paths.endpoint()).await?;
+    let (read_half, mut write_half) = tokio::io::split(stream);
 
     let req = serde_json::json!({ "id": 1, "method": method, "params": params });
     write_half.write_all(format!("{req}\n").as_bytes()).await?;
