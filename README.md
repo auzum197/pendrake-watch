@@ -1,7 +1,110 @@
-# Tauri + React + Typescript
+# Pendrake Watch-only
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Pendrake Watch-only is a watch-only Zcash wallet. A background process built on
+zingolib owns the wallet file and syncs continuously, posting desktop
+notifications while the window is closed. The GUI is a Tauri v2 client that talks
+to that process over a local socket.
 
-## Recommended IDE Setup
+## Architecture
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+The engine is the `pendrake-core` crate. It builds a watch-only wallet from a
+viewing key, runs the sync loop, owns the wallet file, and serves the IPC
+protocol. It never runs on its own. One of two hosts compiles it in and gives it
+a process to live in:
+
+- `pendraked`, the `pendrake-daemon` crate, is the standalone daemon binary. It is
+  the production background process on Linux and Windows, and the dev or headless
+  host on macOS.
+- `PendrakeSync.app` is a small Swift app that embeds the same engine through
+  `pendrake-ffi`, a uniffi static library. It exists only on macOS, where
+  clickable notifications need `UNUserNotificationCenter` and a real app bundle.
+
+The GUI (`src-tauri` plus the React app under `src`) is a thin client. On launch
+it probes the daemon's Unix socket and spawns a host if nothing answers. Closing
+the window leaves the background process running.
+
+| Host | Platforms | Notifications | Rebuild after an engine change |
+| --- | --- | --- | --- |
+| `pendraked` | Linux, Windows, macOS dev | a click opens the `pendrake://` deep link on Linux and Windows | `just daemon` |
+| `PendrakeSync.app` | macOS | clickable, opens the `pendrake://` deep link | `just helper` |
+
+So `pendrake-daemon` is not obsolete now that macOS prefers the app. It remains the
+production daemon on Linux and Windows, and the fast host for engine work on macOS.
+
+## Prerequisites
+
+- Rust, pinned by `rust-toolchain.toml`.
+- Node and `pnpm`, at the version pinned in `package.json`.
+- [`just`](https://github.com/casey/just), the task runner. The common workflows
+  are recipes in the `justfile`, so run `just` to list them.
+- `protoc`, which zingolib needs to build the lightwalletd gRPC stubs.
+- The Tauri v2 platform prerequisites (see the Tauri docs). On Linux that is the
+  webkit2gtk stack. On Windows it is WebView2 and the MSVC build tools.
+
+The committed `crates/Cargo.lock` is required. A yanked transitive dependency only
+resolves through it, so leave it in place.
+
+## Running it
+
+From the repo root:
+
+```
+just install
+just dev
+```
+
+`just dev` builds the release daemon and launches the GUI with hot reload, pinned
+to that freshly-built `pendraked` so it runs the engine you are editing. The daemon
+does the heavy scanning, so it is built release. Run `just` on its own to see every
+task.
+
+## macOS
+
+There are two daemon options in dev, with a trade-off between them.
+
+For fast iteration on the engine, the `pendraked` binary is enough. Its
+notifications appear, but clicking them does nothing, because a loose binary cannot
+drive `UNUserNotificationCenter`.
+
+For clickable notifications that open the transaction screen, build the Swift
+helper with `just helper` (`just helper debug` for a faster Swift-only build). It
+compiles the embedded engine in release and bundles `PendrakeSync.app`. The GUI
+prefers a built `PendrakeSync.app` over the binary and logs which one it spawned.
+The app carries a frozen copy of the engine, so rerun `just helper` after any
+`pendrake-core` change. A missing feature or wrong notification data is usually a
+stale app.
+
+Clicking a notification only opens the transaction screen on the registered app
+bundle, which is the installed app or `just run-prod` (it builds the helper and the
+`.app`, then runs both). Under `just dev` a click focuses the window but does not
+navigate, because the hot-reload binary is not the registered URL handler.
+
+## Linux
+
+Install Tauri's Linux prerequisites and `protoc`, then run `just dev`. The GUI
+spawns `pendraked`, which posts notifications through the session's notification
+service. Clicking a notification opens the `pendrake://` deep link through the
+desktop's URL handler, which the running GUI is registered for.
+
+## Windows
+
+Install WebView2, the MSVC build tools, and `protoc`, then run `just dev`. The GUI
+spawns `pendraked` the same way, and clicking a notification opens the deep link
+too. Reliable toast activation in production also needs the installer's
+AppUserModelID shortcut.
+
+## Environment variables
+
+- `PENDRAKE_DATA_DIR` overrides the directory that holds the wallet, socket, and
+  lock. The GUI and the daemon both read it, so they must agree.
+- `PENDRAKED_BIN` is an explicit path to the `pendraked` binary the GUI should
+  spawn.
+- `PENDRAKE_SYNC_APP` is an explicit path to `PendrakeSync.app` on macOS, checked
+  before the discovered build.
+
+## Repository
+
+`crates/` holds the Rust workspace (`pendrake-core`, `pendrake-ipc`,
+`pendrake-daemon`, `pendrake-ffi`). `src/` and `src-tauri/` hold the GUI.
+`platform/macos/` holds the Swift helper, and `scripts/` holds its build script.
+Contributor conventions live in [AGENTS.md](AGENTS.md).

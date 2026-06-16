@@ -6,6 +6,7 @@ import {
 import { RootLayout } from "@/routes/root";
 import { HomePage } from "@/routes/home";
 import { AboutPage } from "@/routes/about";
+import { TxDetailPage } from "@/routes/tx";
 
 const rootRoute = createRootRoute({
 	component: RootLayout,
@@ -23,7 +24,13 @@ const aboutRoute = createRoute({
 	component: AboutPage,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, aboutRoute]);
+const txRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/tx/$txid",
+	component: TxDetailPage,
+});
+
+const routeTree = rootRoute.addChildren([indexRoute, aboutRoute, txRoute]);
 
 export const router = createRouter({
 	routeTree,

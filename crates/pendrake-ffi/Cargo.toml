@@ -1,0 +1,21 @@
+[package]
+name = "pendrake-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "uniffi surface exposing the Pendrake engine to the macOS Swift helper."
+
+[lib]
+name = "pendrake_ffi"
+# staticlib: linked into PendrakeSync.app. cdylib: read by uniffi-bindgen in
+# library mode. lib: the uniffi-bindgen bin links against this crate.
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/uniffi-bindgen.rs"
+
+[dependencies]
+pendrake-core = { path = "../pendrake-core" }
+uniffi = { version = "0.31", features = ["cli"] }
+thiserror = "1"

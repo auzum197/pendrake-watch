@@ -1,0 +1,29 @@
+[package]
+name = "pendrake-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pendrake background daemon: owns the wallet file and serves the GUI over a Unix socket."
+
+[[bin]]
+name = "pendraked"
+path = "src/main.rs"
+
+[dependencies]
+pendrake-core = { path = "../pendrake-core" }
+
+# Runtime only for the `call` debug client; the engine owns its own in run().
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util"] }
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Desktop notifications. Linux and macOS use notify-rust. Windows uses
+# tauri-winrt-notification directly for its activation callback. (On macOS the
+# daemon is a dev or headless host. Production macOS uses the Swift helper.)
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+notify-rust = "4"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+tauri-winrt-notification = "0.7.2"
