@@ -2425,10 +2425,10 @@ dependencies = [
  "notify-rust",
  "pendrake-core",
  "serde_json",
- "tauri-winrt-notification",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "windows",
 ]
 
 [[package]]
