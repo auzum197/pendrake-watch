@@ -34,3 +34,23 @@ _Avoid_: incoming, outgoing, payment, transfer
 **Birthday**:
 The block height a Wallet begins its initial scan from. Set at import as an exact height or derived from a date. When unspecified it defaults to Sapling activation, the floor that guarantees no shielded history is missed.
 _Avoid_: start height, birth height
+
+**Pool**:
+One of the Zcash value pools a UFVK can view: Orchard, Sapling, or transparent. A Wallet syncs every pool its UFVK contains. Choosing a subset is post-v0.
+_Avoid_: account
+
+**Indexer**:
+The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one. Mainnet uses a default the user can change later; regtest requires the user to supply it during onboarding.
+_Avoid_: server, endpoint, node
+
+**Passphrase**:
+The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. It is never stored, only validated against each Wallet file's header, and the same one applies to every Wallet.
+_Avoid_: password, PIN
+
+**Forget**:
+Deliberately removing a single Wallet while the app is unlocked and the Passphrase is known. Only that Wallet's files are deleted; the others remain.
+_Avoid_: delete, remove
+
+**Start over**:
+The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Forget, which removes one Wallet with the Passphrase known.
+_Avoid_: reset, wipe
