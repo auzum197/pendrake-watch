@@ -24,7 +24,7 @@ use tokio::sync::{Mutex, RwLock};
 use pepper_sync::config::{PerformanceLevel, SyncConfig, TransparentAddressDiscovery};
 use pepper_sync::events::{ScanTiming, SequencedSyncEvent, SyncEvent as LibSyncEvent};
 use zcash_primitives::transaction::TxId;
-use zcash_protocol::consensus::BlockHeight;
+use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_protocol::value::Zatoshis;
 
 use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_URI};
@@ -407,12 +407,13 @@ impl Engine {
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
         let chain = chain_of(args.network);
+        let birthday = args.birthday.max(sapling_activation(chain));
         let meta = Meta {
             network: args.network,
             indexer_uri: args.indexer_uri.clone(),
             import_type: ImportType::Ufvk,
             view_mode: ViewMode::Full,
-            birthday_height: args.birthday,
+            birthday_height: birthday,
             encrypted: true,
         };
 
@@ -422,13 +423,14 @@ impl Engine {
 
         let wallet = WalletConfig::Ufvk {
             ufvk: args.ufvk,
-            birthday: args.birthday,
+            birthday,
             wallet_settings: wallet_settings(),
         };
         let config = self.client_config(chain, &meta.indexer_uri, wallet);
-        let mut client = LightClient::new(config, true, Some(EncryptionConfig::new(args.passphrase)))
-            .await
-            .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
+        let mut client =
+            LightClient::new(config, true, Some(EncryptionConfig::new(args.passphrase)))
+                .await
+                .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
 
         // Flush the freshly-built wallet to disk and block until the file lands,
         // so a caller can rely on the wallet existing the moment import returns.
@@ -463,7 +465,11 @@ impl Engine {
             let meta = guard
                 .as_ref()
                 .ok_or_else(|| anyhow!("no wallet to unlock"))?;
-            self.client_config(chain_of(meta.network), &meta.indexer_uri, WalletConfig::Read)
+            self.client_config(
+                chain_of(meta.network),
+                &meta.indexer_uri,
+                WalletConfig::Read,
+            )
         };
         let mut client = LightClient::new(config, false, Some(EncryptionConfig::new(passphrase)))
             .await
@@ -950,6 +956,13 @@ fn chain_of(network: Network) -> ChainType {
         Network::Mainnet => ChainType::Mainnet,
         Network::Testnet => ChainType::Testnet,
     }
+}
+
+fn sapling_activation(chain: ChainType) -> u32 {
+    chain
+        .activation_height(NetworkUpgrade::Sapling)
+        .map(u32::from)
+        .unwrap_or(0)
 }
 
 fn now_secs() -> u64 {
