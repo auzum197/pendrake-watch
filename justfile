@@ -2,6 +2,9 @@
 # Needs `just` (brew install just) and the prerequisites in the README.
 
 set shell := ["bash", "-cu"]
+# On Windows, plain `bash` resolves to the WSL launcher (System32), which has no
+# distro and fails. Pin recipes to Git Bash instead.
+set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-cu"]
 
 # List the available tasks.
 default:

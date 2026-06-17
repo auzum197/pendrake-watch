@@ -8,7 +8,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -16,7 +16,7 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, PoolBalance, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind,
-    TxStatus, ViewMode, WalletAddress, WalletState,
+    TxStatus, UnlockArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, RwLock};
@@ -31,6 +31,7 @@ use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_UR
 use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
+use zingolib::wallet::encryption::EncryptionConfig;
 use zingolib::wallet::summary::data::{TransactionKind, TransactionSummary};
 use zingolib::wallet::WalletSettings;
 use zip32::AccountId;
@@ -77,6 +78,9 @@ pub struct Engine {
     seen_txids: Mutex<HashSet<String>>,
     /// Bumped on every (re)import and forget so a stale sync loop retires itself.
     generation: AtomicU64,
+    /// Set when an encrypted wallet is on disk but hasn't been unlocked this run.
+    /// While locked the daemon holds no `client` and runs no sync loop.
+    locked: AtomicBool,
 }
 
 /// One in-flight scan range, walked through its lifecycle by the batch events.
@@ -236,32 +240,41 @@ impl Engine {
             addresses: RwLock::new(Vec::new()),
             seen_txids: Mutex::new(seen),
             generation: AtomicU64::new(0),
+            locked: AtomicBool::new(false),
             paths,
         });
 
         if let Some(meta) = Meta::load(&engine.paths.meta_file)? {
-            let config = engine.client_config(
-                chain_of(meta.network),
-                &meta.indexer_uri,
-                WalletConfig::Read,
-            );
-            match LightClient::new(config, false, None).await {
-                Ok(mut client) => {
-                    tracing::info!("loaded existing wallet from disk");
-                    // Persist scanned data as sync advances, so a restart resumes
-                    // from the saved height instead of rescanning from birthday.
-                    client.save_task().await;
-                    *engine.client.lock().await = Some(client);
-                    *engine.meta.write().await = Some(meta);
-                    // Prime the read cache before the sync loop starts contending
-                    // for the wallet, so the GUI's opening queries are instant.
-                    engine.refresh_snapshot().await;
-                    // Reflect "syncing" right away instead of the default idle,
-                    // so the GUI doesn't flash "Synced" before the first round.
-                    engine.sync.write().await.state = SyncState::Syncing;
-                    engine.spawn_sync_loop();
+            if meta.encrypted {
+                // An encrypted wallet stays locked until the GUI sends the
+                // passphrase via `unlock`, so we hold the meta but open no client.
+                tracing::info!("encrypted wallet on disk, waiting for unlock");
+                engine.locked.store(true, Ordering::SeqCst);
+                *engine.meta.write().await = Some(meta);
+            } else {
+                let config = engine.client_config(
+                    chain_of(meta.network),
+                    &meta.indexer_uri,
+                    WalletConfig::Read,
+                );
+                match LightClient::new(config, false, None).await {
+                    Ok(mut client) => {
+                        tracing::info!("loaded existing wallet from disk");
+                        // Persist scanned data as sync advances, so a restart resumes
+                        // from the saved height instead of rescanning from birthday.
+                        client.save_task().await;
+                        *engine.client.lock().await = Some(client);
+                        *engine.meta.write().await = Some(meta);
+                        // Prime the read cache before the sync loop starts contending
+                        // for the wallet, so the GUI's opening queries are instant.
+                        engine.refresh_snapshot().await;
+                        // Reflect "syncing" right away instead of the default idle,
+                        // so the GUI doesn't flash "Synced" before the first round.
+                        engine.sync.write().await.state = SyncState::Syncing;
+                        engine.spawn_sync_loop();
+                    }
+                    Err(e) => tracing::warn!("meta present but wallet load failed: {e}"),
                 }
-                Err(e) => tracing::warn!("meta present but wallet load failed: {e}"),
             }
         }
         Ok(engine)
@@ -301,6 +314,10 @@ impl Engine {
                 let args: ImportUfvkArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.import_ufvk(args).await?)?)
             }
+            "unlock" => {
+                let args: UnlockArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.unlock(args.passphrase).await?)?)
+            }
             "forgetWallet" => {
                 self.forget().await?;
                 Ok(serde_json::Value::Null)
@@ -334,9 +351,11 @@ impl Engine {
     }
 
     async fn wallet_state(&self) -> WalletState {
+        let locked = self.locked.load(Ordering::SeqCst);
         match &*self.meta.read().await {
             Some(m) => WalletState {
                 exists: true,
+                locked,
                 import_type: m.import_type,
                 view_mode: m.view_mode,
                 network: m.network,
@@ -344,6 +363,7 @@ impl Engine {
             },
             None => WalletState {
                 exists: false,
+                locked: false,
                 import_type: ImportType::Ufvk,
                 view_mode: ViewMode::Full,
                 network: Network::Mainnet,
@@ -393,6 +413,7 @@ impl Engine {
             import_type: ImportType::Ufvk,
             view_mode: ViewMode::Full,
             birthday_height: args.birthday,
+            encrypted: true,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -405,7 +426,7 @@ impl Engine {
             wallet_settings: wallet_settings(),
         };
         let config = self.client_config(chain, &meta.indexer_uri, wallet);
-        let mut client = LightClient::new(config, true, None)
+        let mut client = LightClient::new(config, true, Some(EncryptionConfig::new(args.passphrase)))
             .await
             .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
 
@@ -417,6 +438,7 @@ impl Engine {
         meta.save(&self.paths.meta_file)?;
         *self.meta.write().await = Some(meta);
         *self.client.lock().await = Some(client);
+        self.locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.seen_txids.lock().await.clear();
         let _ = std::fs::remove_file(&self.paths.notified_file);
@@ -430,8 +452,35 @@ impl Engine {
         Ok(self.wallet_state().await)
     }
 
+    /// Open the encrypted wallet with the passphrase the GUI collected, then start
+    /// syncing. A wrong passphrase fails the read and leaves the daemon locked.
+    async fn unlock(self: &Arc<Self>, passphrase: String) -> Result<WalletState> {
+        if self.client.lock().await.is_some() {
+            return Ok(self.wallet_state().await);
+        }
+        let config = {
+            let guard = self.meta.read().await;
+            let meta = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("no wallet to unlock"))?;
+            self.client_config(chain_of(meta.network), &meta.indexer_uri, WalletConfig::Read)
+        };
+        let mut client = LightClient::new(config, false, Some(EncryptionConfig::new(passphrase)))
+            .await
+            .map_err(|e| anyhow!("unlock failed: {e:?}"))?;
+        client.save_task().await;
+        *self.client.lock().await = Some(client);
+        self.locked.store(false, Ordering::SeqCst);
+        self.refresh_snapshot().await;
+        self.sync.write().await.state = SyncState::Syncing;
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        self.spawn_sync_loop();
+        Ok(self.wallet_state().await)
+    }
+
     async fn forget(&self) -> Result<()> {
         self.generation.fetch_add(1, Ordering::SeqCst);
+        self.locked.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         *self.sync.write().await = SyncStatus::default();

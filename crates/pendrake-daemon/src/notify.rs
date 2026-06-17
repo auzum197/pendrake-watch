@@ -70,21 +70,52 @@ fn open_url(url: &str) {
     }
 }
 
+/// Our AppUserModelID. `register_identity` gives it a name and icon so toasts
+/// read as "Pendrake" instead of borrowing PowerShell's identity. Matches the
+/// bundle identifier in tauri.conf.json.
+#[cfg(target_os = "windows")]
+const APP_AUMID: &str = "com.auzum197.pendrake-watch";
+
+/// Register the toast identity for the current user: drop our icon next to the
+/// wallet store and point an `AppUserModelId` registry entry at it with a
+/// display name. After this, toasts raised under [`APP_AUMID`] show "Pendrake"
+/// and our icon. In a packaged build the installer's Start Menu shortcut carries
+/// the same AUMID, this is the dev equivalent.
+#[cfg(target_os = "windows")]
+pub fn register_identity(data_root: &std::path::Path) {
+    use std::io::Write;
+
+    let icon = data_root.join("notification-icon.png");
+    if !icon.exists() {
+        match std::fs::File::create(&icon) {
+            Ok(mut f) => {
+                let _ = f.write_all(include_bytes!("../../../src-tauri/icons/128x128.png"));
+            }
+            Err(e) => tracing::warn!("could not write notification icon: {e}"),
+        }
+    }
+
+    let path = format!(r"Software\Classes\AppUserModelId\{APP_AUMID}");
+    match winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER).create_subkey(&path) {
+        Ok((key, _)) => {
+            let _ = key.set_value("DisplayName", &"Pendrake".to_string());
+            let _ = key.set_value("IconUri", &icon.to_string_lossy().into_owned());
+        }
+        Err(e) => tracing::warn!("could not register toast identity: {e}"),
+    }
+}
+
 /// Show a Windows toast whose click hands the deep link to the shell.
 ///
-/// The PowerShell AUMID lets a non-packaged dev build raise toasts at all. The
-/// root `launch`/`activationType="protocol"` pair is what makes the click work:
-/// the shell launches the `pendrake://` URL through the registered scheme handler
-/// without an in-process callback, a COM activator, or a live daemon, none of
-/// which a parked background process can offer.
+/// The root `launch`/`activationType="protocol"` pair is what makes the click
+/// work: the shell launches the `pendrake://` URL through the registered scheme
+/// handler without an in-process callback, a COM activator, or a live daemon,
+/// none of which a parked background process can offer.
 #[cfg(target_os = "windows")]
 fn show_toast(title: &str, body: &str, deep_link: &str) -> windows::core::Result<()> {
     use windows::core::HSTRING;
     use windows::Data::Xml::Dom::XmlDocument;
     use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
-
-    const POWERSHELL_AUMID: &str =
-        r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe";
 
     let xml = format!(
         r#"<toast launch="{}" activationType="protocol">
@@ -103,7 +134,7 @@ fn show_toast(title: &str, body: &str, deep_link: &str) -> windows::core::Result
     let doc = XmlDocument::new()?;
     doc.LoadXml(&HSTRING::from(xml))?;
     let toast = ToastNotification::CreateToastNotification(&doc)?;
-    ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(POWERSHELL_AUMID))?
+    ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))?
         .Show(&toast)
 }
 

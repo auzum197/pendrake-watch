@@ -77,6 +77,9 @@ pub enum ViewMode {
 #[serde(rename_all = "camelCase")]
 pub struct WalletState {
     pub exists: bool,
+    /// True when the wallet file is encrypted and the daemon hasn't been given the
+    /// passphrase yet, so the GUI must collect it via `unlock` before anything works.
+    pub locked: bool,
     pub import_type: ImportType,
     pub view_mode: ViewMode,
     pub network: Network,
@@ -98,6 +101,14 @@ pub struct ImportUfvkArgs {
     pub birthday: u32,
     pub indexer_uri: String,
     pub network: Network,
+    /// Global passphrase that encrypts the wallet at rest (docs/adr/0003). It is
+    /// never persisted, the Argon2 verifier lives in the wallet file's header.
+    pub passphrase: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UnlockArgs {
+    pub passphrase: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]

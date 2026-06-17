@@ -1,0 +1,49 @@
+import type { Balance, SyncStatus } from "@/lib/ipc";
+
+export function confirmed(pool: Balance["orchard"]): bigint {
+  return BigInt(pool?.confirmed ?? "0");
+}
+
+export function totalConfirmed(balance: Balance | null): bigint | null {
+  if (!balance) return null;
+  return (
+    confirmed(balance.orchard) +
+    confirmed(balance.sapling) +
+    confirmed(balance.transparent)
+  );
+}
+
+export function formatZec(zatoshis: bigint): string {
+  return (Number(zatoshis) / 1e8).toLocaleString(undefined, {
+    maximumFractionDigits: 8,
+  });
+}
+
+export function syncLabel(sync: SyncStatus | null): string {
+  if (!sync) return "Connecting…";
+  if (sync.state === "idle") return "Synced";
+  if (sync.state === "error") return "Sync error";
+  return `Syncing… ${Math.round(sync.percent)}%`;
+}
+
+export function formatHeight(sync: SyncStatus | null): string {
+  const h = sync?.chainTip || sync?.syncedHeight;
+  return h ? h.toLocaleString() : "—";
+}
+
+export function formatTime(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  const d = new Date(ms);
+  const today = new Date();
+  const hhmm = d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const sameDay =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate();
+  return sameDay
+    ? `Today ${hhmm}`
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

@@ -28,3 +28,6 @@ notify-rust = "4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"] }
+# Register our own AppUserModelID so toasts show as "Pendrake" with our icon
+# instead of borrowing PowerShell's identity.
+winreg = "0.52"
