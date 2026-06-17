@@ -44,8 +44,9 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 #### Articles and determiners
 
-- Don't drop articles ("the", "a", "an") to sound crisp or punchy. Write "the parser reads the manifest", not "parser reads manifest". Telegraphic, headline-style phrasing is a strong machine-generated tell and often reads like translated copy.
-- The exception is genuine fragment formats (bullet labels, short table cells) where a determiner would just be noise. Everywhere else, use full grammatical sentences.
+- Don't drop the definite or indefinite article before a noun to sound terse. Write "the spec was written", not "spec is written"; "the parser reads the manifest", not "parser reads manifest". This zero-article, telegraphic register is a strong machine-generated tell and often reads like translated copy.
+- Watch the related tense slip: the clipped present where the past belongs ("spec is written" for "the spec was written", "add handler" for "we added a handler"). That is commit-message and changelog phrasing leaking into prose. Use natural past tense for things that happened.
+- The exception is genuine fragment formats (bullet labels, short table cells) where an article would just be noise. Everywhere else, use full grammatical sentences with their articles intact.
 
 #### Cadence and register
 
@@ -100,3 +101,17 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 
 - No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in Linear — project "Pendrake Watch-only", team Auzum197 (AUZ) — managed via the Linear MCP tools. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Hybrid mapping: Linear workflow states for lifecycle plus three labels for agent/human/info distinctions. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
