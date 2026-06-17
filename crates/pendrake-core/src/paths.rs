@@ -2,9 +2,10 @@
 //!
 //! zingolib owns the wallet file inside `wallet_dir`. Alongside it we persist a
 //! small `meta.json` describing how the wallet was imported, so the daemon can
-//! rebuild [`pendrake_ipc::WalletState`] and reconnect after a restart. Neither
-//! file is encrypted yet. At-rest encryption is a later milestone, and nothing
-//! secret beyond the viewing key lives here.
+//! rebuild [`pendrake_ipc::WalletState`] and reconnect after a restart. The wallet
+//! file is encrypted at rest with the global passphrase (docs/adr/0003) when
+//! `Meta.encrypted` is set. `meta.json` itself is plaintext and holds nothing
+//! secret, the viewing key lives only inside the encrypted wallet file.
 
 use std::path::{Path, PathBuf};
 
@@ -65,6 +66,10 @@ pub struct Meta {
     pub import_type: ImportType,
     pub view_mode: ViewMode,
     pub birthday_height: u32,
+    /// Whether the wallet file is encrypted at rest. Defaults false so a wallet
+    /// imported before encryption existed still loads as plaintext.
+    #[serde(default)]
+    pub encrypted: bool,
 }
 
 impl Meta {

@@ -4,9 +4,13 @@ import {
 	createRouter,
 } from "@tanstack/react-router";
 import { RootLayout } from "@/routes/root";
-import { HomePage } from "@/routes/home";
+import { StartGate } from "@/routes/start";
 import { AboutPage } from "@/routes/about";
 import { TxDetailPage } from "@/routes/tx";
+import { OnboardingPage } from "@/routes/onboarding";
+import { DashboardPage } from "@/routes/dashboard";
+import { ActivityPage } from "@/routes/activity";
+import { UnlockPage } from "@/routes/unlock";
 
 const rootRoute = createRootRoute({
 	component: RootLayout,
@@ -15,7 +19,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
-	component: HomePage,
+	component: StartGate,
 });
 
 const aboutRoute = createRoute({
@@ -30,7 +34,39 @@ const txRoute = createRoute({
 	component: TxDetailPage,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, aboutRoute, txRoute]);
+const onboardingRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/onboarding",
+	component: OnboardingPage,
+});
+
+const dashboardRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/dashboard",
+	component: DashboardPage,
+});
+
+const activityRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/activity",
+	component: ActivityPage,
+});
+
+const unlockRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/unlock",
+	component: UnlockPage,
+});
+
+const routeTree = rootRoute.addChildren([
+	indexRoute,
+	aboutRoute,
+	txRoute,
+	onboardingRoute,
+	dashboardRoute,
+	activityRoute,
+	unlockRoute,
+]);
 
 export const router = createRouter({
 	routeTree,

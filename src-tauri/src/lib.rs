@@ -88,8 +88,16 @@ fn pendrake_sync_app() -> Option<PathBuf> {
 }
 
 fn spawn_bin(bin: &PathBuf) -> Result<(), String> {
-    std::process::Command::new(bin)
-        .spawn()
+    let mut cmd = std::process::Command::new(bin);
+    // pendraked is a console binary, so spawning it from the GUI would flash a
+    // terminal window. Detach it from any console on Windows.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.spawn()
         .map(|_| ())
         .map_err(|e| format!("failed to spawn {}: {e}", bin.display()))
 }
@@ -270,6 +278,7 @@ async fn import_ufvk(
     birthday: u32,
     indexer_uri: String,
     network: String,
+    passphrase: String,
 ) -> Result<Value, String> {
     request(
         "importUfvk",
@@ -278,9 +287,15 @@ async fn import_ufvk(
             "birthday": birthday,
             "indexerUri": indexer_uri,
             "network": network,
+            "passphrase": passphrase,
         }),
     )
     .await
+}
+
+#[tauri::command]
+async fn unlock(passphrase: String) -> Result<Value, String> {
+    request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
 
 #[tauri::command]
@@ -378,6 +393,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             import_ufvk,
+            unlock,
             get_wallet_state,
             get_addresses,
             get_sync_status,

@@ -14,7 +14,9 @@
       {
         "title": "pendrake-watch",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "theme": "Dark",
+        "backgroundColor": "#0e0e10"
       }
     ],
     "security": {

@@ -19,11 +19,15 @@ anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Desktop notifications. Linux and macOS use notify-rust. Windows uses
-# tauri-winrt-notification directly for its activation callback. (On macOS the
-# daemon is a dev or headless host. Production macOS uses the Swift helper.)
+# Desktop notifications. Linux and macOS use notify-rust. Windows builds the
+# toast directly so the click can use protocol activation (the WinRT crate's only
+# click hook is an in-process callback a parked daemon can't dispatch). (On macOS
+# the daemon is a dev or headless host. Production macOS uses the Swift helper.)
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 notify-rust = "4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-tauri-winrt-notification = "0.7.2"
+windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"] }
+# Register our own AppUserModelID so toasts show as "Pendrake" with our icon
+# instead of borrowing PowerShell's identity.
+winreg = "0.52"

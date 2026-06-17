@@ -8,6 +8,7 @@ export type ViewMode = "full" | "incoming-only";
 
 export type WalletState = {
   exists: boolean;
+  locked: boolean;
   importType: ImportType;
   viewMode: ViewMode;
   network: Network;
@@ -24,6 +25,7 @@ export type ImportUfvkInput = {
   birthday: number;
   indexerUri: string;
   network: Network;
+  passphrase: string;
 };
 
 export type SyncState = "idle" | "syncing" | "error";
@@ -73,7 +75,13 @@ export function importUfvk(input: ImportUfvkInput): Promise<WalletState> {
     birthday: input.birthday,
     indexerUri: input.indexerUri,
     network: input.network,
+    passphrase: input.passphrase,
   });
+}
+
+// Open an encrypted wallet on this run. Rejects when the passphrase is wrong.
+export function unlock(passphrase: string): Promise<WalletState> {
+  return invoke("unlock", { passphrase });
 }
 
 export function getWalletState(): Promise<WalletState> {

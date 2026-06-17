@@ -78,6 +78,13 @@
 @theme inline {
     --font-sans: 'Noto Sans Variable', sans-serif;
     --font-heading: 'Manrope Variable', sans-serif;
+    /* Pendrake brand palette, lifted from the designer's frames. Used by the
+       onboarding wizard and the dashboard, independent of the light/dark tokens. */
+    --color-brand: #1a2bff;
+    --color-brand-foreground: #ffffff;
+    --color-ink: #0e0e10;
+    --color-ink-soft: #1a1a1c;
+    --color-ink-line: #2a2a2e;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
