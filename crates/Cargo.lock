@@ -2411,10 +2411,12 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tokio",
+ "tonic",
  "tracing",
  "zcash_address",
  "zcash_primitives",
  "zcash_protocol",
+ "zingo-netutils",
  "zingolib",
  "zip32",
 ]

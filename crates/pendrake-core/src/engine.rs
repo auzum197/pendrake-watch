@@ -15,12 +15,12 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ForgetArgs,
-    ImportType, ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SyncEvent, SyncPhase,
-    SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
-    ViewMode, WalletAddress, WalletState,
+    ImportType, ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SetIndexerArgs, SyncEvent,
+    SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
+    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, Notify, RwLock};
 
 use pepper_sync::config::{PerformanceLevel, SyncConfig, TransparentAddressDiscovery};
 use pepper_sync::events::{ScanTiming, SequencedSyncEvent, SyncEvent as LibSyncEvent};
@@ -60,6 +60,9 @@ const TIMING_WINDOW: usize = 12;
 /// Fan-out buffer for pushed events. Sized so a briefly-stalled IPC client lags
 /// rather than blocks the sync loop.
 const EVENT_CAPACITY: usize = 256;
+/// How long to wait on the GetLightdInfo probe when changing the Indexer, before
+/// treating a candidate server as unreachable.
+const INDEXER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct Engine {
     paths: Paths,
@@ -80,6 +83,10 @@ pub struct Engine {
     seen_txids: Mutex<HashSet<String>>,
     /// Bumped on every (re)import and forget so a stale sync loop retires itself.
     generation: AtomicU64,
+    /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
+    /// once. Used when the Indexer changes, so the switch takes effect immediately
+    /// instead of after the current wait elapses.
+    restart: Notify,
     /// Set when an encrypted wallet is on disk but hasn't been unlocked this run.
     /// While locked the daemon holds no `client` and runs no sync loop.
     locked: AtomicBool,
@@ -205,6 +212,7 @@ impl RoundView {
             total_outputs: Some(self.total_outputs),
             eta_seconds: self.eta_seconds(),
             error: None,
+            unreachable: false,
             last_synced_at: None,
         }
     }
@@ -230,6 +238,52 @@ impl RoundView {
     }
 }
 
+/// A failed sync round: the message the GUI shows, plus whether the cause was the
+/// Indexer being unreachable. Only the connectivity case drives the "Change server"
+/// CTA (AUZ-47), so the verdict travels with the error rather than being re-derived.
+struct RoundError {
+    message: String,
+    unreachable: bool,
+}
+
+impl From<anyhow::Error> for RoundError {
+    fn from(e: anyhow::Error) -> Self {
+        // Everything that reaches this path (no wallet, sync start, missing task) is a
+        // local/state error, never a poll-time transport failure.
+        Self {
+            message: e.to_string(),
+            unreachable: false,
+        }
+    }
+}
+
+/// True when a sync failure is the Indexer being unreachable: a connection or
+/// transport failure (`RequestFailed`), as opposed to a scan, consensus, bad-data,
+/// or wallet error. Kept narrow so the "Change server" CTA never shows for a failure
+/// that changing the server wouldn't fix.
+fn is_unreachable<E: std::fmt::Debug + std::fmt::Display>(
+    err: &pepper_sync::error::SyncError<E>,
+) -> bool {
+    use pepper_sync::error::{ServerError, SyncError};
+    matches!(err, SyncError::ServerError(ServerError::RequestFailed(_)))
+}
+
+/// Validate a candidate Indexer with a real `GetLightdInfo` request, not just a
+/// TCP/TLS connect. A plain HTTPS server accepts the connection but doesn't speak
+/// the lightwalletd protocol, so the gRPC call is what actually proves the endpoint
+/// is a Zcash indexer before we point a Wallet at it.
+async fn probe_indexer(uri: &http::Uri) -> Result<()> {
+    use zingo_netutils::Indexer;
+    let mut indexer = zingo_netutils::GrpcIndexer::new(uri.clone())
+        .await
+        .map_err(|e| anyhow!("could not connect to indexer: {e}"))?;
+    indexer
+        .get_lightd_info(INDEXER_PROBE_TIMEOUT)
+        .await
+        .map_err(|e| anyhow!("that server did not respond as a Zcash indexer: {e}"))?;
+    Ok(())
+}
+
 impl Engine {
     /// Build the engine, loading and resuming sync for an existing wallet.
     pub async fn load(paths: Paths, notifier: Arc<dyn Notifier>) -> Result<Arc<Self>> {
@@ -247,6 +301,7 @@ impl Engine {
             addresses: RwLock::new(Vec::new()),
             seen_txids: Mutex::new(seen),
             generation: AtomicU64::new(0),
+            restart: Notify::new(),
             locked: AtomicBool::new(false),
             session_passphrase: Mutex::new(None),
             paths,
@@ -329,6 +384,10 @@ impl Engine {
                 let args: ImportUfvkArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.import_ufvk(args).await?)?)
             }
+            "setIndexer" => {
+                let args: SetIndexerArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_indexer(args.indexer_uri).await?)?)
+            }
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
@@ -385,6 +444,7 @@ impl Engine {
                 view_mode: m.view_mode,
                 network: m.network,
                 birthday_height: m.birthday_height,
+                indexer_uri: m.indexer_uri.clone(),
             },
             None => WalletState {
                 exists: false,
@@ -395,6 +455,7 @@ impl Engine {
                 view_mode: ViewMode::Full,
                 network: Network::Mainnet,
                 birthday_height: 0,
+                indexer_uri: String::new(),
             },
         }
     }
@@ -543,6 +604,68 @@ impl Engine {
         Ok(self.wallet_state().await)
     }
 
+    /// Point the running Wallet at a different Indexer (AUZ-47). The candidate is
+    /// validated with a real `GetLightdInfo` call first (see [`probe_indexer`]), so a
+    /// reachable-but-not-an-indexer endpoint is rejected before anything changes. Only
+    /// then is the gRPC client swapped in place, so the wallet file is never reopened
+    /// and in-flight scanned data and the autosave task survive. The saved value is
+    /// left untouched on any failure.
+    ///
+    /// The switch is handed to the running sync loop rather than spawning a second
+    /// one: `stop_sync` ends the current round (bound to the old Indexer) and a restart
+    /// signal wakes the loop to begin a fresh round against the new Indexer at once.
+    /// Keeping a single loop means the sync task is reaped normally, avoiding the stuck
+    /// `SyncAlreadyRunning` a second loop would hit.
+    async fn set_indexer(&self, indexer_uri: String) -> Result<WalletState> {
+        if self.meta.read().await.is_none() {
+            return Err(anyhow!("no wallet to set the indexer for"));
+        }
+        if self.locked.load(Ordering::SeqCst) {
+            return Err(anyhow!("wallet is locked; unlock before changing the indexer"));
+        }
+        let uri: http::Uri = indexer_uri
+            .parse()
+            .map_err(|_| anyhow!("invalid indexer uri"))?;
+
+        // Probe outside the client lock: a fresh connection plus one GetLightdInfo,
+        // so a slow or dead candidate doesn't block reads on the live client.
+        probe_indexer(&uri).await?;
+
+        {
+            let mut guard = self.client.lock().await;
+            let client = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("no wallet to set the indexer for"))?;
+            client
+                .set_indexer_uri(uri)
+                .await
+                .map_err(|e| anyhow!("could not connect to indexer: {e}"))?;
+            // End the in-flight round (it's bound to the old Indexer) so the loop's
+            // next round picks up the new one. The same loop reaps the task normally.
+            let _ = client.stop_sync();
+        }
+
+        // Persist only once the new Indexer connected, so a rejected URI never sticks.
+        {
+            let mut guard = self.meta.write().await;
+            if let Some(meta) = guard.as_mut() {
+                meta.indexer_uri = indexer_uri;
+                meta.save(&self.paths.meta_file)?;
+            }
+        }
+
+        self.set_sync(|s| {
+            s.state = SyncState::Syncing;
+            s.error = None;
+            s.unreachable = false;
+        })
+        .await;
+        // Cut short any idle/backoff wait so the new round starts now.
+        self.restart.notify_one();
+
+        Ok(self.wallet_state().await)
+    }
+
     /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
     /// Replace lands in onboarding without re-collecting it; Start over passes false
     /// and the passphrase is dropped (docs/adr/0004).
@@ -592,29 +715,50 @@ impl Engine {
             match self.sync_round(generation).await {
                 Ok(()) => {
                     backoff = BACKOFF_MIN;
-                    tokio::time::sleep(IDLE_INTERVAL).await;
+                    // A restart signal (e.g. an Indexer change) cuts the idle wait short.
+                    tokio::select! {
+                        _ = tokio::time::sleep(IDLE_INTERVAL) => {}
+                        _ = self.restart.notified() => {}
+                    }
                 }
                 Err(e) => {
-                    tracing::warn!("sync round failed: {e}; backing off {backoff:?}");
+                    let RoundError {
+                        message,
+                        unreachable,
+                    } = e;
+                    tracing::warn!(
+                        "sync round failed: {message}; unreachable={unreachable}; backing off {backoff:?}"
+                    );
                     self.set_sync(|s| {
                         s.state = SyncState::Error;
-                        s.error = Some(e.to_string());
+                        s.error = Some(message.clone());
+                        s.unreachable = unreachable;
                     })
                     .await;
                     let _ = self.events.send(SyncEvent::Error {
-                        message: e.to_string(),
+                        message,
+                        unreachable,
                     });
-                    tokio::time::sleep(backoff).await;
-                    backoff = (backoff * 2).min(BACKOFF_MAX);
+                    // A restart signal cuts the backoff short and resets it, so switching
+                    // to a working Indexer recovers at once instead of after the backoff.
+                    tokio::select! {
+                        _ = tokio::time::sleep(backoff) => {
+                            backoff = (backoff * 2).min(BACKOFF_MAX);
+                        }
+                        _ = self.restart.notified() => {
+                            backoff = BACKOFF_MIN;
+                        }
+                    }
                 }
             }
         }
     }
 
-    async fn sync_round(&self, generation: u64) -> Result<()> {
+    async fn sync_round(&self, generation: u64) -> Result<(), RoundError> {
         self.set_sync(|s| {
             s.state = SyncState::Syncing;
             s.error = None;
+            s.unreachable = false;
         })
         .await;
 
@@ -678,10 +822,16 @@ impl Engine {
                     };
                     match report {
                         PollReport::NotReady => {}
-                        PollReport::NoHandle => return Err(anyhow!("sync task missing")),
-                        PollReport::Ready(res) => {
-                            break res.map_err(|e| anyhow!("sync error: {e:?}"))?
-                        }
+                        PollReport::NoHandle => return Err(anyhow!("sync task missing").into()),
+                        PollReport::Ready(res) => match res {
+                            Ok(result) => break result,
+                            Err(e) => {
+                                return Err(RoundError {
+                                    message: format!("sync error: {e}"),
+                                    unreachable: is_unreachable(&e),
+                                })
+                            }
+                        },
                     }
                 }
             }
@@ -910,6 +1060,7 @@ impl Engine {
             guard.total_outputs = next.total_outputs;
             guard.eta_seconds = next.eta_seconds;
             guard.error = None;
+            guard.unreachable = false;
             guard.clone()
         };
         let _ = self.events.send(SyncEvent::Progress {
@@ -928,6 +1079,7 @@ impl Engine {
         guard.phase = None;
         guard.eta_seconds = None;
         guard.error = None;
+        guard.unreachable = false;
         guard.last_synced_at = Some(now_secs());
         guard.clone()
     }
@@ -1116,6 +1268,39 @@ mod tests {
         let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         Paths::with_root(root)
+    }
+
+    use pepper_sync::error::{ServerError, SyncError};
+
+    // The error type is generic over the wallet error; String stands in for it here,
+    // since the classifier only matches on the ServerError variant.
+    type TestSyncError = SyncError<String>;
+
+    #[test]
+    fn request_failed_is_unreachable() {
+        let unavailable: TestSyncError =
+            ServerError::RequestFailed(tonic::Status::unavailable("down")).into();
+        assert!(is_unreachable(&unavailable));
+
+        let timeout: TestSyncError =
+            ServerError::RequestFailed(tonic::Status::deadline_exceeded("timeout")).into();
+        assert!(is_unreachable(&timeout));
+    }
+
+    #[test]
+    fn non_connectivity_errors_are_not_unreachable() {
+        // Bad data from a reachable server: the connection worked, so changing it
+        // wouldn't help.
+        let bad_data: TestSyncError = ServerError::InvalidSubtreeRoot.into();
+        assert!(!is_unreachable(&bad_data));
+
+        // An internal channel drop, not a transport failure to the Indexer.
+        let dropped: TestSyncError = ServerError::FetcherDropped.into();
+        assert!(!is_unreachable(&dropped));
+
+        // A consensus/state error has nothing to do with reachability.
+        let chain: TestSyncError = SyncError::ChainError(100, 50, 50);
+        assert!(!is_unreachable(&chain));
     }
 
     #[test]

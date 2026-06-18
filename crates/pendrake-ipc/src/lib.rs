@@ -14,6 +14,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// `skip_serializing_if` predicate for `bool` fields that default to false, so a
+/// false flag stays off the wire and absent reads as false on the GUI side.
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Request {
     pub id: u64,
@@ -92,6 +98,9 @@ pub struct WalletState {
     pub view_mode: ViewMode,
     pub network: Network,
     pub birthday_height: u32,
+    /// The Indexer this Wallet syncs against, editable from Settings (AUZ-47).
+    /// Empty when no wallet exists.
+    pub indexer_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -158,6 +167,12 @@ pub struct ImportUfvkArgs {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetIndexerArgs {
+    pub indexer_uri: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UnlockArgs {
     pub passphrase: String,
 }
@@ -214,6 +229,10 @@ pub struct SyncStatus {
     pub eta_seconds: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Set only when the failure was a connectivity failure to the Indexer, so the
+    /// GUI can offer "Change server". Off (and absent from the wire) otherwise.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unreachable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_synced_at: Option<u64>,
 }
@@ -230,6 +249,7 @@ impl Default for SyncStatus {
             total_outputs: None,
             eta_seconds: None,
             error: None,
+            unreachable: false,
             last_synced_at: None,
         }
     }
@@ -327,7 +347,13 @@ pub enum SyncEvent {
     /// The round reached the chain tip; `status` is the terminal idle snapshot.
     Finished { status: SyncStatus },
     /// The round failed; the GUI shows the message and waits for the next round.
-    Error { message: String },
+    /// `unreachable` is set only for a connectivity failure to the Indexer, gating
+    /// the "Change server" CTA (AUZ-47).
+    Error {
+        message: String,
+        #[serde(default, skip_serializing_if = "is_false")]
+        unreachable: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -14,6 +14,10 @@ pendrake-ipc = { path = "../pendrake-ipc" }
 zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 # Same repo/branch as zingolib; the sync event stream and sync_status live here.
 pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
+# GrpcIndexer + the Indexer trait, to probe a candidate Indexer with a real
+# GetLightdInfo call before saving it. Same version track as zingolib's workspace so
+# the GrpcIndexer/tonic types unify.
+zingo-netutils = "5"
 # Versions track zingolib's workspace so shared types unify (one zcash_protocol).
 zcash_protocol = "0.9"
 # TxId, carried by the sync events and accepted by transaction_summary.
@@ -42,3 +46,8 @@ dirs = "5"
 tracing.workspace = true
 rustls = { version = "0.23", features = ["ring"] }
 fs2 = "0.4"
+
+[dev-dependencies]
+# Constructs tonic::Status values so the sync-error classifier (is_unreachable) is
+# tested against the real RequestFailed transport-failure variant.
+tonic = "0.14"

@@ -304,6 +304,13 @@ async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
 
+/// Retarget the running Wallet at a different Indexer. The daemon connects to the
+/// new server before persisting, so a rejected URI surfaces here as an error.
+#[tauri::command]
+async fn set_indexer(indexer_uri: String) -> Result<Value, String> {
+    request("setIndexer", serde_json::json!({ "indexerUri": indexer_uri })).await
+}
+
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
 /// bool; the Replace modal gates the wipe on it.
 #[tauri::command]
@@ -416,6 +423,7 @@ pub fn run() {
             import_ufvk,
             parse_ufvk,
             unlock,
+            set_indexer,
             verify_passphrase,
             get_wallet_state,
             get_addresses,

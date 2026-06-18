@@ -75,6 +75,7 @@ function BalanceHero({
 }
 
 function SyncRow({ sync }: { sync: SyncStatus | null }) {
+  const navigate = useNavigate();
   if (!sync) return null;
   if (sync.state === "idle") {
     return (
@@ -86,9 +87,22 @@ function SyncRow({ sync }: { sync: SyncStatus | null }) {
   }
   if (sync.state === "error") {
     return (
-      <span className="text-xs text-red-400">
-        Sync error{sync.error ? `: ${sync.error}` : ""}
-      </span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-xs text-red-400">
+          Sync error{sync.error ? `: ${sync.error}` : ""}
+        </span>
+        {/* Only a connectivity failure is fixable by switching servers, so the CTA
+            rides on `unreachable` and jumps straight to the Indexer setting. */}
+        {sync.unreachable && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/settings", hash: "indexer" })}
+            className="text-xs font-medium text-white underline-offset-2 hover:underline"
+          >
+            Change Indexer
+          </button>
+        )}
+      </div>
     );
   }
   const pct = Math.min(100, Math.max(0, Math.round(sync.percent)));

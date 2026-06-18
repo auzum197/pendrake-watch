@@ -19,6 +19,9 @@ export type WalletState = {
   viewMode: ViewMode;
   network: Network;
   birthdayHeight: number;
+  // The Indexer this Wallet syncs against, editable from Settings. Empty when no
+  // wallet exists.
+  indexerUri: string;
 };
 
 export type WalletAddress = {
@@ -66,6 +69,9 @@ export type SyncStatus = {
   totalOutputs?: number;
   etaSeconds?: number;
   error?: string;
+  // Set only when the sync error was the Indexer being unreachable, gating the
+  // "Change server" CTA. Absent reads as false.
+  unreachable?: boolean;
   lastSyncedAt?: number;
 };
 
@@ -92,7 +98,18 @@ export type Tx = {
   status: TxStatus;
 };
 
-export const DEFAULT_INDEXER = "https://na.zec.rocks:443";
+// The public mainnet default: zec.rocks auto-routes to a nearby region.
+export const DEFAULT_INDEXER = "https://zec.rocks:443";
+
+// Curated mainnet Indexers shown in Settings. The default is auto-routed; the rest
+// pin a region. Regtest has no public default, so it only ever uses a custom one.
+export const MAINNET_INDEXERS: { label: string; uri: string }[] = [
+  { label: "Default (auto-routed)", uri: DEFAULT_INDEXER },
+  { label: "North America", uri: "https://na.zec.rocks:443" },
+  { label: "Europe", uri: "https://eu.zec.rocks:443" },
+  { label: "South America", uri: "https://sa.zec.rocks:443" },
+  { label: "Middle East", uri: "https://me.zec.rocks:443" },
+];
 
 export function importUfvk(input: ImportUfvkInput): Promise<WalletState> {
   return invoke("import_ufvk", {
@@ -114,6 +131,13 @@ export function parseUfvk(ufvk: string): Promise<ParseUfvkResult> {
 // Open an encrypted wallet on this run. Rejects when the passphrase is wrong.
 export function unlock(passphrase: string): Promise<WalletState> {
   return invoke("unlock", { passphrase });
+}
+
+// Point the Wallet at a different Indexer. The daemon connects to the new server
+// before persisting, so this rejects when the server is unreachable or the URL is
+// malformed, leaving the current Indexer in place.
+export function setIndexer(indexerUri: string): Promise<WalletState> {
+  return invoke("set_indexer", { indexerUri });
 }
 
 // Re-authenticate against the held session passphrase without touching the wallet.
@@ -209,7 +233,7 @@ export type SyncEvent =
       valueZat: string;
       received: boolean;
     }
-  | { event: "error"; message: string };
+  | { event: "error"; message: string; unreachable?: boolean };
 
 export function onSyncEvent(
   handler: (event: SyncEvent) => void,
