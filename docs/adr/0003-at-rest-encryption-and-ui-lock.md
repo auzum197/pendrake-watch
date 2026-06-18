@@ -11,3 +11,9 @@ An app-level encryption layer wrapping zingolib's plaintext files was the assume
 ## Consequences
 
 The wallet file format becomes encrypted and the IPC protocol grows an `Unlock { passphrase }` request and a locked/unlocked state, both contradicting the current `paths.rs` comment, which must be updated. After any full restart the daemon cannot sync until the GUI supplies the passphrase, acceptable in v0 since there is no autostart. Idle auto-relock and change-passphrase are post-v0.
+
+## Amendment (v0): optional Passphrase persistence via the OS keychain
+
+The original decision kept the Passphrase in daemon memory only, which leaves the daemon unable to sync after a restart until the GUI re-supplies it. v0 wants background sync to survive a reboot, so the Passphrase may be persisted, with one constraint: the OS keychain only (macOS Keychain, Windows Credential Manager, Linux Secret Service), never an app-managed file. The keychain is gated by the OS login and its key lives off the at-rest disk image. An app-managed encrypted blob would be obfuscation, since its key would sit on the same disk it protects. That is the theater this ADR already rejects for plaintext files.
+
+Persistence is an explicit onboarding choice, mirrored as a Settings toggle. Off, the default this ADR describes, keeps the UI lock as written and a restart lands on the unlock screen. On stores the Passphrase in the keychain, the daemon auto-unlocks on start, and the app opens to the dashboard with no unlock screen. The trade is deliberate. With the Passphrase in the keychain, at-rest encryption protects against theft of the Wallet files without the keychain, and the effective gate becomes the OS account. That is acceptable for a watch-only wallet that guards viewing privacy rather than spend authority. Passphrase rotation stays post-v0. This amendment adds where the Passphrase may be kept, not how to change it.

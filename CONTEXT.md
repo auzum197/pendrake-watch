@@ -44,12 +44,16 @@ The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wal
 _Avoid_: server, endpoint, node
 
 **Passphrase**:
-The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. It is never stored, only validated against each Wallet file's header, and the same one applies to every Wallet.
+The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. The same one applies to every Wallet, validated against each Wallet file's header. By default it lives only in the daemon's memory for the session. The user may choose at onboarding to have it remembered so the app keeps syncing across restarts, trading away the unlock step.
 _Avoid_: password, PIN
 
 **Forget**:
 Deliberately removing a single Wallet while the app is unlocked and the Passphrase is known. Only that Wallet's files are deleted; the others remain.
 _Avoid_: delete, remove
+
+**Replace**:
+The v0 path to a different Wallet. Importing a new UFVK forgets the current Wallet and creates one in its place, behind a confirmation, so a synced Wallet is never wiped by accident. It is a single destructive action, not a switch: v0 holds one Wallet, so there is nothing to switch between. Once multi-key lands a new import becomes additive and Replace stops being how import behaves.
+_Avoid_: switch, change, swap
 
 **Start over**:
 The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Forget, which removes one Wallet with the Passphrase known.
