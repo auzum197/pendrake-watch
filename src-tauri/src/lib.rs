@@ -294,6 +294,11 @@ async fn import_ufvk(
 }
 
 #[tauri::command]
+async fn parse_ufvk(ufvk: String) -> Result<Value, String> {
+    request("parseUfvk", serde_json::json!({ "ufvk": ufvk })).await
+}
+
+#[tauri::command]
 async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
@@ -393,6 +398,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             import_ufvk,
+            parse_ufvk,
             unlock,
             get_wallet_state,
             get_addresses,

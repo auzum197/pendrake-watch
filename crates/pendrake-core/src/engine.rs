@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
-    ImportUfvkArgs, Network, PoolBalance, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind,
-    TxStatus, UnlockArgs, ViewMode, WalletAddress, WalletState,
+    ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SyncEvent, SyncPhase, SyncState,
+    SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, RwLock};
@@ -38,6 +38,7 @@ use zip32::AccountId;
 
 use crate::notify::Notifier;
 use crate::paths::{Meta, Paths};
+use crate::ufvk::{parse_ufvk, UfvkError};
 
 /// Gap between sync rounds once a round has finished cleanly. Kept short so a
 /// newly mined transaction is picked up within roughly this window.
@@ -310,6 +311,13 @@ impl Engine {
                     .cloned();
                 Ok(to_value(found)?)
             }
+            "parseUfvk" => {
+                let ufvk = params
+                    .get("ufvk")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow!("parseUfvk needs a ufvk"))?;
+                Ok(to_value(parse_ufvk_result(ufvk))?)
+            }
             "importUfvk" => {
                 let args: ImportUfvkArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.import_ufvk(args).await?)?)
@@ -406,6 +414,22 @@ impl Engine {
     }
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
+        // ADR-0002: the network is derived from the key, never trusted from the
+        // client. Reject testnet and malformed keys, and any disagreement between
+        // the key and the requested network, before touching disk.
+        let identity = parse_ufvk(&args.ufvk).map_err(|e| anyhow!("{e}"))?;
+        let key_network = match identity.network {
+            UfvkNetwork::Mainnet => Network::Mainnet,
+            UfvkNetwork::Regtest => Network::Testnet,
+        };
+        if key_network != args.network {
+            return Err(anyhow!(
+                "the key is {:?} but the import requested {:?}",
+                identity.network,
+                args.network
+            ));
+        }
+
         let chain = chain_of(args.network);
         let birthday = args.birthday.max(sapling_activation(chain));
         let meta = Meta {
@@ -948,6 +972,16 @@ fn save_notified(path: &std::path::Path, seen: &HashSet<String>) {
             }
         }
         Err(e) => tracing::warn!("could not serialize notified txids: {e}"),
+    }
+}
+
+/// Fold the decoder's `Result` into the wire verdict the GUI renders inline. A
+/// testnet or malformed key is an `ok` result tagged by `kind`, not a daemon error.
+fn parse_ufvk_result(input: &str) -> ParseUfvkResult {
+    match parse_ufvk(input) {
+        Ok(identity) => ParseUfvkResult::Valid(identity),
+        Err(UfvkError::Testnet) => ParseUfvkResult::Testnet,
+        Err(UfvkError::Malformed(reason)) => ParseUfvkResult::Malformed { reason },
     }
 }
 
