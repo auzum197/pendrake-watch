@@ -80,6 +80,14 @@ pub struct WalletState {
     /// True when the wallet file is encrypted and the daemon hasn't been given the
     /// passphrase yet, so the GUI must collect it via `unlock` before anything works.
     pub locked: bool,
+    /// True when the daemon holds the session passphrase in memory. Lets onboarding
+    /// tell a post-Replace empty-but-unlocked daemon from a cold one and skip Set
+    /// Password (docs/adr/0004).
+    pub session_held: bool,
+    /// The current Wallet's fingerprint, the value that seeds its LifeHash. `None`
+    /// for a wallet imported before fingerprints were persisted, or when no wallet
+    /// exists.
+    pub fingerprint: Option<String>,
     pub import_type: ImportType,
     pub view_mode: ViewMode,
     pub network: Network,
@@ -143,12 +151,30 @@ pub struct ImportUfvkArgs {
     pub network: Network,
     /// Global passphrase that encrypts the wallet at rest (docs/adr/0003). It is
     /// never persisted, the Argon2 verifier lives in the wallet file's header.
-    pub passphrase: String,
+    /// Omitted on a post-Replace import, where the daemon reuses the session
+    /// passphrase it held across the wipe (docs/adr/0004).
+    #[serde(default)]
+    pub passphrase: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UnlockArgs {
     pub passphrase: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyPassphraseArgs {
+    pub passphrase: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForgetArgs {
+    /// Keep the in-memory session passphrase across the wipe. Replace sets this so
+    /// onboarding can skip Set Password; Start over leaves it false and drops the
+    /// passphrase (docs/adr/0004).
+    #[serde(default)]
+    pub keep_session: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]

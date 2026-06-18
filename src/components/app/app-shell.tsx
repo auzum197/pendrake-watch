@@ -11,7 +11,7 @@ import {
 import type { SyncStatus, WalletState } from "@/lib/ipc";
 import { syncLabel } from "@/lib/format";
 
-type Section = "wallet" | "activity";
+type Section = "wallet" | "activity" | "settings";
 
 export function AppShell({
   active,
@@ -83,7 +83,12 @@ function AppSidebar({
       </nav>
 
       <nav className="mt-auto flex flex-col gap-1">
-        <NavItem icon={<IconSettings className="size-4" />} label="Settings" />
+        <NavItem
+          icon={<IconSettings className="size-4" />}
+          label="Settings"
+          active={active === "settings"}
+          onClick={() => navigate({ to: "/settings" })}
+        />
         <NavItem icon={<IconHelpCircle className="size-4" />} label="About" />
         <NavItem
           icon={<IconLock className="size-4" />}

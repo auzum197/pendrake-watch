@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/popover";
 import {
 	DEFAULT_INDEXER,
+	getWalletState,
 	importUfvk,
 	parseUfvk,
 	type ParseUfvkResult,
@@ -67,19 +68,44 @@ export function OnboardingPage() {
 	const [draft, setDraft] = useState<Draft>(INITIAL);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// A Replace lands here with the daemon still holding the session passphrase, so
+	// the Set Password step is dropped and the new Wallet inherits it (docs/adr/0004).
+	const [sessionHeld, setSessionHeld] = useState(false);
+
+	useEffect(() => {
+		let active = true;
+		getWalletState()
+			.then((s) => active && setSessionHeld(s.sessionHeld))
+			.catch(() => {});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	function set<K extends keyof Draft>(key: K, value: Draft[K]) {
 		setDraft((d) => ({ ...d, [key]: value }));
 	}
 
 	// The step sequence is the router: regtest keeps the Indexer step, mainnet
-	// drops it (src/lib/onboarding). It is derived from the pasted key, so editing
-	// the UFVK on the first step reshapes the flow live.
-	const steps = onboardingSteps(networkFromUfvk(draft.ufvk));
+	// drops it, and a held session passphrase drops Set Password (src/lib/onboarding).
+	// It is derived from the pasted key, so editing the UFVK on the first step
+	// reshapes the flow live.
+	const steps = onboardingSteps(networkFromUfvk(draft.ufvk), sessionHeld);
 	const position = Math.min(index, steps.length - 1);
 	const current = steps[position];
+	const isLast = position === steps.length - 1;
 	const next = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
 	const back = () => setIndex((i) => Math.max(i - 1, 0));
+	// On the final step the primary action imports; earlier steps advance. With Set
+	// Password present that step owns the submit, so the final step is always the
+	// last one in the sequence either way.
+	const advance = () => {
+		if (isLast) {
+			createWallet();
+		} else {
+			next();
+		}
+	};
 
 	async function createWallet() {
 		setBusy(true);
@@ -95,9 +121,9 @@ export function OnboardingPage() {
 						? draft.serverUrl.trim()
 						: DEFAULT_INDEXER,
 				network: networkFromUfvk(draft.ufvk),
-				// The global passphrase encrypts the wallet at rest and is the unlock key
-				// (docs/adr/0003).
-				passphrase: draft.password,
+				// First onboarding sets the global passphrase (docs/adr/0003). A
+				// post-Replace import omits it so the daemon reuses the held one.
+				passphrase: sessionHeld ? undefined : draft.password,
 			});
 			navigate({ to: "/dashboard" });
 		} catch (e) {
@@ -118,7 +144,10 @@ export function OnboardingPage() {
 							set={set}
 							stepNumber={position + 1}
 							stepTotal={steps.length}
-							onNext={next}
+							onNext={advance}
+							isFinal={isLast}
+							busy={busy}
+							error={error}
 						/>
 					)}
 					{current === "indexer" && (
@@ -128,7 +157,10 @@ export function OnboardingPage() {
 							stepNumber={position + 1}
 							stepTotal={steps.length}
 							onBack={back}
-							onNext={next}
+							onNext={advance}
+							isFinal={isLast}
+							busy={busy}
+							error={error}
 						/>
 					)}
 					{current === "passphrase" && (
@@ -218,12 +250,20 @@ function ImportStep({
 	stepNumber,
 	stepTotal,
 	onNext,
+	isFinal,
+	busy,
+	error,
 }: {
 	draft: Draft;
 	set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
 	stepNumber: number;
 	stepTotal: number;
 	onNext: () => void;
+	// When this is the last step (a Replace dropped Set Password), the primary
+	// button imports rather than advancing, and surfaces import progress/errors.
+	isFinal: boolean;
+	busy: boolean;
+	error: string | null;
 }) {
 	const ufvk = draft.ufvk.trim();
 	// The decoder's verdict for exactly the current key. While typing or waiting on
@@ -342,8 +382,17 @@ function ImportStep({
 				/>
 			</div>
 
-			<PrimaryButton disabled={identity?.kind !== "valid"} onClick={onNext}>
-				Continue
+			{isFinal && error && (
+				<p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
+					{error}
+				</p>
+			)}
+
+			<PrimaryButton
+				disabled={identity?.kind !== "valid" || busy}
+				onClick={onNext}
+			>
+				{isFinal ? (busy ? "Creating wallet…" : "Create Wallet") : "Continue"}
 			</PrimaryButton>
 		</>
 	);
@@ -570,6 +619,9 @@ function ServerStep({
 	stepTotal,
 	onBack,
 	onNext,
+	isFinal,
+	busy,
+	error,
 }: {
 	draft: Draft;
 	set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
@@ -577,6 +629,10 @@ function ServerStep({
 	stepTotal: number;
 	onBack: () => void;
 	onNext: () => void;
+	// On a regtest Replace this is the last step, so its button imports.
+	isFinal: boolean;
+	busy: boolean;
+	error: string | null;
 }) {
 	return (
 		<>
@@ -618,9 +674,17 @@ function ServerStep({
 				</label>
 			)}
 
+			{isFinal && error && (
+				<p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
+					{error}
+				</p>
+			)}
+
 			<div className="flex items-center gap-3">
 				<BackButton onClick={onBack} />
-				<PrimaryButton onClick={onNext}>Continue</PrimaryButton>
+				<PrimaryButton disabled={busy} onClick={onNext}>
+					{isFinal ? (busy ? "Creating wallet…" : "Create Wallet") : "Continue"}
+				</PrimaryButton>
 			</div>
 		</>
 	);
