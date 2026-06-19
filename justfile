@@ -38,10 +38,22 @@ run-prod: helper bundle stop
     open platform/macos/PendrakeSync/build/PendrakeSync.app
     open src-tauri/target/release/bundle/macos/pendrake-watch.app
 
+# Stage the pendraked daemon as the Tauri sidecar (binaries/pendraked-<triple>), so
+# externalBin can ship it inside the bundle and the GUI finds it once installed.
+stage-daemon: daemon
+    mkdir -p src-tauri/binaries
+    TRIPLE=$(rustc -vV | sed -n 's/host: //p'); EXT=""; case "$TRIPLE" in *windows*) EXT=".exe";; esac; cp "crates/target/release/pendraked$EXT" "src-tauri/binaries/pendraked-$TRIPLE$EXT"
+
 # Build both Rust workspaces and the production GUI in release.
-build-release:
+build-release: stage-daemon
     cd crates && cargo build --release
     pnpm tauri build --no-bundle
+
+# Build release and bundle installable packages. On Linux this produces the
+# .deb, .rpm, and .AppImage under src-tauri/target/release/bundle.
+package: stage-daemon
+    cd crates && cargo build --release
+    pnpm tauri build
 
 # Build everything in release and run the production GUI on Linux and Windows. It
 # embeds the production frontend and spawns the release pendraked over the local

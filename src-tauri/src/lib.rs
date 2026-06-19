@@ -65,6 +65,15 @@ fn daemon_bin() -> Option<PathBuf> {
         return Some(PathBuf::from(path));
     }
     let exe = std::env::consts::EXE_SUFFIX;
+    // Installed package: the bundled sidecar sits next to the GUI binary.
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let bundled = dir.join(format!("pendraked{exe}"));
+            if bundled.exists() {
+                return Some(bundled);
+            }
+        }
+    }
     [
         format!("crates/target/release/pendraked{exe}"),
         format!("../crates/target/release/pendraked{exe}"),
