@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app/app-shell";
 import { TxList } from "@/components/app/tx-list";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { formatHeight, formatZec, totalConfirmed } from "@/lib/format";
+import { formatHeight, formatZec, isSynced, totalConfirmed } from "@/lib/format";
 import type { Balance, SyncStatus } from "@/lib/ipc";
 
 // The designer's Home frame, wired to the live daemon feed through useWalletData.
@@ -55,9 +55,19 @@ function BalanceHero({
 }) {
   const total = totalConfirmed(balance);
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-ink p-6 text-white">
-      <div className="absolute right-10 top-0 size-72 rounded-full bg-brand/25 blur-[64px]" />
-      <div className="relative flex flex-col gap-5">
+    // No overflow-hidden here: WebKitGTK under software rendering (no GPU, e.g. a
+    // VM) miscomputes the height of an overflow-hidden flex container without an
+    // explicit height, sizing it to the first line and clipping the balance and
+    // sync row. The brand glow is a radial gradient, so the rounded corners still
+    // clip it without overflow-hidden, and there's no blur layer to render.
+    <section
+      className="rounded-2xl bg-ink p-6 text-white"
+      style={{
+        backgroundImage:
+          "radial-gradient(60% 120% at 85% 0%, rgba(26,43,255,0.28), transparent 70%)",
+      }}
+    >
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <span className="flex items-center gap-1.5 text-xs text-white/45">
             <IconShieldCheckFilled className="size-3.5" />
@@ -75,19 +85,33 @@ function BalanceHero({
 }
 
 function SyncRow({ sync }: { sync: SyncStatus | null }) {
+  const navigate = useNavigate();
   if (!sync) return null;
-  if (sync.state === "idle") {
+  if (sync.state === "error") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-xs text-red-400">
+          Sync error{sync.error ? `: ${sync.error}` : ""}
+        </span>
+        {/* Only a connectivity failure is fixable by switching servers, so the CTA
+            rides on `unreachable` and jumps straight to the Indexer setting. */}
+        {sync.unreachable && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/settings", hash: "indexer" })}
+            className="text-xs font-medium text-white underline-offset-2 hover:underline"
+          >
+            Change Indexer
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (isSynced(sync)) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-white/55">
         <IconCircleCheckFilled className="size-3.5 text-brand" />
         Synced
-      </span>
-    );
-  }
-  if (sync.state === "error") {
-    return (
-      <span className="text-xs text-red-400">
-        Sync error{sync.error ? `: ${sync.error}` : ""}
       </span>
     );
   }

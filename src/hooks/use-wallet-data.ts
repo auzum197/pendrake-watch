@@ -108,7 +108,14 @@ export function useWalletData(): WalletData {
           break;
         case "error":
           setSync((prev) =>
-            prev ? { ...prev, state: "error", error: ev.message } : prev,
+            prev
+              ? {
+                  ...prev,
+                  state: "error",
+                  error: ev.message,
+                  unreachable: ev.unreachable ?? false,
+                }
+              : prev,
           );
           break;
       }
