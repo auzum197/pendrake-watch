@@ -28,3 +28,5 @@ target/
 # Pendrake-specific for macOS
 platform/macos/PendrakeSync/build
 platform/macos/PendrakeSync/Generated/
+# Tauri sidecar staged from the daemon build
+src-tauri/binaries/

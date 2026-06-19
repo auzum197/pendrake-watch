@@ -19,10 +19,27 @@ export function formatZec(zatoshis: bigint): string {
   });
 }
 
+// At the chain tip the daemon keeps running short maintenance rounds: each new
+// block flips state to "syncing" and drops syncedHeight a block or two below the
+// tip until the round commits. A strict syncedHeight >= chainTip check only holds
+// at the instant of equality, so it still flickers "Synced" <-> "Syncing 100%"
+// once per block. Treat being within a couple of blocks of the tip as synced so
+// the label holds steady.
+const TIP_SLACK = 2;
+
+export function isSynced(sync: SyncStatus | null): boolean {
+  if (!sync) return false;
+  if (sync.state === "error") return false;
+  return (
+    sync.state === "idle" ||
+    (sync.chainTip > 0 && sync.chainTip - sync.syncedHeight <= TIP_SLACK)
+  );
+}
+
 export function syncLabel(sync: SyncStatus | null): string {
   if (!sync) return "Connecting…";
-  if (sync.state === "idle") return "Synced";
   if (sync.state === "error") return "Sync error";
+  if (isSynced(sync)) return "Synced";
   return `Syncing… ${Math.round(sync.percent)}%`;
 }
 

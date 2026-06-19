@@ -65,6 +65,30 @@ fn daemon_bin() -> Option<PathBuf> {
         return Some(PathBuf::from(path));
     }
     let exe = std::env::consts::EXE_SUFFIX;
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            // Installed package: the bundled sidecar sits next to the GUI binary.
+            let bundled = dir.join(format!("pendraked{exe}"));
+            if bundled.exists() {
+                return Some(bundled);
+            }
+            // Dev build: the GUI binary lives at src-tauri/target/<profile>/, three
+            // levels under the repo root, so the workspace daemon is a fixed hop away.
+            // Resolve it relative to this binary, not the working directory, so a
+            // launcher that starts the GUI from elsewhere (`just` under Git Bash)
+            // still finds it.
+            let found = [
+                format!("../../../crates/target/release/pendraked{exe}"),
+                format!("../../../crates/target/debug/pendraked{exe}"),
+            ]
+            .into_iter()
+            .map(|rel| dir.join(rel))
+            .find(|p| p.exists());
+            if found.is_some() {
+                return found;
+            }
+        }
+    }
     [
         format!("crates/target/release/pendraked{exe}"),
         format!("../crates/target/release/pendraked{exe}"),
@@ -89,6 +113,15 @@ fn pendrake_sync_app() -> Option<PathBuf> {
 
 fn spawn_bin(bin: &PathBuf) -> Result<(), String> {
     let mut cmd = std::process::Command::new(bin);
+    // Don't hand the daemon the launcher's stdio. A background process has no use
+    // for it, and inheriting it breaks the spawn when the GUI was started from Git
+    // Bash: its stdio are MSYS pseudo-terminal handles (emulated pipes), which a
+    // CREATE_NO_WINDOW child can't take over. Launched from cmd the inherited
+    // handles are real console handles and the spawn works, which is why this only
+    // bit under `just`.
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     // pendraked is a console binary, so spawning it from the GUI would flash a
     // terminal window. Detach it from any console on Windows.
     #[cfg(windows)]

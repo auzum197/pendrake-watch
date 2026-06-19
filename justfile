@@ -27,8 +27,9 @@ dev: daemon
 helper profile="release":
     PENDRAKE_HELPER_PROFILE={{profile}} scripts/build-macos-helper.sh
 
-# Build the GUI as a .app bundle (skips the DMG).
-bundle:
+# Build the GUI as a .app bundle (skips the DMG). Stages the daemon first so the
+# externalBin sidecar resolves during the build.
+bundle: stage-daemon
     pnpm tauri build --bundles app
 
 # macOS: run the production-style build where a notification click opens the tx screen.
@@ -38,21 +39,36 @@ run-prod: helper bundle stop
     open platform/macos/PendrakeSync/build/PendrakeSync.app
     open src-tauri/target/release/bundle/macos/pendrake-watch.app
 
+# Stage the pendraked daemon as the Tauri sidecar (binaries/pendraked-<triple>), so
+# externalBin can ship it inside the bundle and the GUI finds it once installed.
+stage-daemon: daemon
+    mkdir -p src-tauri/binaries
+    TRIPLE=$(rustc -vV | sed -n 's/host: //p'); EXT=""; case "$TRIPLE" in *windows*) EXT=".exe";; esac; cp "crates/target/release/pendraked$EXT" "src-tauri/binaries/pendraked-$TRIPLE$EXT"
+
 # Build both Rust workspaces and the production GUI in release.
-build-release:
+build-release: stage-daemon
     cd crates && cargo build --release
     pnpm tauri build --no-bundle
+
+# Build release and bundle installable packages. On Linux this produces the
+# .deb, .rpm, and .AppImage under src-tauri/target/release/bundle.
+package: stage-daemon
+    cd crates && cargo build --release
+    pnpm tauri build
 
 # Build everything in release and run the production GUI on Linux and Windows. It
 # embeds the production frontend and spawns the release pendraked over the local
 # socket. macOS uses run-prod, which also builds the Swift notification helper.
+# `stop` runs before the build: on Windows a running daemon or GUI locks the binary
+# tauri-build recopies as a sidecar, so building over a live instance fails with an
+# access-denied panic.
 [linux]
-run-release: build-release stop
-    ./src-tauri/target/release/pendrake-watch
+run-release: stop build-release
+    PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" ./src-tauri/target/release/pendrake-watch
 
 [windows]
-run-release: build-release stop
-    ./src-tauri/target/release/pendrake-watch.exe
+run-release: stop build-release
+    PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked.exe" ./src-tauri/target/release/pendrake-watch.exe
 
 # Stop any background daemons.
 [unix]
@@ -63,6 +79,7 @@ stop:
 [windows]
 stop:
     -taskkill //IM pendraked.exe //F
+    -taskkill //IM pendrake-watch.exe //F
 
 # Typecheck the frontend and build the Rust workspaces.
 check:
