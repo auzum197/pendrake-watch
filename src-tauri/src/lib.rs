@@ -113,6 +113,15 @@ fn pendrake_sync_app() -> Option<PathBuf> {
 
 fn spawn_bin(bin: &PathBuf) -> Result<(), String> {
     let mut cmd = std::process::Command::new(bin);
+    // Don't hand the daemon the launcher's stdio. A background process has no use
+    // for it, and inheriting it breaks the spawn when the GUI was started from Git
+    // Bash: its stdio are MSYS pseudo-terminal handles (emulated pipes), which a
+    // CREATE_NO_WINDOW child can't take over. Launched from cmd the inherited
+    // handles are real console handles and the spawn works, which is why this only
+    // bit under `just`.
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     // pendraked is a console binary, so spawning it from the GUI would flash a
     // terminal window. Detach it from any console on Windows.
     #[cfg(windows)]
