@@ -27,8 +27,9 @@ dev: daemon
 helper profile="release":
     PENDRAKE_HELPER_PROFILE={{profile}} scripts/build-macos-helper.sh
 
-# Build the GUI as a .app bundle (skips the DMG).
-bundle:
+# Build the GUI as a .app bundle (skips the DMG). Stages the daemon first so the
+# externalBin sidecar resolves during the build.
+bundle: stage-daemon
     pnpm tauri build --bundles app
 
 # macOS: run the production-style build where a notification click opens the tx screen.
