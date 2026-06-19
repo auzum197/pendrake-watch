@@ -58,12 +58,15 @@ package: stage-daemon
 # Build everything in release and run the production GUI on Linux and Windows. It
 # embeds the production frontend and spawns the release pendraked over the local
 # socket. macOS uses run-prod, which also builds the Swift notification helper.
+# `stop` runs before the build: on Windows a running daemon or GUI locks the binary
+# tauri-build recopies as a sidecar, so building over a live instance fails with an
+# access-denied panic.
 [linux]
-run-release: build-release stop
+run-release: stop build-release
     PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" ./src-tauri/target/release/pendrake-watch
 
 [windows]
-run-release: build-release stop
+run-release: stop build-release
     PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked.exe" ./src-tauri/target/release/pendrake-watch.exe
 
 # Stop any background daemons.
@@ -75,6 +78,7 @@ stop:
 [windows]
 stop:
     -taskkill //IM pendraked.exe //F
+    -taskkill //IM pendrake-watch.exe //F
 
 # Typecheck the frontend and build the Rust workspaces.
 check:
