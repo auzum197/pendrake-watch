@@ -55,11 +55,13 @@ function BalanceHero({
 }) {
   const total = totalConfirmed(balance);
   return (
-    // The brand glow is a radial gradient. A blurred element forces a compositing
-    // layer that WebKitGTK under software rendering (no GPU, e.g. a VM) paints
-    // empty, which blanked the balance. A gradient paints reliably.
+    // No overflow-hidden here: WebKitGTK under software rendering (no GPU, e.g. a
+    // VM) miscomputes the height of an overflow-hidden flex container without an
+    // explicit height, sizing it to the first line and clipping the balance and
+    // sync row. The brand glow is a radial gradient, so the rounded corners still
+    // clip it without overflow-hidden, and there's no blur layer to render.
     <section
-      className="overflow-hidden rounded-2xl bg-ink p-6 text-white"
+      className="rounded-2xl bg-ink p-6 text-white"
       style={{
         backgroundImage:
           "radial-gradient(60% 120% at 85% 0%, rgba(26,43,255,0.28), transparent 70%)",
