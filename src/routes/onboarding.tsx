@@ -18,7 +18,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { DEFAULT_INDEXER, importUfvk, type Network } from "@/lib/ipc";
+import { DEFAULT_INDEXER, importUfvk } from "@/lib/ipc";
+import { networkFromUfvk, onboardingSteps } from "@/lib/onboarding";
 
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Server
 // -> Set Password). Fully dark, brand-blue accent, split layout with the 龙 mark.
@@ -42,17 +43,6 @@ type Draft = {
   confirm: string;
 };
 
-// The network is derived from the UFVK's bech32m prefix and is immutable for the
-// wallet (docs/adr/0002): the engine cross-checks this against the key and rejects
-// a mismatch. uviewtest/uviewregtest are testnet, otherwise mainnet. The daemon
-// only models mainnet and testnet, so regtest folds into testnet for now.
-function networkFromUfvk(ufvk: string): Network {
-  const hrp = ufvk.trim().toLowerCase();
-  return hrp.startsWith("uviewtest") || hrp.startsWith("uviewregtest")
-    ? "testnet"
-    : "mainnet";
-}
-
 const INITIAL: Draft = {
   ufvk: "",
   syncMode: "date",
@@ -67,7 +57,7 @@ const INITIAL: Draft = {
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
+  const [index, setIndex] = useState(0);
   const [draft, setDraft] = useState<Draft>(INITIAL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +65,15 @@ export function OnboardingPage() {
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
+
+  // The step sequence is the router: regtest keeps the Indexer step, mainnet
+  // drops it (src/lib/onboarding). It is derived from the pasted key, so editing
+  // the UFVK on the first step reshapes the flow live.
+  const steps = onboardingSteps(networkFromUfvk(draft.ufvk));
+  const position = Math.min(index, steps.length - 1);
+  const current = steps[position];
+  const next = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
+  const back = () => setIndex((i) => Math.max(i - 1, 0));
 
   async function createWallet() {
     setBusy(true);
@@ -107,28 +106,34 @@ export function OnboardingPage() {
       <DragonPanel />
       <div className="flex flex-1 items-center overflow-y-auto px-10 py-12">
         <div className="mx-auto flex w-full max-w-md flex-col gap-7">
-          {step === 0 && (
+          {current === "identity" && (
             <ImportStep
               draft={draft}
               set={set}
-              onNext={() => setStep(1)}
+              stepNumber={position + 1}
+              stepTotal={steps.length}
+              onNext={next}
             />
           )}
-          {step === 1 && (
+          {current === "indexer" && (
             <ServerStep
               draft={draft}
               set={set}
-              onBack={() => setStep(0)}
-              onNext={() => setStep(2)}
+              stepNumber={position + 1}
+              stepTotal={steps.length}
+              onBack={back}
+              onNext={next}
             />
           )}
-          {step === 2 && (
+          {current === "passphrase" && (
             <PasswordStep
               draft={draft}
               set={set}
+              stepNumber={position + 1}
+              stepTotal={steps.length}
               busy={busy}
               error={error}
-              onBack={() => setStep(1)}
+              onBack={back}
               onSubmit={createWallet}
             />
           )}
@@ -151,16 +156,20 @@ function DragonPanel() {
 
 function StepHeading({
   step,
+  total,
   title,
   subtitle,
 }: {
   step: number;
+  total: number;
   title: string;
   subtitle: string;
 }) {
   return (
     <header className="flex flex-col gap-2">
-      <span className="text-xs text-white/40">Step {step} of 3</span>
+      <span className="text-xs text-white/40">
+        Step {step} of {total}
+      </span>
       <h1 className="font-heading text-4xl font-bold tracking-tight">{title}</h1>
       <p className="text-sm text-white/50">{subtitle}</p>
     </header>
@@ -198,16 +207,21 @@ function PrimaryButton({
 function ImportStep({
   draft,
   set,
+  stepNumber,
+  stepTotal,
   onNext,
 }: {
   draft: Draft;
   set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+  stepNumber: number;
+  stepTotal: number;
   onNext: () => void;
 }) {
   return (
     <>
       <StepHeading
-        step={1}
+        step={stepNumber}
+        total={stepTotal}
         title="Import Wallet"
         subtitle="Restore your Zcash wallet from a unified full viewing key."
       />
@@ -404,18 +418,23 @@ function PoolsField({
 function ServerStep({
   draft,
   set,
+  stepNumber,
+  stepTotal,
   onBack,
   onNext,
 }: {
   draft: Draft;
   set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+  stepNumber: number;
+  stepTotal: number;
   onBack: () => void;
   onNext: () => void;
 }) {
   return (
     <>
       <StepHeading
-        step={2}
+        step={stepNumber}
+        total={stepTotal}
         title="Server"
         subtitle="A regtest key was detected. Choose how to connect."
       />
@@ -505,6 +524,8 @@ function ServerCard({
 function PasswordStep({
   draft,
   set,
+  stepNumber,
+  stepTotal,
   busy,
   error,
   onBack,
@@ -512,6 +533,8 @@ function PasswordStep({
 }: {
   draft: Draft;
   set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+  stepNumber: number;
+  stepTotal: number;
   busy: boolean;
   error: string | null;
   onBack: () => void;
@@ -523,7 +546,8 @@ function PasswordStep({
   return (
     <>
       <StepHeading
-        step={3}
+        step={stepNumber}
+        total={stepTotal}
         title="Set Password"
         subtitle="This password encrypts your wallet on this device."
       />
