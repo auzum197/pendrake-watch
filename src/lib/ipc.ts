@@ -28,6 +28,24 @@ export type ImportUfvkInput = {
   passphrase: string;
 };
 
+// A UFVK declares its own network. Testnet is rejected, so a decoded key is one
+// of these two (mirrors the daemon's pendrake-ipc UfvkNetwork).
+export type UfvkNetwork = "mainnet" | "regtest";
+export type Pool = "orchard" | "sapling" | "transparent";
+
+export type UfvkIdentity = {
+  network: UfvkNetwork;
+  fingerprint: string;
+  pools: Pool[];
+};
+
+// The decode verdict, tagged by `kind`. A testnet or malformed key is a result
+// the Identity screen renders inline, not a thrown daemon error.
+export type ParseUfvkResult =
+  | ({ kind: "valid" } & UfvkIdentity)
+  | { kind: "testnet" }
+  | { kind: "malformed"; reason: string };
+
 export type SyncState = "idle" | "syncing" | "error";
 export type SyncPhase = "scanning" | "committing";
 
@@ -77,6 +95,12 @@ export function importUfvk(input: ImportUfvkInput): Promise<WalletState> {
     network: input.network,
     passphrase: input.passphrase,
   });
+}
+
+// Decode a pasted UFVK into its identity (network, pools, fingerprint) without
+// importing it. Drives the Identity screen as the user types.
+export function parseUfvk(ufvk: string): Promise<ParseUfvkResult> {
+  return invoke("parse_ufvk", { ufvk });
 }
 
 // Open an encrypted wallet on this run. Rejects when the passphrase is wrong.

@@ -8,8 +8,10 @@ mod notify;
 mod paths;
 mod run;
 pub mod transport;
+mod ufvk;
 
 pub use engine::Engine;
 pub use notify::{Notifier, NullNotifier};
 pub use paths::{Meta, Paths};
 pub use run::{run, Config, EngineHandle};
+pub use ufvk::{parse_ufvk, UfvkError};

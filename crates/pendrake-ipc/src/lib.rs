@@ -94,6 +94,46 @@ pub struct WalletAddress {
     pub transparent: Option<String>,
 }
 
+/// The network a UFVK declares. Distinct from [`Network`]: a key can be testnet,
+/// which Pendrake rejects, so the decode result carries only the two it accepts.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum UfvkNetwork {
+    Mainnet,
+    Regtest,
+}
+
+/// A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
+/// experimental typecodes are dropped rather than surfaced.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Pool {
+    Orchard,
+    Sapling,
+    Transparent,
+}
+
+/// What a successful UFVK decode tells the GUI: the network it is bound to, a
+/// stable fingerprint that seeds its LifeHash, and the pools it can watch.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UfvkIdentity {
+    pub network: UfvkNetwork,
+    pub fingerprint: String,
+    pub pools: Vec<Pool>,
+}
+
+/// The verdict of a `parseUfvk` request. A testnet or malformed key is a decode
+/// outcome the GUI renders inline, not a transport failure, so it rides back as
+/// an `ok` result tagged by `kind` rather than a daemon error.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ParseUfvkResult {
+    Valid(UfvkIdentity),
+    Testnet,
+    Malformed { reason: String },
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportUfvkArgs {

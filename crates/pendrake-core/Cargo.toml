@@ -18,7 +18,11 @@ pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-a
 zcash_protocol = "0.9"
 # TxId, carried by the sync events and accepted by transaction_summary.
 zcash_primitives = "0.28"
+# UFVK decoding for the identity slice: network, pools, and fingerprint off the key.
+zcash_address = "0.12"
 zip32 = "0.2"
+# Hashes the canonical UFVK encoding into a stable fingerprint.
+sha2 = "0.10"
 
 tokio = { version = "1", features = [
     "rt-multi-thread",
