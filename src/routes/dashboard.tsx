@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app/app-shell";
 import { TxList } from "@/components/app/tx-list";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { formatHeight, formatZec, totalConfirmed } from "@/lib/format";
+import { formatHeight, formatZec, isSynced, totalConfirmed } from "@/lib/format";
 import type { Balance, SyncStatus } from "@/lib/ipc";
 
 // The designer's Home frame, wired to the live daemon feed through useWalletData.
@@ -77,14 +77,6 @@ function BalanceHero({
 function SyncRow({ sync }: { sync: SyncStatus | null }) {
   const navigate = useNavigate();
   if (!sync) return null;
-  if (sync.state === "idle") {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-white/55">
-        <IconCircleCheckFilled className="size-3.5 text-brand" />
-        Synced
-      </span>
-    );
-  }
   if (sync.state === "error") {
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -103,6 +95,14 @@ function SyncRow({ sync }: { sync: SyncStatus | null }) {
           </button>
         )}
       </div>
+    );
+  }
+  if (isSynced(sync)) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-white/55">
+        <IconCircleCheckFilled className="size-3.5 text-brand" />
+        Synced
+      </span>
     );
   }
   const pct = Math.min(100, Math.max(0, Math.round(sync.percent)));

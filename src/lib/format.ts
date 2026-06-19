@@ -19,10 +19,21 @@ export function formatZec(zatoshis: bigint): string {
   });
 }
 
+// At the chain tip the daemon keeps running short rounds, so its state flips
+// idle/syncing every couple of seconds. Treat "caught up to the tip" as synced so
+// the label holds steady instead of flickering.
+export function isSynced(sync: SyncStatus | null): boolean {
+  if (!sync) return false;
+  return (
+    sync.state === "idle" ||
+    (sync.chainTip > 0 && sync.syncedHeight >= sync.chainTip)
+  );
+}
+
 export function syncLabel(sync: SyncStatus | null): string {
   if (!sync) return "Connecting…";
-  if (sync.state === "idle") return "Synced";
   if (sync.state === "error") return "Sync error";
+  if (isSynced(sync)) return "Synced";
   return `Syncing… ${Math.round(sync.percent)}%`;
 }
 
