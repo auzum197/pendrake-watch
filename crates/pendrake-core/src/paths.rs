@@ -70,6 +70,12 @@ pub struct Meta {
     /// imported before encryption existed still loads as plaintext.
     #[serde(default)]
     pub encrypted: bool,
+    /// The UFVK's fingerprint, seeding the Wallet's LifeHash. Persisted at import so
+    /// the GUI can render the current Wallet's identity (the Settings danger zone,
+    /// the Replace modal) without re-deriving it. `None` for a wallet imported
+    /// before this was tracked.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
 }
 
 impl Meta {

@@ -10,6 +10,7 @@ import { TxDetailPage } from "@/routes/tx";
 import { OnboardingPage } from "@/routes/onboarding";
 import { DashboardPage } from "@/routes/dashboard";
 import { ActivityPage } from "@/routes/activity";
+import { SettingsPage } from "@/routes/settings";
 import { UnlockPage } from "@/routes/unlock";
 
 const rootRoute = createRootRoute({
@@ -52,6 +53,12 @@ const activityRoute = createRoute({
 	component: ActivityPage,
 });
 
+const settingsRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/settings",
+	component: SettingsPage,
+});
+
 const unlockRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/unlock",
@@ -65,6 +72,7 @@ const routeTree = rootRoute.addChildren([
 	onboardingRoute,
 	dashboardRoute,
 	activityRoute,
+	settingsRoute,
 	unlockRoute,
 ]);
 

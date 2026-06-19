@@ -9,6 +9,12 @@ export type ViewMode = "full" | "incoming-only";
 export type WalletState = {
   exists: boolean;
   locked: boolean;
+  // The daemon holds the session passphrase in memory. After a Replace-wipe this
+  // stays true, so onboarding skips Set Password (docs/adr/0004).
+  sessionHeld: boolean;
+  // The current Wallet's fingerprint, seeding its LifeHash. Null when no wallet
+  // exists or it predates fingerprint persistence.
+  fingerprint: string | null;
   importType: ImportType;
   viewMode: ViewMode;
   network: Network;
@@ -25,7 +31,8 @@ export type ImportUfvkInput = {
   birthday: number;
   indexerUri: string;
   network: Network;
-  passphrase: string;
+  // Omitted on a post-Replace import: the daemon reuses the held session passphrase.
+  passphrase?: string;
 };
 
 // A UFVK declares its own network. Testnet is rejected, so a decoded key is one
@@ -93,6 +100,7 @@ export function importUfvk(input: ImportUfvkInput): Promise<WalletState> {
     birthday: input.birthday,
     indexerUri: input.indexerUri,
     network: input.network,
+    // Pass undefined through so the daemon falls back to the held passphrase.
     passphrase: input.passphrase,
   });
 }
@@ -106,6 +114,12 @@ export function parseUfvk(ufvk: string): Promise<ParseUfvkResult> {
 // Open an encrypted wallet on this run. Rejects when the passphrase is wrong.
 export function unlock(passphrase: string): Promise<WalletState> {
   return invoke("unlock", { passphrase });
+}
+
+// Re-authenticate against the held session passphrase without touching the wallet.
+// Gates the Replace wipe; true only when the passphrase matches.
+export function verifyPassphrase(passphrase: string): Promise<boolean> {
+  return invoke("verify_passphrase", { passphrase });
 }
 
 export function getWalletState(): Promise<WalletState> {
@@ -132,8 +146,10 @@ export function getTransaction(txid: string): Promise<Tx | null> {
   return invoke("get_transaction", { txid });
 }
 
-export function forgetWallet(): Promise<void> {
-  return invoke("forget_wallet");
+// Wipe the current Wallet. Replace passes keepSession so the daemon retains the
+// session passphrase across the wipe (docs/adr/0004); Start over leaves it false.
+export function forgetWallet(keepSession = false): Promise<void> {
+  return invoke("forget_wallet", { keepSession });
 }
 
 export type BatchPhase = "scanning" | "waiting" | "committing";

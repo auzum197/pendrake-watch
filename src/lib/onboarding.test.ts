@@ -13,6 +13,11 @@ describe("onboardingSteps", () => {
       "passphrase",
     ]);
   });
+
+  it("drops the Passphrase step when the session passphrase is held", () => {
+    expect(onboardingSteps("mainnet", true)).toEqual(["identity"]);
+    expect(onboardingSteps("testnet", true)).toEqual(["identity", "indexer"]);
+  });
 });
 
 describe("networkFromUfvk", () => {

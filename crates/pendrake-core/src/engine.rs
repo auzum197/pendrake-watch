@@ -14,9 +14,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
-    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
-    ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SyncEvent, SyncPhase, SyncState,
-    SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, ViewMode, WalletAddress, WalletState,
+    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ForgetArgs,
+    ImportType, ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SyncEvent, SyncPhase,
+    SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
+    ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, RwLock};
@@ -82,6 +83,11 @@ pub struct Engine {
     /// Set when an encrypted wallet is on disk but hasn't been unlocked this run.
     /// While locked the daemon holds no `client` and runs no sync loop.
     locked: AtomicBool,
+    /// The global passphrase for the session, held in memory once a wallet is
+    /// imported or unlocked. Replace keeps it across the wipe so the new Wallet
+    /// inherits it and onboarding skips Set Password; Start over drops it
+    /// (docs/adr/0004). Never persisted.
+    session_passphrase: Mutex<Option<String>>,
 }
 
 /// One in-flight scan range, walked through its lifecycle by the batch events.
@@ -242,6 +248,7 @@ impl Engine {
             seen_txids: Mutex::new(seen),
             generation: AtomicU64::new(0),
             locked: AtomicBool::new(false),
+            session_passphrase: Mutex::new(None),
             paths,
         });
 
@@ -326,8 +333,15 @@ impl Engine {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
             }
+            "verifyPassphrase" => {
+                let args: VerifyPassphraseArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.verify_passphrase(&args.passphrase).await)?)
+            }
             "forgetWallet" => {
-                self.forget().await?;
+                // Tolerate a null/absent body (an older client, or Start over) as the
+                // default: drop the session passphrase.
+                let args: ForgetArgs = serde_json::from_value(params).unwrap_or_default();
+                self.forget(args.keep_session).await?;
                 Ok(serde_json::Value::Null)
             }
             // The push stream is wired up by the IPC layer, so the engine just acks.
@@ -360,10 +374,13 @@ impl Engine {
 
     async fn wallet_state(&self) -> WalletState {
         let locked = self.locked.load(Ordering::SeqCst);
+        let session_held = self.session_passphrase.lock().await.is_some();
         match &*self.meta.read().await {
             Some(m) => WalletState {
                 exists: true,
                 locked,
+                session_held,
+                fingerprint: m.fingerprint.clone(),
                 import_type: m.import_type,
                 view_mode: m.view_mode,
                 network: m.network,
@@ -372,6 +389,8 @@ impl Engine {
             None => WalletState {
                 exists: false,
                 locked: false,
+                session_held,
+                fingerprint: None,
                 import_type: ImportType::Ufvk,
                 view_mode: ViewMode::Full,
                 network: Network::Mainnet,
@@ -430,6 +449,18 @@ impl Engine {
             ));
         }
 
+        // A first onboarding sends the passphrase; a post-Replace import omits it and
+        // reuses the one the daemon held across the wipe (docs/adr/0004).
+        let passphrase = match args.passphrase {
+            Some(p) => p,
+            None => self
+                .session_passphrase
+                .lock()
+                .await
+                .clone()
+                .ok_or_else(|| anyhow!("no session passphrase held for this import"))?,
+        };
+
         let chain = chain_of(args.network);
         let birthday = args.birthday.max(sapling_activation(chain));
         let meta = Meta {
@@ -439,6 +470,7 @@ impl Engine {
             view_mode: ViewMode::Full,
             birthday_height: birthday,
             encrypted: true,
+            fingerprint: Some(identity.fingerprint.clone()),
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -452,7 +484,7 @@ impl Engine {
         };
         let config = self.client_config(chain, &meta.indexer_uri, wallet);
         let mut client =
-            LightClient::new(config, true, Some(EncryptionConfig::new(args.passphrase)))
+            LightClient::new(config, true, Some(EncryptionConfig::new(passphrase.clone())))
                 .await
                 .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
 
@@ -464,6 +496,7 @@ impl Engine {
         meta.save(&self.paths.meta_file)?;
         *self.meta.write().await = Some(meta);
         *self.client.lock().await = Some(client);
+        *self.session_passphrase.lock().await = Some(passphrase);
         self.locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.seen_txids.lock().await.clear();
@@ -495,11 +528,13 @@ impl Engine {
                 WalletConfig::Read,
             )
         };
-        let mut client = LightClient::new(config, false, Some(EncryptionConfig::new(passphrase)))
-            .await
-            .map_err(|e| anyhow!("unlock failed: {e:?}"))?;
+        let mut client =
+            LightClient::new(config, false, Some(EncryptionConfig::new(passphrase.clone())))
+                .await
+                .map_err(|e| anyhow!("unlock failed: {e:?}"))?;
         client.save_task().await;
         *self.client.lock().await = Some(client);
+        *self.session_passphrase.lock().await = Some(passphrase);
         self.locked.store(false, Ordering::SeqCst);
         self.refresh_snapshot().await;
         self.sync.write().await.state = SyncState::Syncing;
@@ -508,11 +543,17 @@ impl Engine {
         Ok(self.wallet_state().await)
     }
 
-    async fn forget(&self) -> Result<()> {
+    /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
+    /// Replace lands in onboarding without re-collecting it; Start over passes false
+    /// and the passphrase is dropped (docs/adr/0004).
+    async fn forget(&self, keep_session: bool) -> Result<()> {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.locked.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
+        if !keep_session {
+            *self.session_passphrase.lock().await = None;
+        }
         *self.sync.write().await = SyncStatus::default();
         self.txs.write().await.clear();
         *self.balance.write().await = None;
@@ -523,6 +564,16 @@ impl Engine {
         let _ = std::fs::remove_dir_all(&self.paths.wallet_dir);
         self.paths.ensure_dirs()?;
         Ok(())
+    }
+
+    /// Re-authenticate a passphrase against the held session passphrase, the one
+    /// that opened the current Wallet. Used by the Replace modal before it wipes
+    /// anything (docs/adr/0004). False when nothing is held.
+    async fn verify_passphrase(&self, passphrase: &str) -> bool {
+        match &*self.session_passphrase.lock().await {
+            Some(held) => ct_eq(held.as_bytes(), passphrase.as_bytes()),
+            None => false,
+        }
     }
 
     fn spawn_sync_loop(self: &Arc<Self>) {
@@ -1006,6 +1057,15 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
+/// Constant-time byte comparison, so re-auth doesn't leak the passphrase through
+/// early-exit timing. Differing lengths short-circuit, which only reveals length.
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
 fn pool_balance(confirmed: Option<Zatoshis>, total: Option<Zatoshis>) -> Option<PoolBalance> {
     match (confirmed, total) {
         (None, None) => None,
@@ -1043,5 +1103,57 @@ fn map_balance(bal: &AccountBalance) -> Balance {
             bal.confirmed_transparent_balance,
             bal.total_transparent_balance,
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notify::NullNotifier;
+
+    // An isolated data root under the temp dir, wiped first so a rerun starts clean.
+    fn test_paths(name: &str) -> Paths {
+        let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
+        let _ = std::fs::remove_dir_all(&root);
+        Paths::with_root(root)
+    }
+
+    #[test]
+    fn ct_eq_matches_only_identical_bytes() {
+        assert!(ct_eq(b"correct horse", b"correct horse"));
+        assert!(ct_eq(b"", b""));
+        assert!(!ct_eq(b"correct horse", b"correct mouse"));
+        // Differing lengths are unequal, never a panic or a prefix match.
+        assert!(!ct_eq(b"horse", b"horses"));
+    }
+
+    #[tokio::test]
+    async fn verify_passphrase_checks_the_held_session_passphrase() {
+        let engine = Engine::load(test_paths("verify"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        // Nothing held (cold daemon): every guess is rejected.
+        assert!(!engine.verify_passphrase("anything").await);
+
+        *engine.session_passphrase.lock().await = Some("correct horse".into());
+        assert!(engine.verify_passphrase("correct horse").await);
+        assert!(!engine.verify_passphrase("wrong").await);
+    }
+
+    #[tokio::test]
+    async fn forget_keeps_the_session_passphrase_only_for_replace() {
+        let engine = Engine::load(test_paths("forget"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+
+        // Replace (keep_session) retains it, so onboarding can skip Set Password.
+        *engine.session_passphrase.lock().await = Some("pw".into());
+        engine.forget(true).await.unwrap();
+        assert_eq!(engine.session_passphrase.lock().await.as_deref(), Some("pw"));
+        assert!(engine.verify_passphrase("pw").await);
+
+        // Start over drops it, so onboarding asks for a new passphrase.
+        engine.forget(false).await.unwrap();
+        assert!(engine.session_passphrase.lock().await.is_none());
     }
 }

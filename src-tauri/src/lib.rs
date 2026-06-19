@@ -278,19 +278,20 @@ async fn import_ufvk(
     birthday: u32,
     indexer_uri: String,
     network: String,
-    passphrase: String,
+    passphrase: Option<String>,
 ) -> Result<Value, String> {
-    request(
-        "importUfvk",
-        serde_json::json!({
-            "ufvk": ufvk,
-            "birthday": birthday,
-            "indexerUri": indexer_uri,
-            "network": network,
-            "passphrase": passphrase,
-        }),
-    )
-    .await
+    // A post-Replace import omits the passphrase: the daemon reuses the one it held
+    // across the wipe (docs/adr/0004), so leave the field out rather than send null.
+    let mut params = serde_json::json!({
+        "ufvk": ufvk,
+        "birthday": birthday,
+        "indexerUri": indexer_uri,
+        "network": network,
+    });
+    if let Some(passphrase) = passphrase {
+        params["passphrase"] = Value::String(passphrase);
+    }
+    request("importUfvk", params).await
 }
 
 #[tauri::command]
@@ -301,6 +302,17 @@ async fn parse_ufvk(ufvk: String) -> Result<Value, String> {
 #[tauri::command]
 async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
+}
+
+/// Re-authenticate against the daemon's held session passphrase. Returns a bare
+/// bool; the Replace modal gates the wipe on it.
+#[tauri::command]
+async fn verify_passphrase(passphrase: String) -> Result<Value, String> {
+    request(
+        "verifyPassphrase",
+        serde_json::json!({ "passphrase": passphrase }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -334,8 +346,12 @@ async fn get_transaction(txid: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn forget_wallet() -> Result<Value, String> {
-    request("forgetWallet", Value::Null).await
+async fn forget_wallet(keep_session: Option<bool>) -> Result<Value, String> {
+    request(
+        "forgetWallet",
+        serde_json::json!({ "keepSession": keep_session.unwrap_or(false) }),
+    )
+    .await
 }
 
 /// Bring the GUI window to the front. The notification open's implicit activation
@@ -400,6 +416,7 @@ pub fn run() {
             import_ufvk,
             parse_ufvk,
             unlock,
+            verify_passphrase,
             get_wallet_state,
             get_addresses,
             get_sync_status,
