@@ -55,9 +55,17 @@ function BalanceHero({
 }) {
   const total = totalConfirmed(balance);
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-ink p-6 text-white">
-      <div className="absolute right-10 top-0 size-72 rounded-full bg-brand/25 blur-[64px]" />
-      <div className="relative flex flex-col gap-5">
+    // The brand glow is a radial gradient. A blurred element forces a compositing
+    // layer that WebKitGTK under software rendering (no GPU, e.g. a VM) paints
+    // empty, which blanked the balance. A gradient paints reliably.
+    <section
+      className="overflow-hidden rounded-2xl bg-ink p-6 text-white"
+      style={{
+        backgroundImage:
+          "radial-gradient(60% 120% at 85% 0%, rgba(26,43,255,0.28), transparent 70%)",
+      }}
+    >
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <span className="flex items-center gap-1.5 text-xs text-white/45">
             <IconShieldCheckFilled className="size-3.5" />
