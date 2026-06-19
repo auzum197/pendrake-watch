@@ -60,11 +60,11 @@ package: stage-daemon
 # socket. macOS uses run-prod, which also builds the Swift notification helper.
 [linux]
 run-release: build-release stop
-    ./src-tauri/target/release/pendrake-watch
+    PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" ./src-tauri/target/release/pendrake-watch
 
 [windows]
 run-release: build-release stop
-    ./src-tauri/target/release/pendrake-watch.exe
+    PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked.exe" ./src-tauri/target/release/pendrake-watch.exe
 
 # Stop any background daemons.
 [unix]

@@ -65,12 +65,27 @@ fn daemon_bin() -> Option<PathBuf> {
         return Some(PathBuf::from(path));
     }
     let exe = std::env::consts::EXE_SUFFIX;
-    // Installed package: the bundled sidecar sits next to the GUI binary.
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(dir) = exe_path.parent() {
+            // Installed package: the bundled sidecar sits next to the GUI binary.
             let bundled = dir.join(format!("pendraked{exe}"));
             if bundled.exists() {
                 return Some(bundled);
+            }
+            // Dev build: the GUI binary lives at src-tauri/target/<profile>/, three
+            // levels under the repo root, so the workspace daemon is a fixed hop away.
+            // Resolve it relative to this binary, not the working directory, so a
+            // launcher that starts the GUI from elsewhere (`just` under Git Bash)
+            // still finds it.
+            let found = [
+                format!("../../../crates/target/release/pendraked{exe}"),
+                format!("../../../crates/target/debug/pendraked{exe}"),
+            ]
+            .into_iter()
+            .map(|rel| dir.join(rel))
+            .find(|p| p.exists());
+            if found.is_some() {
+                return found;
             }
         }
     }
