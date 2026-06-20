@@ -66,14 +66,14 @@ function StatusBadge({ status }: { status: Tx["status"] }) {
     return (
       <span className="flex items-center gap-1.5 text-zinc-600">
         <IconCircleCheckFilled className="size-4 text-brand" />
-        Completed
+        Confirmed
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1.5 text-zinc-600">
       <IconLoader2 className="size-4 animate-spin text-brand" />
-      In progress
+      Pending
     </span>
   );
 }
