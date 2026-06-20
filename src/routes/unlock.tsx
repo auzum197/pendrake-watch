@@ -11,21 +11,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { forgetWallet, unlock as unlockWallet } from "@/lib/ipc";
+import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
 // decrypts the wallet, so collecting it here is the lock. The real version hands
 // the passphrase to the daemon over IPC (`Unlock { passphrase }`); until that
 // lands this checks the in-session passphrase. A forgotten passphrase can't be
 // recovered (Argon2, never stored), so the only way out is the destructive "Start
-// over", which wipes the store and returns to onboarding via the forget machinery.
+// over", which wipes the store and returns to onboarding via the remove machinery.
 export function UnlockPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [shown, setShown] = useState(false);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirmForget, setConfirmForget] = useState(false);
+  const [confirmStartOver, setConfirmStartOver] = useState(false);
 
   async function submit() {
     setBusy(true);
@@ -40,8 +40,8 @@ export function UnlockPage() {
     }
   }
 
-  async function forget() {
-    await forgetWallet();
+  async function startOver() {
+    await removeWallet();
     navigate({ to: "/onboarding" });
   }
 
@@ -114,7 +114,7 @@ export function UnlockPage() {
 
           <button
             type="button"
-            onClick={() => setConfirmForget(true)}
+            onClick={() => setConfirmStartOver(true)}
             className="self-center text-sm text-white/45 transition-colors hover:text-white/70"
           >
             Forgot passphrase?
@@ -122,7 +122,7 @@ export function UnlockPage() {
         </form>
       </div>
 
-      <AlertDialog open={confirmForget} onOpenChange={setConfirmForget}>
+      <AlertDialog open={confirmStartOver} onOpenChange={setConfirmStartOver}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Start over?</AlertDialogTitle>
@@ -136,7 +136,7 @@ export function UnlockPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={forget}>Start over</AlertDialogAction>
+            <AlertDialogAction onClick={startOver}>Start over</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -386,9 +386,9 @@ async fn get_transaction(txid: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
-async fn forget_wallet(keep_session: Option<bool>) -> Result<Value, String> {
+async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
     request(
-        "forgetWallet",
+        "removeWallet",
         serde_json::json!({ "keepSession": keep_session.unwrap_or(false) }),
     )
     .await
@@ -464,7 +464,7 @@ pub fn run() {
             get_balance,
             get_transactions,
             get_transaction,
-            forget_wallet,
+            remove_wallet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

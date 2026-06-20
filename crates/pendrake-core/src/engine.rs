@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
-    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ForgetArgs,
+    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, RemoveArgs,
     ImportType, ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SetIndexerArgs, SyncEvent,
     SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
     VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
@@ -35,6 +35,7 @@ use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
 use zingolib::wallet::summary::data::{TransactionKind, TransactionSummary};
 use zingolib::wallet::WalletSettings;
+use zingolib::ActivationHeights;
 use zip32::AccountId;
 
 use crate::notify::Notifier;
@@ -81,7 +82,7 @@ pub struct Engine {
     /// Received txids already notified, so each transaction notifies exactly once
     /// across sync rounds and restarts.
     seen_txids: Mutex<HashSet<String>>,
-    /// Bumped on every (re)import and forget so a stale sync loop retires itself.
+    /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
     /// once. Used when the Indexer changes, so the switch takes effect immediately
@@ -396,11 +397,11 @@ impl Engine {
                 let args: VerifyPassphraseArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.verify_passphrase(&args.passphrase).await)?)
             }
-            "forgetWallet" => {
+            "removeWallet" => {
                 // Tolerate a null/absent body (an older client, or Start over) as the
                 // default: drop the session passphrase.
-                let args: ForgetArgs = serde_json::from_value(params).unwrap_or_default();
-                self.forget(args.keep_session).await?;
+                let args: RemoveArgs = serde_json::from_value(params).unwrap_or_default();
+                self.remove(args.keep_session).await?;
                 Ok(serde_json::Value::Null)
             }
             // The push stream is wired up by the IPC layer, so the engine just acks.
@@ -500,7 +501,7 @@ impl Engine {
         let identity = parse_ufvk(&args.ufvk).map_err(|e| anyhow!("{e}"))?;
         let key_network = match identity.network {
             UfvkNetwork::Mainnet => Network::Mainnet,
-            UfvkNetwork::Regtest => Network::Testnet,
+            UfvkNetwork::Regtest => Network::Regtest,
         };
         if key_network != args.network {
             return Err(anyhow!(
@@ -544,10 +545,13 @@ impl Engine {
             wallet_settings: wallet_settings(),
         };
         let config = self.client_config(chain, &meta.indexer_uri, wallet);
-        let mut client =
-            LightClient::new(config, true, Some(EncryptionConfig::new(passphrase.clone())))
-                .await
-                .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
+        let mut client = LightClient::new(
+            config,
+            true,
+            Some(EncryptionConfig::new(passphrase.clone())),
+        )
+        .await
+        .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
 
         // Flush the freshly-built wallet to disk and block until the file lands,
         // so a caller can rely on the wallet existing the moment import returns.
@@ -589,10 +593,13 @@ impl Engine {
                 WalletConfig::Read,
             )
         };
-        let mut client =
-            LightClient::new(config, false, Some(EncryptionConfig::new(passphrase.clone())))
-                .await
-                .map_err(|e| anyhow!("unlock failed: {e:?}"))?;
+        let mut client = LightClient::new(
+            config,
+            false,
+            Some(EncryptionConfig::new(passphrase.clone())),
+        )
+        .await
+        .map_err(|e| anyhow!("unlock failed: {e:?}"))?;
         client.save_task().await;
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
@@ -621,7 +628,9 @@ impl Engine {
             return Err(anyhow!("no wallet to set the indexer for"));
         }
         if self.locked.load(Ordering::SeqCst) {
-            return Err(anyhow!("wallet is locked; unlock before changing the indexer"));
+            return Err(anyhow!(
+                "wallet is locked; unlock before changing the indexer"
+            ));
         }
         let uri: http::Uri = indexer_uri
             .parse()
@@ -669,7 +678,7 @@ impl Engine {
     /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
     /// Replace lands in onboarding without re-collecting it; Start over passes false
     /// and the passphrase is dropped (docs/adr/0004).
-    async fn forget(&self, keep_session: bool) -> Result<()> {
+    async fn remove(&self, keep_session: bool) -> Result<()> {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.locked.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
@@ -784,7 +793,7 @@ impl Engine {
         let mut stream_open = true;
 
         let result = loop {
-            // A (re)import or forget bumps the generation, retiring this round.
+            // A (re)import or remove bumps the generation, retiring this round.
             if self.generation.load(Ordering::SeqCst) != generation {
                 return Ok(());
             }
@@ -1191,7 +1200,7 @@ fn parse_ufvk_result(input: &str) -> ParseUfvkResult {
 fn chain_of(network: Network) -> ChainType {
     match network {
         Network::Mainnet => ChainType::Mainnet,
-        Network::Testnet => ChainType::Testnet,
+        Network::Regtest => ChainType::Regtest(ActivationHeights::default()),
     }
 }
 
@@ -1326,19 +1335,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn forget_keeps_the_session_passphrase_only_for_replace() {
-        let engine = Engine::load(test_paths("forget"), Arc::new(NullNotifier))
+    async fn remove_keeps_the_session_passphrase_only_for_replace() {
+        let engine = Engine::load(test_paths("remove"), Arc::new(NullNotifier))
             .await
             .unwrap();
 
         // Replace (keep_session) retains it, so onboarding can skip Set Password.
         *engine.session_passphrase.lock().await = Some("pw".into());
-        engine.forget(true).await.unwrap();
-        assert_eq!(engine.session_passphrase.lock().await.as_deref(), Some("pw"));
+        engine.remove(true).await.unwrap();
+        assert_eq!(
+            engine.session_passphrase.lock().await.as_deref(),
+            Some("pw")
+        );
         assert!(engine.verify_passphrase("pw").await);
 
         // Start over drops it, so onboarding asks for a new passphrase.
-        engine.forget(false).await.unwrap();
+        engine.remove(false).await.unwrap();
         assert!(engine.session_passphrase.lock().await.is_none());
     }
 }

@@ -62,7 +62,7 @@ impl Response {
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Mainnet,
-    Testnet,
+    Regtest,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,7 +184,7 @@ pub struct VerifyPassphraseArgs {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForgetArgs {
+pub struct RemoveArgs {
     /// Keep the in-memory session passphrase across the wipe. Replace sets this so
     /// onboarding can skip Set Password; Start over leaves it false and drops the
     /// passphrase (docs/adr/0004).
