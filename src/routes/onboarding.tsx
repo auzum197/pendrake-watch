@@ -1,13 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-	IconAdjustmentsHorizontal,
 	IconCalendar,
-	IconCheck,
 	IconEye,
 	IconEyeOff,
 	IconInfoCircle,
-	IconServer2,
 } from "@tabler/icons-react";
 import {
 	Popover,
@@ -24,23 +21,20 @@ import {
 import { networkFromUfvk, onboardingSteps } from "@/lib/onboarding";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 
-// Faithful rebuild of the designer's onboarding frames (Import Wallet -> Server
+// Faithful rebuild of the designer's onboarding frames (Import Wallet -> Indexer
 // -> Set Password). Fully dark, brand-blue accent, split layout with the 龙 mark.
-// The submit calls importUfvk, the one piece the daemon backs today. Still UI
-// only, pending backend: the password (no encryption yet) and regtest server
-// routing. Those carry TODOs where they'd wire in. The Wallet syncs every pool
-// its UFVK contains, so there's no pool choice to make.
+// The submit calls importUfvk, the one piece the daemon backs today. The password
+// is still UI only (no encryption yet) and carries a TODO where it would wire in.
+// The Wallet syncs every pool its UFVK contains, so there's no pool choice to make.
 
 type SyncMode = "date" | "height";
-type ServerMode = "default" | "custom";
 
 type Draft = {
 	ufvk: string;
 	syncMode: SyncMode;
 	date: string;
 	height: string;
-	server: ServerMode;
-	serverUrl: string;
+	indexerUri: string;
 	password: string;
 	confirm: string;
 };
@@ -50,8 +44,7 @@ const INITIAL: Draft = {
 	syncMode: "date",
 	date: "",
 	height: "",
-	server: "default",
-	serverUrl: "",
+	indexerUri: "",
 	password: "",
 	confirm: "",
 };
@@ -105,16 +98,18 @@ export function OnboardingPage() {
 		setBusy(true);
 		setError(null);
 		try {
+			const network = networkFromUfvk(draft.ufvk);
 			await importUfvk({
 				ufvk: draft.ufvk.trim(),
 				// TODO: a date birthday needs server-side conversion to a height. Until
 				// then a height syncs from there, a date scans from the start.
 				birthday: draft.syncMode === "height" ? Number(draft.height) || 0 : 0,
+				// Regtest has no universal Indexer, so its onboarding requires a custom
+				// one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
+				// (AUZ-104). Mainnet skips the step and takes the public default.
 				indexerUri:
-					draft.server === "custom" && draft.serverUrl.trim()
-						? draft.serverUrl.trim()
-						: DEFAULT_INDEXER,
-				network: networkFromUfvk(draft.ufvk),
+					network === "regtest" ? draft.indexerUri.trim() : DEFAULT_INDEXER,
+				network,
 				// First onboarding sets the global passphrase (docs/adr/0003). A
 				// post-Replace import omits it so the daemon reuses the held one.
 				passphrase: sessionHeld ? undefined : draft.password,
@@ -145,7 +140,7 @@ export function OnboardingPage() {
 						/>
 					)}
 					{current === "indexer" && (
-						<ServerStep
+						<IndexerStep
 							draft={draft}
 							set={set}
 							stepNumber={position + 1}
@@ -518,7 +513,7 @@ function Segmented<T extends string>({
 	);
 }
 
-function ServerStep({
+function IndexerStep({
 	draft,
 	set,
 	stepNumber,
@@ -540,45 +535,30 @@ function ServerStep({
 	busy: boolean;
 	error: string | null;
 }) {
+	// Regtest has no universal Indexer, so onboarding requires one here and the
+	// primary action stays disabled until a URL is entered (AUZ-104).
+	const ready = draft.indexerUri.trim().length > 0;
 	return (
 		<>
 			<StepHeading
 				step={stepNumber}
 				total={stepTotal}
-				title="Server"
-				subtitle="A regtest key was detected. Choose how to connect."
+				title="Indexer"
+				subtitle="A regtest key was detected. Point it at the Indexer to connect to."
 			/>
 
-			<div className="grid grid-cols-2 gap-4">
-				<ServerCard
-					active={draft.server === "default"}
-					icon={<IconServer2 className="size-4" />}
-					title="Default"
-					desc="Use the bundled regtest node."
-					onClick={() => set("server", "default")}
+			<label className="flex flex-col gap-2">
+				<FieldLabel>Indexer URL</FieldLabel>
+				<input
+					autoFocus
+					className={`${fieldBase} h-12 font-mono`}
+					placeholder="https://localhost:8232"
+					spellCheck={false}
+					autoComplete="off"
+					value={draft.indexerUri}
+					onChange={(e) => set("indexerUri", e.currentTarget.value)}
 				/>
-				<ServerCard
-					active={draft.server === "custom"}
-					icon={<IconAdjustmentsHorizontal className="size-4" />}
-					title="Custom"
-					desc="Point to your own server URL."
-					onClick={() => set("server", "custom")}
-				/>
-			</div>
-
-			{draft.server === "custom" && (
-				<label className="flex flex-col gap-2">
-					<FieldLabel>Custom Server URL</FieldLabel>
-					<input
-						className={`${fieldBase} h-12 font-mono`}
-						placeholder="https://localhost:8232"
-						spellCheck={false}
-						autoComplete="off"
-						value={draft.serverUrl}
-						onChange={(e) => set("serverUrl", e.currentTarget.value)}
-					/>
-				</label>
-			)}
+			</label>
 
 			{isFinal && error && (
 				<p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
@@ -588,54 +568,11 @@ function ServerStep({
 
 			<div className="flex items-center gap-3">
 				<BackButton onClick={onBack} />
-				<PrimaryButton disabled={busy} onClick={onNext}>
+				<PrimaryButton disabled={busy || !ready} onClick={onNext}>
 					{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
 				</PrimaryButton>
 			</div>
 		</>
-	);
-}
-
-function ServerCard({
-	active,
-	icon,
-	title,
-	desc,
-	onClick,
-}: {
-	active: boolean;
-	icon: ReactNode;
-	title: string;
-	desc: string;
-	onClick: () => void;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={`flex flex-col gap-3 rounded-2xl border p-4 text-left transition-colors ${
-				active
-					? "border-brand bg-brand/10"
-					: "border-ink-line bg-ink-soft hover:border-white/20"
-			}`}
-		>
-			<div className="flex items-start justify-between">
-				<span className="flex size-9 items-center justify-center rounded-full bg-white/5 text-white/70">
-					{icon}
-				</span>
-				<span
-					className={`flex size-5 items-center justify-center rounded-full border transition-colors ${
-						active ? "border-brand bg-brand text-white" : "border-white/25"
-					}`}
-				>
-					{active && <IconCheck className="size-3.5" />}
-				</span>
-			</div>
-			<div className="flex flex-col gap-1">
-				<span className="font-medium">{title}</span>
-				<span className="text-xs text-white/45">{desc}</span>
-			</div>
-		</button>
 	);
 }
 
