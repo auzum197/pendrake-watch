@@ -349,8 +349,8 @@ function ImportStep({
 			<div className="flex flex-col gap-2.5">
 				<FieldLabel>Sync from</FieldLabel>
 				{network === "regtest" ? (
-					// Regtest has no universal date anchor, so it offers only a height,
-					// defaulting to its activation (1) when left blank.
+					// Regtest has no universal date reference, so it offers only a
+					// height, defaulting to its activation (1) when left blank.
 					<input
 						className={`${fieldBase} h-12 font-mono`}
 						inputMode="numeric"

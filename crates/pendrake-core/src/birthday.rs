@@ -21,9 +21,9 @@ use pendrake_ipc::BirthdayInput;
 /// height is used as given.
 ///
 /// A date floors rather than back-projecting to a recent height because that needs
-/// a recent finalized mainnet block compiled in as an anchor, and the earliest
-/// block Pendrake supports is Sapling activation anyway. Swapping in such an anchor
-/// later is the only change needed to turn a date into a tighter start.
+/// a recent finalized mainnet block compiled in as a date reference, and the
+/// earliest block Pendrake supports is Sapling activation anyway. Swapping in such
+/// a reference later is the only change needed to turn a date into a tighter start.
 pub fn resolve_birthday(input: &BirthdayInput, chain: &ChainType) -> u32 {
     let sapling = sapling_activation(chain);
     match *input {
