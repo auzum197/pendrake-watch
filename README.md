@@ -1,14 +1,17 @@
 # Pendrake Watch-only
 
-Pendrake Watch-only is a watch-only Zcash wallet. A background process built on
-zingolib owns the wallet file and syncs continuously, posting desktop
-notifications while the window is closed. The GUI is a Tauri v2 client that talks
+Pendrake Watch-only is a watch-only Zcash wallet. A Wallet is one imported UFVK, on
+mainnet or regtest, holding no spending keys. A background process built on zingolib
+owns the wallet file and syncs continuously, posting a desktop notification for each
+newly detected transaction while the window is closed. The wallet file is encrypted
+at rest with a passphrase that also locks the UI, so the app stays locked until the
+daemon holds the passphrase for the session. The GUI is a Tauri v2 client that talks
 to that process over a local socket.
 
 ## Architecture
 
-The engine is the `pendrake-core` crate. It builds a watch-only wallet from a
-viewing key, runs the sync loop, owns the wallet file, and serves the IPC
+The engine is the `pendrake-core` crate. It builds a watch-only wallet from an
+imported UFVK, runs the sync loop, owns the wallet file, and serves the IPC
 protocol. It never runs on its own. One of two hosts compiles it in and gives it
 a process to live in:
 
@@ -30,6 +33,68 @@ the window leaves the background process running.
 
 So `pendrake-daemon` is not obsolete now that macOS prefers the app. It remains the
 production daemon on Linux and Windows, and the fast host for engine work on macOS.
+
+## User flow
+
+One routing fork at launch feeds three top-level states: onboarding, unlock, and the
+dashboard. Onboarding branches on the network the UFVK declares and on whether a
+session passphrase already exists. The two destructive paths, Start over and Replace,
+both collapse back into onboarding and are told apart only by whether the passphrase
+survived the wipe.
+
+```
+                          ┌─────────────────────────────────┐
+                          │ App launch                      │
+                          │ GUI probes the IPC socket,      │
+                          │ spawns the daemon if nothing    │
+                          │ answers                         │
+                          └────────────────┬────────────────┘
+                                           ▼
+                          ┌─────────────────────────────────┐
+                          │ Route on daemon state           │
+                          │ (exists checked before locked)  │
+                          └───┬────────────┬────────────┬────┘
+            exists = false    │            │            │   exists = true
+                              │            │            │   unlocked
+                              ▼            │            ▼
+                      ┌──────────────┐     │      ┌────────────┐
+                      │ ONBOARDING   │     │      │ DASHBOARD  │◄──────┐
+                      └──────┬───────┘     │      └─────┬──────┘       │
+                             │      exists = true,      │              │
+                             │      locked (no session  │              │
+                             │      passphrase)         │              │
+                             │             ▼            │              │
+                             │      ┌──────────────┐    │              │
+                             │      │ UNLOCK       │    │              │
+                             │      └──┬────────┬──┘    │              │
+                             │  enter  │        │ "Forgot passphrase?" │
+                             │  pass.  │        ▼                      │
+                             │         │   Start over (wipes ALL,      │
+                             │         │   drops session) ─────────────┤
+                             │         └──────────────► DASHBOARD       │
+                             ▼                                          │
+                  ┌────────────────────────┐                           │
+                  │ Paste UFVK             │                           │
+                  │ network parsed from    │                           │
+                  │ the key, not chosen    │                           │
+                  └───┬──────────┬─────┬───┘                           │
+       testnet key    │ mainnet  │     │ regtest                       │
+            │         │          │     │                               │
+            ▼         ▼          │     ▼                               │
+      rejected   Identity        │  Identity ─► Indexer                │
+   "testnet key"     │           │     │  (regtest must supply it;     │
+   no Wallet made    └─────┬─────┘     │   mainnet ships a default)    │
+                           ▼           │                               │
+                    (Set Password)◄────┘  shown only when NO session   │
+                           │              passphrase is held           │
+                           ▼                                           │
+                   import ─► pin N = chain tip ─────────────────────────┘
+                                                 lands in Initial scan
+```
+
+Replace re-enters this fork from the Settings danger zone. It wipes the current Wallet
+but keeps the session passphrase, so onboarding skips Set Password before the new
+UFVK import. Start over loses the passphrase, so onboarding shows Set Password again.
 
 ## Prerequisites
 

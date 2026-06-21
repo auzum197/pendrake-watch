@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
-import { forgetWallet, verifyPassphrase, type Network } from "@/lib/ipc";
+import { removeWallet, verifyPassphrase, type Network } from "@/lib/ipc";
 
 type Step = "explain" | "reauth";
 
@@ -63,7 +63,7 @@ export function ReplaceDialog({
         return;
       }
       // keepSession so the new Wallet inherits the passphrase (docs/adr/0004).
-      await forgetWallet(true);
+      await removeWallet(true);
       navigate({ to: "/onboarding" });
     } catch (e) {
       setError(String(e));

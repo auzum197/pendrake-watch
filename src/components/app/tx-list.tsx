@@ -5,7 +5,15 @@ import { formatTime, formatZec } from "@/lib/format";
 
 export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
   const navigate = useNavigate();
-  const rows = limit ? txs.slice(0, limit) : txs;
+  // Always newest block first. Pending transactions have no height yet, so they
+  // sit above confirmed ones. Transactions in the same block fall back to time.
+  const ordered = [...txs].sort((a, b) => {
+    const ha = a.blockHeight ?? Infinity;
+    const hb = b.blockHeight ?? Infinity;
+    if (ha !== hb) return hb - ha;
+    return b.datetime - a.datetime;
+  });
+  const rows = limit ? ordered.slice(0, limit) : ordered;
 
   if (rows.length === 0) {
     return <p className="mt-4 text-sm text-zinc-400">No transactions yet.</p>;

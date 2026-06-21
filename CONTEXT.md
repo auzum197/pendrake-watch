@@ -24,7 +24,7 @@ The Zcash chain a Wallet is bound to, either mainnet or regtest. It is encoded i
 _Avoid_: chain, env
 
 **Initial scan**:
-The first full sync of a Wallet, from its UFVK's birthday to the chain tip. Transactions found during it are recorded silently. It ends with a single "scanned successfully" notification, after which the Wallet notifies on each newly detected transaction.
+The first full sync of a Wallet, from its UFVK's Birthday to the chain tip pinned at import, a fixed height rather than the moving tip. Transactions found during it are recorded silently. It ends with a single "scanned successfully" notification when that height is reached, after which the Wallet notifies on each newly detected transaction. A restart before that height resumes the Initial scan.
 _Avoid_: backfill, catch-up, priming
 
 **Received / Sent**:
@@ -44,17 +44,17 @@ The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wal
 _Avoid_: server, endpoint, node
 
 **Passphrase**:
-The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. The same one applies to every Wallet, validated against each Wallet file's header. By default it lives only in the daemon's memory for the session. The user may choose at onboarding to have it remembered so the app keeps syncing across restarts, trading away the unlock step.
+The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
 _Avoid_: password, PIN
 
-**Forget**:
-Deliberately removing a single Wallet while the app is unlocked and the Passphrase is known. Only that Wallet's files are deleted; the others remain.
-_Avoid_: delete, remove
+**Remove**:
+The wipe of a single Wallet and its state. Not a v0 user action: v0 exposes only Replace (swap the Wallet, in Settings) and Start over (wipe after a lost Passphrase, on the unlock screen), both named for what the user ends with rather than for the deletion, and both sharing this wipe underneath. Remove surfaces as its own action with multi-key, where a Wallet list takes one Wallet out and the others remain.
+_Avoid_: delete, forget
 
 **Replace**:
-The v0 path to a different Wallet. Importing a new UFVK forgets the current Wallet and creates one in its place, behind a confirmation, so a synced Wallet is never wiped by accident. It is a single destructive action, not a switch: v0 holds one Wallet, so there is nothing to switch between. Once multi-key lands a new import becomes additive and Replace stops being how import behaves.
+The v0 path to a different Wallet. Importing a new UFVK removes the current Wallet and creates one in its place, behind a confirmation, so a synced Wallet is never wiped by accident. It is a single destructive action, not a switch: v0 holds one Wallet, so there is nothing to switch between. Once multi-key lands a new import becomes additive and Replace stops being how import behaves.
 _Avoid_: switch, change, swap
 
 **Start over**:
-The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Forget, which removes one Wallet with the Passphrase known.
+The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Remove, which takes one Wallet out with the Passphrase known.
 _Avoid_: reset, wipe

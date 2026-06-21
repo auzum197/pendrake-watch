@@ -4,14 +4,10 @@ import {
 	IconAdjustmentsHorizontal,
 	IconCalendar,
 	IconCheck,
-	IconChevronDown,
-	IconCircleDashed,
 	IconEye,
 	IconEyeOff,
 	IconInfoCircle,
-	IconLeaf,
 	IconServer2,
-	IconStack2,
 } from "@tabler/icons-react";
 import {
 	Popover,
@@ -31,11 +27,11 @@ import { LifeHashIcon } from "@/components/onboarding/lifehash";
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Server
 // -> Set Password). Fully dark, brand-blue accent, split layout with the 龙 mark.
 // The submit calls importUfvk, the one piece the daemon backs today. Still UI
-// only, pending backend: the password (no encryption yet), pool selection, and
-// regtest server routing. Those carry TODOs where they'd wire in.
+// only, pending backend: the password (no encryption yet) and regtest server
+// routing. Those carry TODOs where they'd wire in. The Wallet syncs every pool
+// its UFVK contains, so there's no pool choice to make.
 
 type SyncMode = "date" | "height";
-type Pool = "orchard" | "sapling" | "transparent" | "sprout";
 type ServerMode = "default" | "custom";
 
 type Draft = {
@@ -43,7 +39,6 @@ type Draft = {
 	syncMode: SyncMode;
 	date: string;
 	height: string;
-	pools: Pool[];
 	server: ServerMode;
 	serverUrl: string;
 	password: string;
@@ -55,7 +50,6 @@ const INITIAL: Draft = {
 	syncMode: "date",
 	date: "",
 	height: "",
-	pools: ["orchard", "sapling"],
 	server: "default",
 	serverUrl: "",
 	password: "",
@@ -309,7 +303,10 @@ function ImportStep({
 					<span className="flex items-center gap-1.5">
 						<FieldLabel>Unified Full Viewing Key</FieldLabel>
 						<Popover>
-							<PopoverTrigger className="text-white/40 transition-colors hover:text-white/70">
+							<PopoverTrigger
+								tabIndex={-1}
+								className="text-white/40 transition-colors hover:text-white/70"
+							>
 								<IconInfoCircle className="size-4" />
 							</PopoverTrigger>
 							<PopoverContent className="w-80 border-ink-line bg-[#161618] text-white">
@@ -326,6 +323,7 @@ function ImportStep({
 					</span>
 					<div className="relative">
 						<textarea
+							autoFocus
 							className={`${fieldBase} min-h-52 resize-y py-3 font-mono`}
 							placeholder="your ufvk..."
 							spellCheck={false}
@@ -376,10 +374,6 @@ function ImportStep({
 						}
 					/>
 				)}
-				<PoolsField
-					pools={draft.pools}
-					onChange={(pools) => set("pools", pools)}
-				/>
 			</div>
 
 			{isFinal && error && (
@@ -392,7 +386,7 @@ function ImportStep({
 				disabled={identity?.kind !== "valid" || busy}
 				onClick={onNext}
 			>
-				{isFinal ? (busy ? "Creating wallet…" : "Create Wallet") : "Continue"}
+				{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
 			</PrimaryButton>
 		</>
 	);
@@ -524,94 +518,6 @@ function Segmented<T extends string>({
 	);
 }
 
-const POOLS: {
-	id: Pool;
-	label: string;
-	icon: ReactNode;
-	deprecated?: boolean;
-}[] = [
-	{ id: "orchard", label: "Orchard", icon: <IconStack2 className="size-4" /> },
-	{ id: "sapling", label: "Sapling", icon: <IconLeaf className="size-4" /> },
-	{
-		id: "transparent",
-		label: "Transparent",
-		icon: <IconEye className="size-4" />,
-	},
-	{
-		id: "sprout",
-		label: "Sprout",
-		icon: <IconCircleDashed className="size-4" />,
-		deprecated: true,
-	},
-];
-
-function PoolsField({
-	pools,
-	onChange,
-}: {
-	pools: Pool[];
-	onChange: (pools: Pool[]) => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const toggle = (id: Pool) =>
-		onChange(
-			pools.includes(id) ? pools.filter((p) => p !== id) : [...pools, id],
-		);
-
-	return (
-		<div className="rounded-xl border border-ink-line bg-ink-soft">
-			<button
-				type="button"
-				onClick={() => setOpen((o) => !o)}
-				className="flex h-12 w-full items-center justify-between px-4 text-sm"
-			>
-				<span>
-					<span className="font-medium">Pools</span>
-					<span className="text-white/45"> · {pools.length} selected</span>
-				</span>
-				<IconChevronDown
-					className={`size-4 text-white/45 transition-transform ${open ? "rotate-180" : ""}`}
-				/>
-			</button>
-			{open && (
-				<ul className="flex flex-col gap-1 px-2 pb-2">
-					{POOLS.map((pool) => {
-						const on = pools.includes(pool.id);
-						return (
-							<li key={pool.id}>
-								<button
-									type="button"
-									onClick={() => toggle(pool.id)}
-									className="flex w-full items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/5"
-								>
-									<span className="flex size-8 items-center justify-center rounded-full bg-white/5 text-white/70">
-										{pool.icon}
-									</span>
-									<span className="text-sm font-medium">{pool.label}</span>
-									{pool.deprecated && (
-										<span className="rounded-full border border-ink-line px-2 py-0.5 text-[10px] text-white/40">
-											deprecated
-										</span>
-									)}
-									<span
-										className={`ml-auto flex size-5 items-center justify-center rounded-full border transition-colors ${
-											on
-												? "border-brand bg-brand text-white"
-												: "border-white/25"
-										}`}
-									>
-										{on && <IconCheck className="size-3.5" />}
-									</span>
-								</button>
-							</li>
-						);
-					})}
-				</ul>
-			)}
-		</div>
-	);
-}
-
 function ServerStep({
 	draft,
 	set,
@@ -683,7 +589,7 @@ function ServerStep({
 			<div className="flex items-center gap-3">
 				<BackButton onClick={onBack} />
 				<PrimaryButton disabled={busy} onClick={onNext}>
-					{isFinal ? (busy ? "Creating wallet…" : "Create Wallet") : "Continue"}
+					{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
 				</PrimaryButton>
 			</div>
 		</>
@@ -792,7 +698,7 @@ function PasswordStep({
 			<div className="flex items-center gap-3">
 				<BackButton onClick={onBack} />
 				<PrimaryButton disabled={!matches || busy} onClick={onSubmit}>
-					{busy ? "Creating wallet…" : "Create Wallet"}
+					{busy ? "Importing wallet…" : "Import Wallet"}
 				</PrimaryButton>
 			</div>
 		</>
@@ -820,6 +726,7 @@ function PasswordInput({
 			/>
 			<button
 				type="button"
+				tabIndex={-1}
 				onClick={() => setShown((s) => !s)}
 				className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white/70"
 			>
