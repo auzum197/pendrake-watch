@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconCheck,
   IconCircleCheck,
   IconServer2,
 } from "@tabler/icons-react";
-import { AppShell } from "@/components/app/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
@@ -17,21 +16,15 @@ import { MAINNET_INDEXERS, setIndexer, type Network } from "@/lib/ipc";
 // Settings, with the current Wallet's identity, the Indexer it syncs against, and a
 // danger zone for Replace.
 export function SettingsPage() {
-  const navigate = useNavigate();
   const { hash } = useLocation();
-  const { wallet, sync, loaded } = useWalletData();
+  const { wallet } = useWalletData();
   const [replacing, setReplacing] = useState(false);
 
-  // No wallet means onboarding hasn't run, so there's nothing to configure here.
-  useEffect(() => {
-    if (loaded && wallet && !wallet.exists) navigate({ to: "/onboarding" });
-  }, [loaded, wallet, navigate]);
-
   return (
-    <AppShell active="settings" wallet={wallet} sync={sync}>
+    <>
       <h1 className="font-heading text-xl font-bold">Settings</h1>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+      <section className="rounded-2xl border border-zinc-200 bg-card p-6">
         <h2 className="font-heading text-base font-semibold">Wallet</h2>
         <div className="mt-4 flex items-center gap-4">
           {wallet?.fingerprint ? (
@@ -93,7 +86,7 @@ export function SettingsPage() {
         fingerprint={wallet?.fingerprint ?? null}
         network={wallet?.network ?? "mainnet"}
       />
-    </AppShell>
+    </>
   );
 }
 
@@ -191,7 +184,7 @@ function IndexerSection({
   return (
     <section
       ref={sectionRef}
-      className="rounded-2xl border border-zinc-200 bg-white p-6"
+      className="rounded-2xl border border-zinc-200 bg-card p-6"
     >
       <div className="flex items-center gap-2">
         <IconServer2 className="size-4 text-zinc-500" />

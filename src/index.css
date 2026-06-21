@@ -7,9 +7,11 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    --background: oklch(1 0 0);
+    /* Surfaces are a soft off-white rather than pure white: the floating panel
+       (background) a touch grayer, cards a step lighter so they still lift off it. */
+    --background: oklch(0.965 0.003 286);
     --foreground: oklch(0.141 0.005 285.823);
-    --card: oklch(1 0 0);
+    --card: oklch(0.988 0.002 286);
     --card-foreground: oklch(0.141 0.005 285.823);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.141 0.005 285.823);

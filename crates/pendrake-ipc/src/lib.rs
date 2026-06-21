@@ -385,6 +385,32 @@ pub enum TxStatus {
     Pending,
 }
 
+/// Which side of a transaction an output sits on. A Sent transaction still
+/// produces a Received change note, so one transaction can carry both.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum NoteDirection {
+    Received,
+    Sent,
+}
+
+/// One output within a transaction: a shielded Note or a transparent UTXO,
+/// reusing [`Pool`] to say which. Identified within its transaction by `pool` and
+/// `output_index`, since there is no per-note id upstream. Only shielded notes
+/// carry a `memo`; only Sent outputs carry a `recipient`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub pool: Pool,
+    pub direction: NoteDirection,
+    pub output_index: u32,
+    pub value_zat: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tx {
@@ -395,4 +421,7 @@ pub struct Tx {
     pub kind: TxKind,
     pub value_zat: String,
     pub status: TxStatus,
+    /// The transaction's outputs the Wallet can see, both directions, carried so
+    /// the GUI can show per-note Pool/value/memo and the has-memo indicator.
+    pub notes: Vec<Note>,
 }

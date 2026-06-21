@@ -5,7 +5,6 @@ import {
   IconLoader2,
   IconShieldCheckFilled,
 } from "@tabler/icons-react";
-import { AppShell } from "@/components/app/app-shell";
 import { TxList } from "@/components/app/tx-list";
 import { BalanceChart } from "@/components/dashboard/BalanceChart";
 import { useWalletData } from "@/hooks/use-wallet-data";
@@ -26,17 +25,10 @@ import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
 // reconstructed from the confirmed transaction history.
 
 export function DashboardPage() {
-  const navigate = useNavigate();
-  const { wallet, balance, txs, sync, loaded, error } = useWalletData();
-
-  // A real "no wallet yet" answer means onboarding hasn't run. An error (e.g. the
-  // daemon isn't reachable) leaves the view up with placeholders instead.
-  useEffect(() => {
-    if (loaded && wallet && !wallet.exists) navigate({ to: "/onboarding" });
-  }, [loaded, wallet, navigate]);
+  const { balance, txs, sync, error } = useWalletData();
 
   return (
-    <AppShell active="wallet" wallet={wallet} sync={sync}>
+    <>
       <div className="flex items-center justify-between">
         <h1 className="font-heading text-xl font-bold">Wallet</h1>
         <span className="text-sm text-zinc-400 tabular-nums">
@@ -50,11 +42,11 @@ export function DashboardPage() {
       )}
       <BalanceHero balance={balance} sync={sync} />
       <ChartCard balance={balance} txs={txs} sync={sync} />
-      <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+      <section className="rounded-2xl border border-zinc-200 bg-card p-6">
         <h2 className="font-heading text-base font-semibold">Recent Activity</h2>
         <TxList txs={txs} limit={5} />
       </section>
-    </AppShell>
+    </>
   );
 }
 
@@ -227,7 +219,7 @@ function ChartCard({
   // as still settling rather than final.
   const calculating = !isSynced(sync);
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-6">
+    <section className="rounded-2xl border border-zinc-200 bg-card p-6">
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
           {standing ? (

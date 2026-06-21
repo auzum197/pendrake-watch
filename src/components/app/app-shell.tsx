@@ -25,11 +25,25 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex bg-white text-zinc-900">
+    // The frame shares the sidebar's ink, so the sidebar reads as part of it and
+    // the content sits on top as a floating panel. app-frame holds the chrome
+    // (frame + panel surface) still across navigations; only app-content fades.
+    <div className="app-frame fixed inset-0 z-50 flex bg-ink text-zinc-900">
       <AppSidebar active={active} wallet={wallet} sync={sync} />
-      <main className="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-7">
-        {children}
-      </main>
+      {/* The panel is a held-still white surface with the routed content scrolling
+          on top of it. app-content is the scroller, not the inner content: naming
+          and clipping the scroller keeps its transition snapshot panel-sized and
+          panel-positioned whatever the scroll offset, so content crossfades inside
+          the rounded frame instead of spilling over it. Transparent over the still
+          surface, so the ink never flashes through mid-fade. */}
+      <div className="relative my-3 mr-3 flex-1 rounded-2xl bg-background">
+        <main
+          data-scroll-restoration-id="app-main"
+          className="app-content absolute inset-0 overflow-y-auto rounded-2xl"
+        >
+          <div className="flex min-h-full flex-col gap-6 px-8 py-7">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -48,8 +62,11 @@ function AppSidebar({
     ? `${syncLabel(sync)} · ${wallet.network}`
     : syncLabel(sync);
 
+  // Extra top padding clears the macOS traffic-light buttons: the title bar is
+  // transparent (tauri.conf.json), so the webview draws under it and the buttons
+  // sit over the sidebar's top-left.
   return (
-    <aside className="flex w-64 shrink-0 flex-col bg-ink px-3 py-5 text-white">
+    <aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
       <div className="flex items-center gap-2.5 px-2">
         <span className="flex size-8 items-center justify-center rounded-lg bg-brand">
           <IconShieldCheckFilled className="size-5 text-white" />

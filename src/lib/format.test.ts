@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { athStanding, balanceHistory, formatEta, isSynced } from "./format";
+import {
+  athStanding,
+  balanceHistory,
+  formatEta,
+  isSynced,
+  splitAddress,
+  txHasMemo,
+} from "./format";
 import type { BalancePoint } from "./format";
-import type { Balance, SyncStatus, Tx } from "./ipc";
+import type { Balance, Note, SyncStatus, Tx } from "./ipc";
 
 const ZEC = 100_000_000;
 
@@ -82,9 +89,66 @@ function tx(part: Partial<Tx>): Tx {
     kind: "received",
     valueZat: "0",
     status: "confirmed",
+    notes: [],
     ...part,
   };
 }
+
+function note(part: Partial<Note>): Note {
+  return {
+    pool: "orchard",
+    direction: "received",
+    outputIndex: 0,
+    valueZat: "0",
+    ...part,
+  };
+}
+
+describe("txHasMemo", () => {
+  it("is false with no notes or only empty memos", () => {
+    expect(txHasMemo(tx({}))).toBe(false);
+    expect(txHasMemo(tx({ notes: [note({}), note({ memo: "" })] }))).toBe(false);
+  });
+
+  it("never trips on a transparent-only transaction", () => {
+    expect(
+      txHasMemo(tx({ notes: [note({ pool: "transparent", valueZat: "5" })] })),
+    ).toBe(false);
+  });
+
+  it("is true when any note carries a memo", () => {
+    expect(
+      txHasMemo(tx({ notes: [note({}), note({ memo: "gm" })] })),
+    ).toBe(true);
+  });
+});
+
+describe("splitAddress", () => {
+  it("splits a unified address at its bech32 separator", () => {
+    const { prefix, head, tail } = splitAddress("u1abcdefghijklmnopqrstuvwx");
+    expect(prefix).toBe("u1");
+    expect(head).toBe("abcdef");
+    expect(tail).toBe("stuvwx");
+  });
+
+  it("keeps the human-readable part for Sapling addresses", () => {
+    expect(splitAddress("zs1qqqqqqqqqqwwwwww").prefix).toBe("zs1");
+  });
+
+  it("uses the two-char version prefix for transparent addresses", () => {
+    // base58 t-addrs hold no "1" separator, so lastIndexOf would over-eat.
+    const { prefix } = splitAddress("t1Xyz12345abcde67890fghij");
+    expect(prefix).toBe("t1");
+  });
+
+  it("leaves a short body whole with no tail", () => {
+    expect(splitAddress("u1abc")).toEqual({
+      prefix: "u1",
+      head: "abc",
+      tail: "",
+    });
+  });
+});
 
 function orchard(zat: number): Balance {
   return { orchard: { confirmed: String(zat), total: String(zat) } };

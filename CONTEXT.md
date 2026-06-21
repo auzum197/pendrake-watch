@@ -31,6 +31,10 @@ _Avoid_: backfill, catch-up, priming
 The direction of a transaction relative to the Wallet. The same two words are used everywhere, in the transaction list and in notification text ("Received 1.5 ZEC", "Sent 0.2 ZEC").
 _Avoid_: incoming, outgoing, payment, transfer
 
+**Confirmed / Pending**:
+The status of a transaction. Confirmed means it has landed in a block, Pending means it is still in the mempool. The same two words are used in the transaction list and everywhere status is shown.
+_Avoid_: completed, in progress, complete, unconfirmed
+
 **Birthday**:
 The block height a Wallet begins its initial scan from. Set at import as an exact height or derived from a date. When unspecified it defaults to Sapling activation, the floor that guarantees no shielded history is missed.
 _Avoid_: start height, birth height
@@ -38,6 +42,18 @@ _Avoid_: start height, birth height
 **Pool**:
 One of the Zcash value pools a UFVK can view: Orchard, Sapling, or transparent. A Wallet syncs every pool its UFVK contains. Choosing a subset is post-v0.
 _Avoid_: account
+
+**Note**:
+A shielded output (Orchard or Sapling) a Wallet can see. A transaction is made of notes and UTXOs. A transaction consumes input notes, nullifying them, and creates output notes, each encrypted to a recipient. A created note addressed to the Wallet is a Received note (including the change a Sent transaction returns), one addressed to someone else is a Sent note. A note's destination relative to the Wallet is a separate axis from a transaction's own Received / Sent direction, so a Sent transaction holds notes of both destinations. Within a transaction a note is identified by its Pool and its output index, the only handle it has. Only shielded notes carry a Memo.
+_Avoid_: output, coin
+
+**UTXO**:
+A transparent coin a Wallet can see, the transparent counterpart of a Note. It has a value and a direction, Received or Sent, but carries no Memo, since the transparent Pool has no memo field.
+_Avoid_: transparent note, coin, output
+
+**Memo**:
+The optional text carried by a shielded Note. UTXOs carry none, and one transaction can hold several memos, one per note. The transaction list shows an indicator when any note in a transaction carries a memo, and the transaction detail shows the full text grouped by Received and Sent note.
+_Avoid_: message, comment
 
 **Indexer**:
 The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one. Mainnet uses a default the user can change later; regtest requires the user to supply it during onboarding.
