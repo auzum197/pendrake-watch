@@ -44,7 +44,7 @@ One of the Zcash value pools a UFVK can view: Orchard, Sapling, or transparent. 
 _Avoid_: account
 
 **Note**:
-A shielded output (Orchard or Sapling) a Wallet can see. A transaction is made of notes and UTXOs. A Received note is addressed to the Wallet, a Sent note is addressed to someone else, and a Sent transaction still produces a Received change note that comes back to the Wallet. Within a transaction a note is identified by its Pool and its output index. Only shielded notes carry a Memo.
+A shielded output (Orchard or Sapling) a Wallet can see. A transaction is made of notes and UTXOs. A transaction consumes input notes, nullifying them, and creates output notes, each encrypted to a recipient. A created note addressed to the Wallet is a Received note (including the change a Sent transaction returns), one addressed to someone else is a Sent note. A note's destination relative to the Wallet is a separate axis from a transaction's own Received / Sent direction, so a Sent transaction holds notes of both destinations. Within a transaction a note is identified by its Pool and its output index, the only handle it has. Only shielded notes carry a Memo.
 _Avoid_: output, coin
 
 **UTXO**:

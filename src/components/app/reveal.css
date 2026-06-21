@@ -1,0 +1,48 @@
+/* One-shot entrance shared by the transaction list rows and the transaction
+   detail sections: each element fades and rises into place as it mounts. The
+   cascade is driven per element by an inline animationDelay. transform/opacity
+   only, so it stays on the GPU. Under reduced motion the rise is dropped and the
+   fade stays, so content still arrives gently rather than snapping in. */
+
+.reveal-up {
+  animation: reveal-up 360ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes reveal-up {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* The row a user opened, briefly tinted when they come back from its detail so
+   the eye relands on it. Starts at the tint and dissolves, so on first paint the
+   only lit row is the one they left. Colour-only, so it's kept under reduced
+   motion: it carries meaning (which row), it isn't decorative movement. */
+.tx-flash {
+  animation: tx-flash 1200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tx-flash {
+  from {
+    background-color: rgba(26, 43, 255, 0.16);
+  }
+  to {
+    background-color: transparent;
+  }
+}

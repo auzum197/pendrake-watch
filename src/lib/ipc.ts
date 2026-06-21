@@ -88,6 +88,20 @@ export type Balance = {
 
 export type TxKind = "received" | "sent";
 export type TxStatus = "confirmed" | "pending";
+export type NoteDirection = "received" | "sent";
+
+// One output within a transaction: a shielded Note or a transparent UTXO (`pool`
+// says which). There's no per-note id, so a note is identified by its pool and
+// outputIndex. Only shielded notes carry a memo; only Sent outputs carry a
+// recipient. Empty memos are stripped daemon-side, so a present `memo` is real.
+export type Note = {
+	pool: Pool;
+	direction: NoteDirection;
+	outputIndex: number;
+	valueZat: string;
+	memo?: string;
+	recipient?: string;
+};
 
 export type Tx = {
 	txid: string;
@@ -96,6 +110,7 @@ export type Tx = {
 	kind: TxKind;
 	valueZat: string;
 	status: TxStatus;
+	notes: Note[];
 };
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.

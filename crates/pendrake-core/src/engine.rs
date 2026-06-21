@@ -14,10 +14,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
-    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, RemoveArgs,
-    ImportType, ImportUfvkArgs, Network, ParseUfvkResult, PoolBalance, SetIndexerArgs, SyncEvent,
-    SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
-    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
+    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
+    ImportUfvkArgs, Network, Note, NoteDirection, ParseUfvkResult, Pool, PoolBalance, RemoveArgs,
+    SetIndexerArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork,
+    UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -1253,7 +1253,84 @@ fn map_tx(s: &TransactionSummary) -> Tx {
         } else {
             TxStatus::Pending
         },
+        notes: map_notes(s),
     }
+}
+
+/// Treat a memo that is absent or blank as no memo, so the GUI's has-memo
+/// indicator and detail view never trip on an empty Note. The original text is
+/// kept intact when present, since real memos can be large formatted blocks.
+fn clean_memo(memo: &Option<String>) -> Option<String> {
+    memo.as_deref()
+        .filter(|m| !m.trim().is_empty())
+        .map(str::to_owned)
+}
+
+/// Flatten a transaction's shielded notes and transparent coins into one list the
+/// GUI groups by direction. zingolib exposes memos per Note (not per transaction)
+/// across four shielded vectors; transparent coins carry value but no memo. Sent
+/// outputs keep their recipient address, preferring the unified address the user
+/// sent to over the per-pool receiver.
+fn map_notes(s: &TransactionSummary) -> Vec<Note> {
+    let mut notes = Vec::new();
+
+    for (pool, vec) in [
+        (Pool::Orchard, &s.orchard_notes),
+        (Pool::Sapling, &s.sapling_notes),
+    ] {
+        for n in vec {
+            notes.push(Note {
+                pool,
+                direction: NoteDirection::Received,
+                output_index: n.output_index,
+                value_zat: n.value.to_string(),
+                memo: clean_memo(&n.memo),
+                recipient: None,
+            });
+        }
+    }
+    for c in &s.transparent_coins {
+        notes.push(Note {
+            pool: Pool::Transparent,
+            direction: NoteDirection::Received,
+            output_index: c.output_index,
+            value_zat: c.value.to_string(),
+            memo: None,
+            recipient: None,
+        });
+    }
+
+    for (pool, vec) in [
+        (Pool::Orchard, &s.outgoing_orchard_notes),
+        (Pool::Sapling, &s.outgoing_sapling_notes),
+    ] {
+        for n in vec {
+            notes.push(Note {
+                pool,
+                direction: NoteDirection::Sent,
+                output_index: n.output_index,
+                value_zat: n.value.to_string(),
+                memo: clean_memo(&n.memo),
+                recipient: Some(
+                    n.recipient_unified_address
+                        .clone()
+                        .unwrap_or_else(|| n.recipient.clone()),
+                ),
+            });
+        }
+    }
+    for c in &s.outgoing_transparent_coins {
+        notes.push(Note {
+            pool: Pool::Transparent,
+            direction: NoteDirection::Sent,
+            output_index: c.output_index,
+            value_zat: c.value.to_string(),
+            memo: None,
+            recipient: Some(c.recipient.clone()),
+        });
+    }
+
+    notes
 }
 
 fn map_balance(bal: &AccountBalance) -> Balance {

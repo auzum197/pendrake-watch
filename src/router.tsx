@@ -4,6 +4,7 @@ import {
 	createRouter,
 } from "@tanstack/react-router";
 import { RootLayout } from "@/routes/root";
+import { AppLayout } from "@/routes/app-layout";
 import { StartGate } from "@/routes/start";
 import { AboutPage } from "@/routes/about";
 import { TxDetailPage } from "@/routes/tx";
@@ -29,32 +30,40 @@ const aboutRoute = createRoute({
 	component: AboutPage,
 });
 
-const txRoute = createRoute({
-	getParentRoute: () => rootRoute,
-	path: "/tx/$txid",
-	component: TxDetailPage,
-});
-
 const onboardingRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/onboarding",
 	component: OnboardingPage,
 });
 
-const dashboardRoute = createRoute({
+// Pathless layout: the signed-in screens share one AppShell instance, mounted
+// here so the sidebar persists while only their content swaps.
+const appLayoutRoute = createRoute({
 	getParentRoute: () => rootRoute,
+	id: "app",
+	component: AppLayout,
+});
+
+const txRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/tx/$txid",
+	component: TxDetailPage,
+});
+
+const dashboardRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
 	path: "/dashboard",
 	component: DashboardPage,
 });
 
 const activityRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appLayoutRoute,
 	path: "/activity",
 	component: ActivityPage,
 });
 
 const settingsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appLayoutRoute,
 	path: "/settings",
 	component: SettingsPage,
 });
@@ -68,18 +77,24 @@ const unlockRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	indexRoute,
 	aboutRoute,
-	txRoute,
 	onboardingRoute,
-	dashboardRoute,
-	activityRoute,
-	settingsRoute,
 	unlockRoute,
+	appLayoutRoute.addChildren([
+		dashboardRoute,
+		activityRoute,
+		settingsRoute,
+		txRoute,
+	]),
 ]);
 
 export const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",
 	defaultViewTransition: true,
+	// Restore each route's scroll on back/forward. The app's scroll lives in a
+	// nested container (AppShell's <main>, tagged data-scroll-restoration-id), not
+	// the window, so returning from a transaction lands the list where it was.
+	scrollRestoration: true,
 });
 
 declare module "@tanstack/react-router" {

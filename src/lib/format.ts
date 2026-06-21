@@ -147,6 +147,33 @@ export function athStanding(
   return { pct, atPeak: pct >= 100 };
 }
 
+// A transaction trips the list's memo indicator when any of its notes carries a
+// memo. Empty memos are stripped daemon-side, so a present `memo` is real, and
+// transparent-only transactions (no shielded notes) never trip it.
+export function txHasMemo(tx: Tx): boolean {
+  return tx.notes.some((n) => !!n.memo);
+}
+
+export type AddressParts = { prefix: string; head: string; tail: string };
+
+// Split a Zcash address into its encoding prefix and data body so the detail view
+// can color the two apart. Bech32(m) forms (unified "u1…", Sapling "zs1…") put
+// the human-readable part before the final "1" separator; transparent base58
+// forms ("t1…", "t3…") have no separator, so the two-character version stands in.
+// The body is then clipped to the first and last `visible` characters.
+export function splitAddress(addr: string, visible = 6): AddressParts {
+  let prefix: string;
+  if (addr.startsWith("t")) {
+    prefix = addr.slice(0, 2);
+  } else {
+    const sep = addr.lastIndexOf("1");
+    prefix = sep > 0 ? addr.slice(0, sep + 1) : addr.slice(0, 2);
+  }
+  const data = addr.slice(prefix.length);
+  if (data.length <= visible * 2) return { prefix, head: data, tail: "" };
+  return { prefix, head: data.slice(0, visible), tail: data.slice(-visible) };
+}
+
 export function formatTime(epoch: number): string {
   const ms = epoch < 1e12 ? epoch * 1000 : epoch;
   const d = new Date(ms);
