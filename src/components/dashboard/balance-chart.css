@@ -29,3 +29,39 @@
     }
   }
 }
+
+/* One-shot ping marking where a freshly arrived datapoint landed. A stroke ring
+   expands out from the point and fades. Single color (brand), the pop comes from
+   the expansion, not a second hue. Starts at scale(0.6), not 0, so it grows out
+   of the dot rather than appearing from nothing. transform-box keeps the scale
+   centered on the circle's own box. */
+.balance-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: balance-ping 560ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes balance-ping {
+  from {
+    opacity: 0.5;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* Keep the information (a point arrived) without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes balance-ping {
+    from {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+}
