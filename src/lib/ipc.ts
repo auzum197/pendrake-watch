@@ -29,9 +29,17 @@ export type WalletAddress = {
 	transparent?: string;
 };
 
+// The user's raw Birthday choice. The daemon's resolver turns it into a starting
+// height (mirrors pendrake-ipc BirthdayInput), so the GUI never pre-resolves. A
+// date is unix seconds for midnight UTC of the picked day, mainnet only.
+export type BirthdayInput =
+	| { kind: "height"; value: number }
+	| { kind: "date"; value: number }
+	| { kind: "default" };
+
 export type ImportUfvkInput = {
 	ufvk: string;
-	birthday: number;
+	birthday: BirthdayInput;
 	indexerUri: string;
 	network: Network;
 	// Omitted on a post-Replace import: the daemon reuses the held session passphrase.

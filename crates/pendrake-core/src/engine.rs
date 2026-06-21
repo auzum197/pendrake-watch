@@ -25,7 +25,7 @@ use tokio::sync::{Mutex, Notify, RwLock};
 use pepper_sync::config::{PerformanceLevel, SyncConfig, TransparentAddressDiscovery};
 use pepper_sync::events::{ScanTiming, SequencedSyncEvent, SyncEvent as LibSyncEvent};
 use zcash_primitives::transaction::TxId;
-use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::BlockHeight;
 use zcash_protocol::value::Zatoshis;
 
 use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_URI};
@@ -38,6 +38,7 @@ use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
 use zip32::AccountId;
 
+use crate::birthday::resolve_birthday;
 use crate::notify::Notifier;
 use crate::paths::{Meta, Paths};
 use crate::ufvk::{parse_ufvk, UfvkError};
@@ -524,7 +525,8 @@ impl Engine {
         };
 
         let chain = chain_of(args.network);
-        let birthday = args.birthday.max(sapling_activation(chain));
+        let birthday = resolve_birthday(&args.birthday, &chain);
+        tracing::debug!(resolved_birthday = birthday, "resolved wallet birthday");
         let meta = Meta {
             network: args.network,
             indexer_uri: args.indexer_uri.clone(),
@@ -1202,13 +1204,6 @@ fn chain_of(network: Network) -> ChainType {
         Network::Mainnet => ChainType::Mainnet,
         Network::Regtest => ChainType::Regtest(ActivationHeights::default()),
     }
-}
-
-fn sapling_activation(chain: ChainType) -> u32 {
-    chain
-        .activation_height(NetworkUpgrade::Sapling)
-        .map(u32::from)
-        .unwrap_or(0)
 }
 
 fn now_secs() -> u64 {

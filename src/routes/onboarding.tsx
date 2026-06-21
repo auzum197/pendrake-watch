@@ -21,7 +21,11 @@ import {
 	parseUfvk,
 	type ParseUfvkResult,
 } from "@/lib/ipc";
-import { networkFromUfvk, onboardingSteps } from "@/lib/onboarding";
+import {
+	birthdayChoice,
+	networkFromUfvk,
+	onboardingSteps,
+} from "@/lib/onboarding";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Server
@@ -107,9 +111,7 @@ export function OnboardingPage() {
 		try {
 			await importUfvk({
 				ufvk: draft.ufvk.trim(),
-				// TODO: a date birthday needs server-side conversion to a height. Until
-				// then a height syncs from there, a date scans from the start.
-				birthday: draft.syncMode === "height" ? Number(draft.height) || 0 : 0,
+				birthday: birthdayChoice(draft, networkFromUfvk(draft.ufvk)),
 				indexerUri:
 					draft.server === "custom" && draft.serverUrl.trim()
 						? draft.serverUrl.trim()
@@ -260,6 +262,7 @@ function ImportStep({
 	error: string | null;
 }) {
 	const ufvk = draft.ufvk.trim();
+	const network = networkFromUfvk(ufvk);
 	// The decoder's verdict for exactly the current key. While typing or waiting on
 	// the daemon, `parsed.input` lags `ufvk`, so `identity` is null and no stale
 	// panel or error shows for a key the user has already changed.
@@ -345,34 +348,50 @@ function ImportStep({
 
 			<div className="flex flex-col gap-2.5">
 				<FieldLabel>Sync from</FieldLabel>
-				<Segmented
-					value={draft.syncMode}
-					onChange={(v) => set("syncMode", v)}
-					options={[
-						{ value: "date", label: "Date" },
-						{ value: "height", label: "Block Height" },
-					]}
-				/>
-				{draft.syncMode === "date" ? (
-					<div className="relative">
-						<input
-							className={`${fieldBase} h-12 font-mono`}
-							placeholder="dd/mm/yyyy"
-							value={draft.date}
-							onChange={(e) => set("date", e.currentTarget.value)}
-						/>
-						<IconCalendar className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
-					</div>
-				) : (
+				{network === "regtest" ? (
+					// Regtest has no universal date anchor, so it offers only a height,
+					// defaulting to its activation (1) when left blank.
 					<input
 						className={`${fieldBase} h-12 font-mono`}
 						inputMode="numeric"
-						placeholder="Block height"
+						placeholder="1"
 						value={draft.height}
 						onChange={(e) =>
 							set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
 						}
 					/>
+				) : (
+					<>
+						<Segmented
+							value={draft.syncMode}
+							onChange={(v) => set("syncMode", v)}
+							options={[
+								{ value: "date", label: "Date" },
+								{ value: "height", label: "Block Height" },
+							]}
+						/>
+						{draft.syncMode === "date" ? (
+							<div className="relative">
+								<input
+									className={`${fieldBase} h-12 font-mono`}
+									placeholder="dd/mm/yyyy"
+									value={draft.date}
+									onChange={(e) => set("date", e.currentTarget.value)}
+								/>
+								<IconCalendar className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+							</div>
+						) : (
+							<input
+								className={`${fieldBase} h-12 font-mono`}
+								inputMode="numeric"
+								placeholder="Block height"
+								value={draft.height}
+								onChange={(e) =>
+									set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
+								}
+							/>
+						)}
+					</>
 				)}
 			</div>
 
