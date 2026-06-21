@@ -82,6 +82,10 @@ pub struct Engine {
     /// Received txids already notified, so each transaction notifies exactly once
     /// across sync rounds and restarts.
     seen_txids: Mutex<HashSet<String>>,
+    /// Set once the "Indexer unreachable" notification has fired for the current
+    /// outage, so a multi-round backoff notifies once. Cleared when a round
+    /// succeeds, the Indexer changes, or a fresh sync loop starts.
+    unreachable_notified: AtomicBool,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -301,6 +305,7 @@ impl Engine {
             balance: RwLock::new(None),
             addresses: RwLock::new(Vec::new()),
             seen_txids: Mutex::new(seen),
+            unreachable_notified: AtomicBool::new(false),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             locked: AtomicBool::new(false),
@@ -669,6 +674,8 @@ impl Engine {
             s.unreachable = false;
         })
         .await;
+        // A switch starts a fresh outage episode, so a dead new Indexer notifies too.
+        self.unreachable_notified.store(false, Ordering::SeqCst);
         // Cut short any idle/backoff wait so the new round starts now.
         self.restart.notify_one();
 
@@ -709,6 +716,8 @@ impl Engine {
     }
 
     fn spawn_sync_loop(self: &Arc<Self>) {
+        // A fresh loop (unlock, import, replace) starts a clean outage episode.
+        self.unreachable_notified.store(false, Ordering::SeqCst);
         let engine = Arc::clone(self);
         let generation = engine.generation.load(Ordering::SeqCst);
         tokio::spawn(async move { engine.run_sync_loop(generation).await });
@@ -724,6 +733,8 @@ impl Engine {
             match self.sync_round(generation).await {
                 Ok(()) => {
                     backoff = BACKOFF_MIN;
+                    // A round got through, so the outage (if any) is over: a later one notifies again.
+                    self.unreachable_notified.store(false, Ordering::SeqCst);
                     // A restart signal (e.g. an Indexer change) cuts the idle wait short.
                     tokio::select! {
                         _ = tokio::time::sleep(IDLE_INTERVAL) => {}
@@ -748,6 +759,27 @@ impl Engine {
                         message,
                         unreachable,
                     });
+                    // One desktop notification per outage: the loop re-emits the error every
+                    // backoff round, but the user only needs telling once that the Indexer is
+                    // down and where to fix it. Recovery or an Indexer change re-arms it.
+                    if unreachable && !self.unreachable_notified.swap(true, Ordering::SeqCst) {
+                        let host = self
+                            .meta
+                            .read()
+                            .await
+                            .as_ref()
+                            .and_then(|m| m.indexer_uri.parse::<http::Uri>().ok())
+                            .and_then(|u| u.host().map(str::to_owned));
+                        let body = format!(
+                            "Pendrake can't reach {}. Open to choose another server.",
+                            host.as_deref().unwrap_or("your Indexer"),
+                        );
+                        self.notifier.notify(
+                            "Can't reach your Indexer",
+                            &body,
+                            "pendrake://settings/indexer",
+                        );
+                    }
                     // A restart signal cuts the backoff short and resets it, so switching
                     // to a working Indexer recovers at once instead of after the backoff.
                     tokio::select! {
