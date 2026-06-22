@@ -6,7 +6,7 @@
 //! pushed event, so the GUI sees progress and history update as blocks land
 //! rather than on a poll timer.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -40,6 +40,7 @@ use zip32::AccountId;
 
 use crate::birthday::resolve_birthday;
 use crate::notify::Notifier;
+use crate::notify_policy::{Disposition, NotificationPolicy};
 use crate::paths::{Meta, Paths};
 use crate::ufvk::{parse_ufvk, UfvkError};
 
@@ -80,9 +81,9 @@ pub struct Engine {
     txs: RwLock<Vec<Tx>>,
     balance: RwLock<Option<Balance>>,
     addresses: RwLock<Vec<WalletAddress>>,
-    /// Received txids already notified, so each transaction notifies exactly once
-    /// across sync rounds and restarts.
-    seen_txids: Mutex<HashSet<String>>,
+    /// The notification policy (ADR-0006): the seen-set, the silent Initial scan,
+    /// and the one-time "scan finished" crossing.
+    notify: NotificationPolicy,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -270,27 +271,33 @@ fn is_unreachable<E: std::fmt::Debug + std::fmt::Display>(
     matches!(err, SyncError::ServerError(ServerError::RequestFailed(_)))
 }
 
-/// Validate a candidate Indexer with a real `GetLightdInfo` request, not just a
-/// TCP/TLS connect. A plain HTTPS server accepts the connection but doesn't speak
-/// the lightwalletd protocol, so the gRPC call is what actually proves the endpoint
-/// is a Zcash indexer before we point a Wallet at it.
-async fn probe_indexer(uri: &http::Uri) -> Result<()> {
+/// The chain tip the Indexer reports, via a real `GetLightdInfo` request. It also
+/// serves as the reachability check: a plain HTTPS server accepts the connection but
+/// can't answer this, so the gRPC call proves the endpoint is a Zcash indexer before
+/// a Wallet points at it. The tip is pinned at import as the Initial-scan boundary N
+/// (ADR-0006).
+async fn indexer_tip(uri: &http::Uri) -> Result<u32> {
     use zingo_netutils::Indexer;
     let mut indexer = zingo_netutils::GrpcIndexer::new(uri.clone())
         .await
         .map_err(|e| anyhow!("could not connect to indexer: {e}"))?;
-    indexer
+    let info = indexer
         .get_lightd_info(INDEXER_PROBE_TIMEOUT)
         .await
         .map_err(|e| anyhow!("that server did not respond as a Zcash indexer: {e}"))?;
-    Ok(())
+    Ok(info.block_height as u32)
+}
+
+/// The reachability check alone: the [`indexer_tip`] probe with its height discarded.
+async fn probe_indexer(uri: &http::Uri) -> Result<()> {
+    indexer_tip(uri).await.map(|_| ())
 }
 
 impl Engine {
     /// Build the engine, loading and resuming sync for an existing wallet.
     pub async fn load(paths: Paths, notifier: Arc<dyn Notifier>) -> Result<Arc<Self>> {
         paths.ensure_dirs()?;
-        let seen = load_notified(&paths.notified_file);
+        let notify = NotificationPolicy::load(paths.notified_file.clone());
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
         let engine = Arc::new(Self {
             notifier,
@@ -301,7 +308,7 @@ impl Engine {
             txs: RwLock::new(Vec::new()),
             balance: RwLock::new(None),
             addresses: RwLock::new(Vec::new()),
-            seen_txids: Mutex::new(seen),
+            notify,
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             locked: AtomicBool::new(false),
@@ -527,12 +534,21 @@ impl Engine {
         let chain = chain_of(args.network);
         let birthday = resolve_birthday(&args.birthday, &chain);
         tracing::debug!(resolved_birthday = birthday, "resolved wallet birthday");
+        // Pin the Initial-scan boundary at the current chain tip (ADR-0006). This
+        // GetLightdInfo also fails fast on an unreachable or wrong Indexer, before the
+        // wallet file is written.
+        let indexer_uri: http::Uri = args
+            .indexer_uri
+            .parse()
+            .map_err(|_| anyhow!("invalid indexer uri"))?;
+        let scan_target_height = indexer_tip(&indexer_uri).await?;
         let meta = Meta {
             network: args.network,
             indexer_uri: args.indexer_uri.clone(),
             import_type: ImportType::Ufvk,
             view_mode: ViewMode::Full,
             birthday_height: birthday,
+            scan_target_height,
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
         };
@@ -566,8 +582,7 @@ impl Engine {
         *self.session_passphrase.lock().await = Some(passphrase);
         self.locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
-        self.seen_txids.lock().await.clear();
-        let _ = std::fs::remove_file(&self.paths.notified_file);
+        self.notify.reset();
         // Prime the cache (empty history, fixed addresses, zero balance) so the
         // GUI's post-import queries don't block on the starting sync.
         self.refresh_snapshot().await;
@@ -692,9 +707,8 @@ impl Engine {
         self.txs.write().await.clear();
         *self.balance.write().await = None;
         self.addresses.write().await.clear();
-        self.seen_txids.lock().await.clear();
+        self.notify.reset();
         let _ = std::fs::remove_file(&self.paths.meta_file);
-        let _ = std::fs::remove_file(&self.paths.notified_file);
         let _ = std::fs::remove_dir_all(&self.paths.wallet_dir);
         self.paths.ensure_dirs()?;
         Ok(())
@@ -1011,8 +1025,20 @@ impl Engine {
             received,
         });
 
-        let already_notified = self.seen_txids.lock().await.contains(&txid);
-        if !already_notified {
+        // ADR-0006: during the Initial scan (synced_height below the import-pinned
+        // target) a detection is recorded silently; once live, each freshly seen txid
+        // notifies.
+        let live = {
+            let synced = self.sync.read().await.synced_height;
+            let target = self
+                .meta
+                .read()
+                .await
+                .as_ref()
+                .map_or(0, |m| m.scan_target_height);
+            synced >= target
+        };
+        if let Disposition::Notify = self.notify.classify(&txid, live) {
             let amount = format_amount(summary.value);
             let (title, body) = if received {
                 (
@@ -1033,11 +1059,7 @@ impl Engine {
                 .notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
             {
-                Ok(()) => {
-                    let mut seen = self.seen_txids.lock().await;
-                    seen.insert(txid.clone());
-                    save_notified(&self.paths.notified_file, &seen);
-                }
+                Ok(()) => self.notify.mark_notified(&txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
                 }
@@ -1081,6 +1103,7 @@ impl Engine {
             guard.unreachable = false;
             guard.clone()
         };
+        self.announce_scan_complete(status.synced_height).await;
         let _ = self.events.send(SyncEvent::Progress {
             status,
             batches: view.batch_snapshot(),
@@ -1089,17 +1112,40 @@ impl Engine {
 
     /// Mark the round complete at the chain tip, preserving `last_synced_at`.
     async fn finalize(&self, synced_height: u32) -> SyncStatus {
-        let mut guard = self.sync.write().await;
-        guard.state = SyncState::Idle;
-        guard.synced_height = synced_height;
-        guard.chain_tip = guard.chain_tip.max(synced_height);
-        guard.percent = 100;
-        guard.phase = None;
-        guard.eta_seconds = None;
-        guard.error = None;
-        guard.unreachable = false;
-        guard.last_synced_at = Some(now_secs());
-        guard.clone()
+        let status = {
+            let mut guard = self.sync.write().await;
+            guard.state = SyncState::Idle;
+            guard.synced_height = synced_height;
+            guard.chain_tip = guard.chain_tip.max(synced_height);
+            guard.percent = 100;
+            guard.phase = None;
+            guard.eta_seconds = None;
+            guard.error = None;
+            guard.unreachable = false;
+            guard.last_synced_at = Some(now_secs());
+            guard.clone()
+        };
+        self.announce_scan_complete(synced_height).await;
+        status
+    }
+
+    /// Emit the one-time "scan finished" toast the first time `synced_height` reaches
+    /// the import-pinned target N (ADR-0006). A legacy wallet (no target, N = 0) reads
+    /// as always live and never fires.
+    async fn announce_scan_complete(&self, synced_height: u32) {
+        let target = self
+            .meta
+            .read()
+            .await
+            .as_ref()
+            .map_or(0, |m| m.scan_target_height);
+        if self.notify.crossed_to_live(synced_height, target) {
+            let _ = self.notifier.notify(
+                "Wallet ready",
+                "Pendrake finished scanning. You'll be notified of new activity.",
+                "pendrake://wallet",
+            );
+        }
     }
 
     async fn set_sync(&self, f: impl FnOnce(&mut SyncStatus)) {
@@ -1175,24 +1221,6 @@ fn format_zec(zat: u64) -> String {
         format!("{whole}.{frac:08}")
             .trim_end_matches('0')
             .to_string()
-    }
-}
-
-fn load_notified(path: &std::path::Path) -> HashSet<String> {
-    std::fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
-}
-
-fn save_notified(path: &std::path::Path, seen: &HashSet<String>) {
-    match serde_json::to_vec(seen) {
-        Ok(bytes) => {
-            if let Err(e) = std::fs::write(path, bytes) {
-                tracing::warn!("could not persist notified txids: {e}");
-            }
-        }
-        Err(e) => tracing::warn!("could not serialize notified txids: {e}"),
     }
 }
 

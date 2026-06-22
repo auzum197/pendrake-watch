@@ -6,6 +6,7 @@ mod birthday;
 mod engine;
 mod ipc;
 mod notify;
+mod notify_policy;
 mod paths;
 mod run;
 pub mod transport;
