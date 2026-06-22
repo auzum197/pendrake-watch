@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.8",
     "@fontsource-variable/noto-sans": "^5.2.10",
+    "@fontsource-variable/nunito-sans": "^5.2.7",
     "@tabler/icons-react": "^3.44.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-router": "^1.170.11",
