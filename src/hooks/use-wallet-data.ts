@@ -98,6 +98,14 @@ export function useWalletData(): WalletData {
       if (!active) return;
       switch (ev.event) {
         case "progress":
+          // A progress tick moves the scan forward but changes neither the
+          // balance nor the history, so only the sync status updates here.
+          // Refetching the whole snapshot on every tick rebuilt the chart's
+          // data each time. Balance and history refresh on `transaction` and
+          // `finished`, with the slow poll as the safety net.
+          cache.sync = ev.status;
+          setSync(ev.status);
+          break;
         case "finished":
           cache.sync = ev.status;
           setSync(ev.status);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconCircleCheckFilled,
@@ -211,7 +211,10 @@ function ChartCard({
   sync: SyncStatus | null;
 }) {
   const total = totalConfirmed(balance);
-  const points = balanceHistory(txs, balance);
+  // Memoised so a sync-only refresh (the percent bar, the still-calculating
+  // spinner) doesn't hand the chart a fresh array and force a full recharts
+  // reconcile while you're hovering it.
+  const points = useMemo(() => balanceHistory(txs, balance), [txs, balance]);
   const hasData = points.length >= 2;
   const standing = athStanding(points);
   // The standing reads off the reconstructed history, which keeps shifting until
