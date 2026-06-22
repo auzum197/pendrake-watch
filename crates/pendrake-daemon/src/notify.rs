@@ -14,45 +14,37 @@ pub struct DesktopNotifier;
 
 impl Notifier for DesktopNotifier {
     #[cfg(target_os = "linux")]
-    fn notify(&self, title: &str, body: &str, deep_link: &str) {
+    fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
         // The "default" action fires when the user clicks the notification body.
         // Wait for it off the calling thread, then open the deep link.
-        match notify_rust::Notification::new()
+        let handle = notify_rust::Notification::new()
             .summary(title)
             .body(body)
             .action("default", "Open")
-            .show()
-        {
-            Ok(handle) => {
-                let url = deep_link.to_string();
-                std::thread::spawn(move || {
-                    handle.wait_for_action(|action| {
-                        if action == "default" {
-                            open_url(&url);
-                        }
-                    });
-                });
-            }
-            Err(e) => tracing::warn!("notification for {deep_link} failed: {e}"),
-        }
+            .show()?;
+        let url = deep_link.to_string();
+        std::thread::spawn(move || {
+            handle.wait_for_action(|action| {
+                if action == "default" {
+                    open_url(&url);
+                }
+            });
+        });
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
-    fn notify(&self, title: &str, body: &str, deep_link: &str) {
-        if let Err(e) = show_toast(title, body, deep_link) {
-            tracing::warn!("notification for {deep_link} failed: {e}");
-        }
+    fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
+        show_toast(title, body, deep_link).map_err(Into::into)
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    fn notify(&self, title: &str, body: &str, deep_link: &str) {
-        if let Err(e) = notify_rust::Notification::new()
+    fn notify(&self, title: &str, body: &str, _deep_link: &str) -> anyhow::Result<()> {
+        notify_rust::Notification::new()
             .summary(title)
             .body(body)
-            .show()
-        {
-            tracing::warn!("notification for {deep_link} failed: {e}");
-        }
+            .show()?;
+        Ok(())
     }
 }
 

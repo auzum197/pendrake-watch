@@ -39,17 +39,6 @@ fn main() -> Result<()> {
         notify::register_identity(&paths.root);
     }
 
-    if args.get(1).map(String::as_str) == Some("notify-test") {
-        use pendrake_core::Notifier;
-        DesktopNotifier.notify(
-            "Funds received",
-            "0.42 ZEC received in your wallet.",
-            "pendrake://tx?txid=0000000000000000000000000000000000000000000000000000000000000001",
-        );
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        return Ok(());
-    }
-
     let handle = pendrake_core::run(Config::default(), Arc::new(DesktopNotifier))?;
     tracing::info!("pendraked running");
     // Background daemon: stay alive until the process is signalled. The GUI's

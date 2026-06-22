@@ -19,3 +19,4 @@ path = "src/uniffi-bindgen.rs"
 pendrake-core = { path = "../pendrake-core" }
 uniffi = { version = "0.31", features = ["cli"] }
 thiserror = "1"
+anyhow.workspace = true
