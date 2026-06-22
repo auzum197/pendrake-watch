@@ -579,8 +579,17 @@ impl Engine {
     /// Open the encrypted wallet with the passphrase the GUI collected, then start
     /// syncing. A wrong passphrase fails the read and leaves the daemon locked.
     async fn unlock(self: &Arc<Self>, passphrase: String) -> Result<WalletState> {
+        // Already open: Sign Out locks the GUI's screen without dropping the
+        // in-memory wallet, so re-entry lands here. Verify the passphrase against
+        // the session one that decrypted the wallet instead of waving any input
+        // through. The constant-time match is a real check and needs no server, so
+        // it works offline. A plaintext wallet has no passphrase, so it re-enters.
         if self.client.lock().await.is_some() {
-            return Ok(self.wallet_state().await);
+            let encrypted = self.meta.read().await.as_ref().is_some_and(|m| m.encrypted);
+            if !encrypted || self.verify_passphrase(&passphrase).await {
+                return Ok(self.wallet_state().await);
+            }
+            return Err(anyhow!("incorrect passphrase"));
         }
         let config = {
             let guard = self.meta.read().await;
