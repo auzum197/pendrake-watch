@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	birthdayChoice,
+	dateFromInput,
+	formatDateInput,
 	networkFromUfvk,
 	onboardingSteps,
 	parseDateToUnix,
@@ -83,5 +85,29 @@ describe("birthdayChoice", () => {
 		expect(
 			birthdayChoice({ syncMode: "date", date: "28/10/2018", height: "" }, "regtest"),
 		).toEqual({ kind: "default" });
+	});
+});
+
+describe("date field <-> calendar", () => {
+	it("round-trips a typed date through the calendar's Date", () => {
+		const picked = dateFromInput("28/10/2018");
+		expect(picked).toBeDefined();
+		expect(formatDateInput(picked as Date)).toBe("28/10/2018");
+	});
+
+	it("lands on the same calendar day the field names, regardless of timezone", () => {
+		const picked = dateFromInput("01/01/2020") as Date;
+		expect([picked.getFullYear(), picked.getMonth(), picked.getDate()]).toEqual([
+			2020, 0, 1,
+		]);
+	});
+
+	it("has no date for a field that isn't a real date", () => {
+		expect(dateFromInput("")).toBeUndefined();
+		expect(dateFromInput("31/02/2020")).toBeUndefined();
+	});
+
+	it("zero-pads day and month when formatting a selection", () => {
+		expect(formatDateInput(new Date(2021, 2, 5))).toBe("05/03/2021");
 	});
 });

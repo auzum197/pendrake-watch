@@ -21,9 +21,12 @@ import {
 } from "@/lib/ipc";
 import {
 	birthdayChoice,
+	dateFromInput,
+	formatDateInput,
 	networkFromUfvk,
 	onboardingSteps,
 } from "@/lib/onboarding";
+import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Indexer
@@ -415,21 +418,55 @@ function SyncFrom({
 						]}
 					/>
 					{draft.syncMode === "date" ? (
-						<div className="relative">
-							<input
-								className={`${fieldBase} h-12 font-mono`}
-								placeholder="dd/mm/yyyy"
-								value={draft.date}
-								onChange={(e) => set("date", e.currentTarget.value)}
-							/>
-							<IconCalendar className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
-						</div>
+						<DateField value={draft.date} onChange={(v) => set("date", v)} />
 					) : (
 						height
 					)}
 				</>
 			)}
 		</div>
+	);
+}
+
+// A dd/mm/yyyy field that takes either a typed date or one picked from the
+// calendar behind the icon. The calendar is just a second way into the same
+// string, so downstream (parseDateToUnix) never knows which the user used.
+function DateField({
+	value,
+	onChange,
+}: {
+	value: string;
+	onChange: (value: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const selected = dateFromInput(value);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="relative">
+				<input
+					className={`${fieldBase} h-12 pr-12 font-mono`}
+					placeholder="dd/mm/yyyy"
+					value={value}
+					onChange={(e) => onChange(e.currentTarget.value)}
+				/>
+				<PopoverTrigger
+					type="button"
+					aria-label="Open calendar"
+					className="absolute right-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-white/40 outline-none transition-colors hover:text-white/70 focus-visible:text-white/70"
+				>
+					<IconCalendar className="size-4" />
+				</PopoverTrigger>
+			</div>
+			<PopoverContent align="end" className="dark w-auto p-0">
+				<BirthdayCalendar
+					selected={selected}
+					onSelect={(date) => {
+						onChange(formatDateInput(date));
+						setOpen(false);
+					}}
+				/>
+			</PopoverContent>
+		</Popover>
 	);
 }
 

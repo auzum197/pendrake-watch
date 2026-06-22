@@ -49,6 +49,25 @@ export function parseDateToUnix(input: string): number | null {
 	return Math.floor(ms / 1000);
 }
 
+// The date field's value as a Date for the calendar to highlight, or undefined
+// while it isn't a real date. parseDateToUnix anchors to UTC midnight, so the day
+// is rebuilt in local time to land on the same calendar square in any timezone.
+export function dateFromInput(value: string): Date | undefined {
+	const secs = parseDateToUnix(value);
+	if (secs === null) return undefined;
+	const utc = new Date(secs * 1000);
+	return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+}
+
+// Format a calendar selection back into the dd/mm/yyyy the field stores. The
+// calendar hands back a local-midnight Date, so its parts are read directly and a
+// picked date is indistinguishable from a typed one downstream.
+export function formatDateInput(date: Date): string {
+	const dd = String(date.getDate()).padStart(2, "0");
+	const mm = String(date.getMonth() + 1).padStart(2, "0");
+	return `${dd}/${mm}/${date.getFullYear()}`;
+}
+
 export type BirthdayDraft = {
 	syncMode: "date" | "height";
 	date: string;
