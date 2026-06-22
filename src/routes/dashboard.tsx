@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import {
+  IconAlertTriangle,
   IconCircleCheckFilled,
   IconLoader2,
   IconShieldCheckFilled,
@@ -148,29 +148,19 @@ function useCreepingPercent(sync: SyncStatus | null, syncing: boolean): number {
 }
 
 function SyncRow({ sync }: { sync: SyncStatus | null }) {
-  const navigate = useNavigate();
   const synced = isSynced(sync);
   const syncing = !!sync && sync.state !== "error" && !synced;
   const displayed = useCreepingPercent(sync, syncing);
   if (!sync) return null;
   if (sync.state === "error") {
+    // The raw transport error belongs in the logs. A connectivity failure gets
+    // named so the app-shell "Change Indexer" banner reads as its fix. Any other
+    // error reads as a transient pause the backoff loop is already retrying.
     return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-xs text-red-400">
-          Sync error{sync.error ? `: ${sync.error}` : ""}
-        </span>
-        {/* Only a connectivity failure is fixable by switching servers, so the CTA
-            rides on `unreachable` and jumps straight to the Indexer setting. */}
-        {sync.unreachable && (
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/settings", hash: "indexer" })}
-            className="text-xs font-medium text-white underline-offset-2 hover:underline"
-          >
-            Change Indexer
-          </button>
-        )}
-      </div>
+      <span className="flex items-center gap-1.5 text-xs text-white/55">
+        <IconAlertTriangle className="size-3.5 text-amber-400" />
+        {sync.unreachable ? "Can't reach your Indexer" : "Sync paused, retrying…"}
+      </span>
     );
   }
   if (synced) {
