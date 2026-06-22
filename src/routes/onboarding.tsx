@@ -17,6 +17,7 @@ import {
 	importUfvk,
 	parseUfvk,
 	type ParseUfvkResult,
+	type UfvkNetwork,
 } from "@/lib/ipc";
 import { networkFromUfvk, onboardingSteps } from "@/lib/onboarding";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
@@ -99,11 +100,12 @@ export function OnboardingPage() {
 		setError(null);
 		try {
 			const network = networkFromUfvk(draft.ufvk);
+			// Regtest only ever picks a height; mainnet may pick a date, which still
+			// needs server-side conversion to a height, so a date scans from the start.
+			const fromHeight = network === "regtest" || draft.syncMode === "height";
 			await importUfvk({
 				ufvk: draft.ufvk.trim(),
-				// TODO: a date birthday needs server-side conversion to a height. Until
-				// then a height syncs from there, a date scans from the start.
-				birthday: draft.syncMode === "height" ? Number(draft.height) || 0 : 0,
+				birthday: fromHeight ? Number(draft.height) || 0 : 0,
 				// Regtest has no universal Indexer, so its onboarding requires a custom
 				// one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
 				// (AUZ-104). Mainnet skips the step and takes the public default.
@@ -310,8 +312,8 @@ function ImportStep({
 								</p>
 								<p className="mt-1.5 text-xs leading-relaxed text-white/55">
 									A UFVK lets the wallet watch your balance and history without
-									any spending key. Pasting it creates a watch-only wallet, so no
-									funds can ever move from here.
+									any spending key. Pasting it creates a watch-only wallet, so
+									no funds can ever move from here.
 								</p>
 							</PopoverContent>
 						</Popover>
@@ -338,38 +340,11 @@ function ImportStep({
 				<UfvkFeedback identity={identity} />
 			</div>
 
-			<div className="flex flex-col gap-2.5">
-				<FieldLabel>Sync from</FieldLabel>
-				<Segmented
-					value={draft.syncMode}
-					onChange={(v) => set("syncMode", v)}
-					options={[
-						{ value: "date", label: "Date" },
-						{ value: "height", label: "Block Height" },
-					]}
-				/>
-				{draft.syncMode === "date" ? (
-					<div className="relative">
-						<input
-							className={`${fieldBase} h-12 font-mono`}
-							placeholder="dd/mm/yyyy"
-							value={draft.date}
-							onChange={(e) => set("date", e.currentTarget.value)}
-						/>
-						<IconCalendar className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
-					</div>
-				) : (
-					<input
-						className={`${fieldBase} h-12 font-mono`}
-						inputMode="numeric"
-						placeholder="Block height"
-						value={draft.height}
-						onChange={(e) =>
-							set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
-						}
-					/>
-				)}
-			</div>
+			{identity?.kind === "valid" && (
+				<div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2 motion-safe:duration-300 motion-safe:ease-out-soft">
+					<SyncFrom network={identity.network} draft={draft} set={set} />
+				</div>
+			)}
 
 			{isFinal && error && (
 				<p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
@@ -384,6 +359,64 @@ function ImportStep({
 				{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
 			</PrimaryButton>
 		</>
+	);
+}
+
+// The birthday picker, shown only once the key decodes. Its shape follows the
+// network: mainnet offers a date or a height, regtest a height alone, since a
+// local chain has no calendar to date a birthday against.
+function SyncFrom({
+	network,
+	draft,
+	set,
+}: {
+	network: UfvkNetwork;
+	draft: Draft;
+	set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
+}) {
+	const height = (
+		<input
+			className={`${fieldBase} h-12 font-mono`}
+			inputMode="numeric"
+			placeholder="Block height"
+			value={draft.height}
+			onChange={(e) =>
+				set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
+			}
+		/>
+	);
+
+	return (
+		<div className="flex flex-col gap-2.5">
+			<FieldLabel>Sync from</FieldLabel>
+			{network === "regtest" ? (
+				height
+			) : (
+				<>
+					<Segmented
+						value={draft.syncMode}
+						onChange={(v) => set("syncMode", v)}
+						options={[
+							{ value: "date", label: "Date" },
+							{ value: "height", label: "Block Height" },
+						]}
+					/>
+					{draft.syncMode === "date" ? (
+						<div className="relative">
+							<input
+								className={`${fieldBase} h-12 font-mono`}
+								placeholder="dd/mm/yyyy"
+								value={draft.date}
+								onChange={(e) => set("date", e.currentTarget.value)}
+							/>
+							<IconCalendar className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+						</div>
+					) : (
+						height
+					)}
+				</>
+			)}
+		</div>
 	);
 }
 
@@ -484,6 +517,10 @@ function Verdict({ result }: { result: ParseUfvkResult }) {
 	);
 }
 
+// The selected option is marked by a brand capsule that slides between segments
+// rather than popping onto each. The capsule is one segment wide and rides on
+// translateX, so the move is a single GPU transform and a click mid-slide
+// retargets it. Segments are equal width to keep that translate exact.
 function Segmented<T extends string>({
 	value,
 	onChange,
@@ -493,16 +530,32 @@ function Segmented<T extends string>({
 	onChange: (v: T) => void;
 	options: { value: T; label: string }[];
 }) {
+	const active = Math.max(
+		0,
+		options.findIndex((o) => o.value === value),
+	);
 	return (
-		<div className="inline-flex w-fit rounded-full border border-ink-line bg-ink-soft p-1">
+		<div
+			className="relative grid w-full rounded-full border border-ink-line bg-ink-soft p-1"
+			style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}
+		>
+			<span
+				aria-hidden
+				className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-brand ease-out-soft motion-safe:transition-transform motion-safe:duration-200"
+				style={{
+					width: `calc((100% - 0.5rem) / ${options.length})`,
+					transform: `translateX(${active * 100}%)`,
+				}}
+			/>
 			{options.map((o) => (
 				<button
 					key={o.value}
 					type="button"
+					aria-pressed={value === o.value}
 					onClick={() => onChange(o.value)}
-					className={`rounded-full px-5 py-1.5 text-sm font-medium transition-colors ${
+					className={`relative z-10 rounded-full px-5 py-1.5 text-sm font-medium transition-colors ${
 						value === o.value
-							? "bg-brand text-brand-foreground"
+							? "text-brand-foreground"
 							: "text-white/55 hover:text-white/80"
 					}`}
 				>
@@ -569,7 +622,11 @@ function IndexerStep({
 			<div className="flex items-center gap-3">
 				<BackButton onClick={onBack} />
 				<PrimaryButton disabled={busy || !ready} onClick={onNext}>
-					{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
+					{isFinal
+						? busy
+							? "Importing wallet…"
+							: "Import Wallet"
+						: "Continue"}
 				</PrimaryButton>
 			</div>
 		</>
