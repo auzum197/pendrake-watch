@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
+import { takePendingTxid } from "@/lib/deep-link";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
 // decrypts the wallet, so collecting it here is the lock. The real version hands
@@ -32,7 +33,10 @@ export function UnlockPage() {
     setError(false);
     try {
       await unlockWallet(password);
-      navigate({ to: "/dashboard" });
+      // Resume a deep link that arrived while locked, otherwise land on the dashboard.
+      const txid = takePendingTxid();
+      if (txid) navigate({ to: "/tx/$txid", params: { txid } });
+      else navigate({ to: "/dashboard" });
     } catch {
       setError(true);
     } finally {

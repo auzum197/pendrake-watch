@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use pendrake_ipc::{Request, Response};
+use pendrake_ipc::{Request, Response, SyncEvent};
 use tokio::io::{
     AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf,
 };
@@ -77,6 +77,12 @@ async fn stream_events<S>(
 where
     S: AsyncRead + AsyncWrite,
 {
+    // Track this subscriber so the engine relocks when the last GUI feed drops: a
+    // Sign Out is explicit, this catches a plain quit. The guard decrements on every
+    // exit path.
+    engine.subscriber_joined();
+    let _subscriber = SubscriberGuard(Arc::clone(&engine));
+
     let mut events = engine.subscribe();
     loop {
         tokio::select! {
@@ -96,7 +102,13 @@ where
             }
 
             event = events.recv() => match event {
-                Ok(event) => write_line(&mut write_half, &event).await?,
+                // While the session is locked, push nothing wallet-bearing; only an
+                // Error (connectivity) is safe to surface to the unlock screen.
+                Ok(event) => {
+                    if !engine.session_locked() || matches!(event, SyncEvent::Error { .. }) {
+                        write_line(&mut write_half, &event).await?;
+                    }
+                }
                 // A slow reader fell behind; the next Progress snapshot resyncs it.
                 Err(RecvError::Lagged(_)) => {}
                 Err(RecvError::Closed) => break,
@@ -104,6 +116,16 @@ where
         }
     }
     Ok(())
+}
+
+/// Decrements the engine's subscriber count when a feed ends, relocking on the last
+/// one out. A guard, so every exit path (clean return, error, or panic) is covered.
+struct SubscriberGuard(Arc<Engine>);
+
+impl Drop for SubscriberGuard {
+    fn drop(&mut self) {
+        self.0.subscriber_left();
+    }
 }
 
 async fn write_line<W, T>(write_half: &mut W, value: &T) -> Result<()>

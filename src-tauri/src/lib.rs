@@ -337,6 +337,13 @@ async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
 
+/// Lock the GUI session. The daemon keeps the wallet open and syncing, but the next
+/// session must re-enter the passphrase. Sign Out calls this.
+#[tauri::command]
+async fn lock() -> Result<Value, String> {
+    request("lock", Value::Null).await
+}
+
 /// Retarget the running Wallet at a different Indexer. The daemon connects to the
 /// new server before persisting, so a rejected URI surfaces here as an error.
 #[tauri::command]
@@ -456,6 +463,7 @@ pub fn run() {
             import_ufvk,
             parse_ufvk,
             unlock,
+            lock,
             set_indexer,
             verify_passphrase,
             get_wallet_state,

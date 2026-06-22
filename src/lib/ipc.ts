@@ -148,6 +148,12 @@ export function unlock(passphrase: string): Promise<WalletState> {
 	return invoke("unlock", { passphrase });
 }
 
+// Lock the GUI session. The daemon keeps the wallet open and syncing; re-entry needs
+// the passphrase. Sign Out calls this.
+export function lock(): Promise<void> {
+	return invoke("lock");
+}
+
 // Point the Wallet at a different Indexer. The daemon connects to the new server
 // before persisting, so this rejects when the server is unreachable or the URL is
 // malformed, leaving the current Indexer in place.

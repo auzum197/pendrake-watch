@@ -3,6 +3,8 @@ import { Outlet, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen } from "@tauri-apps/api/event";
+import { getWalletState } from "@/lib/ipc";
+import { stashPendingTxid } from "@/lib/deep-link";
 
 // pendrake://tx?txid=<id> -> the transaction detail route.
 function txidFromUrl(url: string): string | null {
@@ -19,9 +21,18 @@ export function RootLayout() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const go = (urls: string[] | null) => {
+    const go = async (urls: string[] | null) => {
       const txid = urls?.map(txidFromUrl).find(Boolean);
-      if (txid) navigate({ to: "/tx/$txid", params: { txid } });
+      if (!txid) return;
+      // A deep link must not skip the lock screen. If the session is locked, stash
+      // the target and let the unlock screen replay it after re-entry.
+      const { locked } = await getWalletState();
+      if (locked) {
+        stashPendingTxid(txid);
+        navigate({ to: "/unlock" });
+      } else {
+        navigate({ to: "/tx/$txid", params: { txid } });
+      }
     };
     // Cold start (app launched by the deep link) and warm via onOpenUrl, plus the
     // `deep-link` event the single-instance callback forwards when the URL reaches

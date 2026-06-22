@@ -60,8 +60,16 @@ The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wal
 _Avoid_: server, endpoint, node
 
 **Passphrase**:
-The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
+The single secret set during onboarding. It encrypts every Wallet file at rest, and re-entering it is what clears the Session lock. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a full restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
 _Avoid_: password, PIN
+
+**Session lock**:
+The gate that holds the app on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether the Wallet is syncing: background sync and notifications keep running while locked, so a Sign Out or a closed window still catches new transactions. It arms at startup, on Sign Out, and when the app's window goes away, and is cleared only by entering the Passphrase.
+_Avoid_: logout, timeout, screen lock
+
+**Sign Out**:
+Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while the Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
+_Avoid_: log out, lock
 
 **Remove**:
 The wipe of a single Wallet and its state. Not a v0 user action: v0 exposes only Replace (swap the Wallet, in Settings) and Start over (wipe after a lost Passphrase, on the unlock screen), both named for what the user ends with rather than for the deletion, and both sharing this wipe underneath. Remove surfaces as its own action with multi-key, where a Wallet list takes one Wallet out and the others remain.

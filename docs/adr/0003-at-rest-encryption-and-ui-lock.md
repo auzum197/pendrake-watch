@@ -12,6 +12,14 @@ An app-level encryption layer wrapping zingolib's plaintext files was the assume
 
 The wallet file format becomes encrypted and the IPC protocol grows an `Unlock { passphrase }` request and a locked/unlocked state, both contradicting the current `paths.rs` comment, which must be updated. After any full restart the daemon cannot sync until the GUI supplies the passphrase, acceptable in v0 since there is no autostart. Idle auto-relock and change-passphrase are post-v0.
 
+## Amendment: the lock is a GUI-session gate, not the absence of the key
+
+The original decision tied "locked" to the daemon lacking the session key, locked precisely while no key is held, with no separate lock mechanism. That made background sync and the lock mutually exclusive, and it let two bugs through (AUZ-114). A daemon that kept the key to sync in the background reported itself unlocked, so relaunching after a quit walked past the unlock screen, and a re-entry check that only asked "is a wallet loaded?" accepted any passphrase.
+
+The model is now two layers. The session key (the Passphrase held in memory with the Wallet open) drives background sync and notifications and survives a Sign Out or a GUI quit. The Session lock is a separate flag the daemon enforces on every wallet read: while locked it answers only lifecycle and auth calls and pushes no wallet-bearing events, though it keeps scanning and notifying. Unlock verifies the Passphrase for real, a constant-time match against the held one when the Wallet is already open, a decrypt when cold, and is the only thing that clears the lock. The lock arms at startup for an encrypted Wallet, on Sign Out, and when the last GUI session disconnects.
+
+The trade this accepts is that the key lives in daemon memory while the GUI is locked. For a watch-only wallet guarding viewing privacy rather than spend authority, that is the same trade the keychain amendment below already accepts. A plaintext (pre-encryption) Wallet has no Passphrase to demand, so it is never session-locked. Idle auto-relock stays post-v0.
+
 ## Amendment (post-v0): optional Passphrase persistence via the OS keychain
 
 v0 keeps the Passphrase in daemon memory only, the decision above, so after a restart the daemon cannot sync until the GUI re-supplies it and the app lands on the unlock screen. Letting background sync survive a reboot is deferred post-v0, tracked in AUZ-102. When it lands the Passphrase may be persisted under one constraint: the OS keychain only (macOS Keychain, Windows Credential Manager, Linux Secret Service), never an app-managed file. The keychain is gated by the OS login and its key lives off the at-rest disk image. An app-managed encrypted blob would be obfuscation, since its key would sit on the same disk it protects. That is the theater this ADR already rejects for plaintext files.
