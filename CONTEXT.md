@@ -74,3 +74,11 @@ _Avoid_: switch, change, swap
 **Start over**:
 The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Remove, which takes one Wallet out with the Passphrase known.
 _Avoid_: reset, wipe
+
+**Span**:
+The selectable time window of the balance chart: ALL, 1 year, 1 month, or 1 week. A Span is always anchored at today and reaches back, so the balance carries flat to the present edge whether or not a recent transaction exists. ALL runs from the first transaction to today. Distinct from the block ranges pepper-sync scans, which is why it is not called a range.
+_Avoid_: range, window, period, timeframe
+
+**Fiat value**:
+A Wallet's balance expressed in a fiat currency (USD in v0), its balance marked against the ZEC price. The spot Fiat value uses the current price. Over a Span it is marked daily against historical prices, so it moves with the market even while the balance holds still. Always additive to the ZEC figure, never a replacement: a Wallet's balance is denominated in ZEC first, and the ZEC view always renders even when no price is available.
+_Avoid_: fiat-equivalent, worth, valuation, USD value (as the concept name)
