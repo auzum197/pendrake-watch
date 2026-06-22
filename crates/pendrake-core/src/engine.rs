@@ -1009,15 +1009,8 @@ impl Engine {
             received,
         });
 
-        let first_seen = {
-            let mut seen = self.seen_txids.lock().await;
-            let fresh = seen.insert(txid.clone());
-            if fresh {
-                save_notified(&self.paths.notified_file, &seen);
-            }
-            fresh
-        };
-        if first_seen {
+        let already_notified = self.seen_txids.lock().await.contains(&txid);
+        if !already_notified {
             let amount = format_amount(summary.value);
             let (title, body) = if received {
                 (
@@ -1031,8 +1024,22 @@ impl Engine {
                 "new tx {txid} ({} zat, received={received}), notifying",
                 summary.value
             );
-            self.notifier
-                .notify(title, &body, &format!("pendrake://tx?txid={txid}"));
+            // Record the txid as notified only after delivery succeeds. A failure
+            // leaves it out of the set, so a later rediscovery (at the latest, the
+            // next restart's catch-up sync) tries again rather than losing it.
+            match self
+                .notifier
+                .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
+            {
+                Ok(()) => {
+                    let mut seen = self.seen_txids.lock().await;
+                    seen.insert(txid.clone());
+                    save_notified(&self.paths.notified_file, &seen);
+                }
+                Err(e) => {
+                    tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
+                }
+            }
         }
     }
 

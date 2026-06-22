@@ -2440,6 +2440,7 @@ dependencies = [
 name = "pendrake-ffi"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "pendrake-core",
  "thiserror 1.0.69",
  "uniffi",

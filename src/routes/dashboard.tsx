@@ -12,7 +12,6 @@ import {
   athStanding,
   balanceHistory,
   formatEta,
-  formatHeight,
   formatZec,
   isSynced,
   totalConfirmed,
@@ -29,12 +28,6 @@ export function DashboardPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <h1 className="font-heading text-xl font-bold">Wallet</h1>
-        <span className="text-sm text-zinc-400 tabular-nums">
-          Block height {formatHeight(sync)}
-        </span>
-      </div>
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
           Can't reach the background process: {error}

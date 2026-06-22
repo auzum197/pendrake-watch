@@ -19,19 +19,39 @@ pub enum FfiError {
     Start(String),
 }
 
+/// Raised by the Swift notifier when the OS rejects a notification, so the engine
+/// can leave the txid unmarked and retry it later.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum NotifyError {
+    #[error("{message}")]
+    Failed { message: String },
+}
+
+/// uniffi routes a marshalling failure on a callback call through the method's
+/// error type, so it needs this conversion.
+impl From<uniffi::UnexpectedUniFFICallbackError> for NotifyError {
+    fn from(e: uniffi::UnexpectedUniFFICallbackError) -> Self {
+        NotifyError::Failed {
+            message: e.to_string(),
+        }
+    }
+}
+
 /// Implemented in Swift. The engine calls this from a runtime thread, which is
-/// fine for `UNUserNotificationCenter.add`.
+/// fine for `UNUserNotificationCenter.add`. It returns the delivery outcome so the
+/// engine only records a transaction as notified once the OS accepted it.
 #[uniffi::export(callback_interface)]
 pub trait FfiNotifier: Send + Sync {
-    fn notify(&self, title: String, body: String, deep_link: String);
+    fn notify(&self, title: String, body: String, deep_link: String) -> Result<(), NotifyError>;
 }
 
 struct NotifierAdapter(Box<dyn FfiNotifier>);
 
 impl Notifier for NotifierAdapter {
-    fn notify(&self, title: &str, body: &str, deep_link: &str) {
+    fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
         self.0
-            .notify(title.to_string(), body.to_string(), deep_link.to_string());
+            .notify(title.to_string(), body.to_string(), deep_link.to_string())
+            .map_err(anyhow::Error::new)
     }
 }
 
