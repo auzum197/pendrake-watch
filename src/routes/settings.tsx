@@ -44,6 +44,18 @@ export function SettingsPage() {
             </span>
           </div>
         </div>
+
+        {wallet?.exists && (
+          // The block the daemon's resolver settled the import choice into and
+          // scans from (docs/adr/0002). The height is what's actually loaded,
+          // whether the user gave a date, a height, or left it blank.
+          <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-4">
+            <span className="text-sm text-zinc-500">Birthday</span>
+            <span className="font-mono text-sm text-zinc-700">
+              Block {wallet.birthdayHeight.toLocaleString()}
+            </span>
+          </div>
+        )}
       </section>
 
       {wallet?.exists && (

@@ -1,0 +1,66 @@
+/* react-day-picker animates a month change by adding a single class token to the
+   caption and weeks via classList.add/remove, which reject space-separated strings,
+   so each state has to be one class (not a stack of Tailwind utilities). The new
+   month enters from the side it travels toward; the old one leaves the opposite way.
+   The curve is the inlined --ease-out-soft (@theme inline doesn't emit it on :root). */
+
+@keyframes birthday-cal-enter-right {
+	from {
+		opacity: 0;
+		transform: translateX(1.5rem);
+	}
+}
+@keyframes birthday-cal-enter-left {
+	from {
+		opacity: 0;
+		transform: translateX(-1.5rem);
+	}
+}
+@keyframes birthday-cal-exit-left {
+	to {
+		opacity: 0;
+		transform: translateX(-1.5rem);
+	}
+}
+@keyframes birthday-cal-exit-right {
+	to {
+		opacity: 0;
+		transform: translateX(1.5rem);
+	}
+}
+@keyframes birthday-cal-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+@keyframes birthday-cal-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+
+.birthday-cal-after-enter {
+	animation: birthday-cal-enter-right 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.birthday-cal-before-enter {
+	animation: birthday-cal-enter-left 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.birthday-cal-before-exit {
+	animation: birthday-cal-exit-left 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.birthday-cal-after-exit {
+	animation: birthday-cal-exit-right 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Drop the sideways travel but keep a fade, which still fires the animationend that
+   react-day-picker waits on to tear the old month down. */
+@media (prefers-reduced-motion: reduce) {
+	.birthday-cal-after-enter,
+	.birthday-cal-before-enter {
+		animation: birthday-cal-fade-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	.birthday-cal-after-exit,
+	.birthday-cal-before-exit {
+		animation: birthday-cal-fade-out 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+	}
+}

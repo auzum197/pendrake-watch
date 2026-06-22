@@ -308,7 +308,9 @@ async fn request(method: &str, params: Value) -> Result<Value, String> {
 #[tauri::command]
 async fn import_ufvk(
     ufvk: String,
-    birthday: u32,
+    // The user's raw Birthday choice (a tagged height/date/default). The daemon's
+    // resolver settles it into a height, so the bridge just forwards it (AUZ-95).
+    birthday: Value,
     indexer_uri: String,
     network: String,
     passphrase: Option<String>,
