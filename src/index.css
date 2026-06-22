@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/noto-sans";
 @import "@fontsource-variable/manrope";
+@import "@fontsource-variable/nunito-sans";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -79,7 +80,7 @@
 
 @theme inline {
     --font-sans: 'Noto Sans Variable', sans-serif;
-    --font-heading: 'Manrope Variable', sans-serif;
+    --font-heading: 'Nunito Sans Variable', sans-serif;
     /* Strong ease-out for reveals and entrances, punchier than the built-ins. */
     --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
     /* Pendrake brand palette, lifted from the designer's frames. Used by the

@@ -177,6 +177,19 @@ describe("balanceHistory", () => {
     expect(points[points.length - 1].value).toBe(1.5);
   });
 
+  it("yields a leading and a transaction point for a single transaction", () => {
+    const txs = [
+      tx({ datetime: 1000, kind: "received", valueZat: String(2 * ZEC) }),
+    ];
+    const points = balanceHistory(txs, orchard(2 * ZEC));
+
+    // The leading point holds the balance before the only transaction, which then
+    // steps up to the live total. Both share its time, so the chart falls back to
+    // even spacing rather than collapsing onto one x.
+    expect(points.map((p) => p.value)).toEqual([0, 2]);
+    expect(points.map((p) => p.t)).toEqual([1000, 1000]);
+  });
+
   it("sorts by time and ignores pending transactions", () => {
     const txs = [
       tx({ datetime: 2000, kind: "sent", valueZat: String(ZEC / 2) }),
