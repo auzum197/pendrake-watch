@@ -3,7 +3,7 @@ name = "pendrake-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Pendrake engine: zingolib watch-only wallet construction and wallet-file lifecycle."
+description = "Pendrake core: zingolib watch-only wallet construction and wallet-file lifecycle."
 
 [dependencies]
 pendrake-ipc = { path = "../pendrake-ipc" }

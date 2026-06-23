@@ -1,4 +1,4 @@
-//! The wallet engine: sole owner of the zingolib wallet file.
+//! The wallet service: sole owner of the zingolib wallet file.
 //!
 //! It builds a watch-only wallet from a UFVK, persists it, and runs a sync loop
 //! driven by pepper-sync's event stream. Each scanned batch advances a live
@@ -66,7 +66,7 @@ const EVENT_CAPACITY: usize = 256;
 /// treating a candidate server as unreachable.
 const INDEXER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
-pub struct Engine {
+pub struct WalletService {
     paths: Paths,
     notifier: Arc<dyn Notifier>,
     client: Mutex<Option<LightClient>>,
@@ -314,13 +314,13 @@ fn allowed_while_locked(method: &str) -> bool {
     )
 }
 
-impl Engine {
-    /// Build the engine, loading and resuming sync for an existing wallet.
+impl WalletService {
+    /// Build the service, loading and resuming sync for an existing wallet.
     pub async fn load(paths: Paths, notifier: Arc<dyn Notifier>) -> Result<Arc<Self>> {
         paths.ensure_dirs()?;
         let seen = load_notified(&paths.notified_file);
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
-        let engine = Arc::new(Self {
+        let service = Arc::new(Self {
             notifier,
             client: Mutex::new(None),
             meta: RwLock::new(None),
@@ -339,17 +339,17 @@ impl Engine {
             paths,
         });
 
-        if let Some(meta) = Meta::load(&engine.paths.meta_file)? {
-            engine.encrypted.store(meta.encrypted, Ordering::SeqCst);
+        if let Some(meta) = Meta::load(&service.paths.meta_file)? {
+            service.encrypted.store(meta.encrypted, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
                 // which loads the client and starts sync.
                 tracing::info!("encrypted wallet on disk, waiting for unlock");
-                engine.session_locked.store(true, Ordering::SeqCst);
-                *engine.meta.write().await = Some(meta);
+                service.session_locked.store(true, Ordering::SeqCst);
+                *service.meta.write().await = Some(meta);
             } else {
-                let config = engine.client_config(
+                let config = service.client_config(
                     chain_of(meta.network),
                     &meta.indexer_uri,
                     WalletConfig::Read,
@@ -360,21 +360,21 @@ impl Engine {
                         // Persist scanned data as sync advances, so a restart resumes
                         // from the saved height instead of rescanning from birthday.
                         client.save_task().await;
-                        *engine.client.lock().await = Some(client);
-                        *engine.meta.write().await = Some(meta);
+                        *service.client.lock().await = Some(client);
+                        *service.meta.write().await = Some(meta);
                         // Prime the read cache before the sync loop starts contending
                         // for the wallet, so the GUI's opening queries are instant.
-                        engine.refresh_snapshot().await;
+                        service.refresh_snapshot().await;
                         // Reflect "syncing" right away instead of the default idle,
                         // so the GUI doesn't flash "Synced" before the first round.
-                        engine.sync.write().await.state = SyncState::Syncing;
-                        engine.spawn_sync_loop();
+                        service.sync.write().await.state = SyncState::Syncing;
+                        service.spawn_sync_loop();
                     }
                     Err(e) => tracing::warn!("meta present but wallet load failed: {e}"),
                 }
             }
         }
-        Ok(engine)
+        Ok(service)
     }
 
     pub async fn handle(
@@ -448,7 +448,7 @@ impl Engine {
                 self.remove(args.keep_session).await?;
                 Ok(serde_json::Value::Null)
             }
-            // The push stream is wired up by the IPC layer, so the engine just acks.
+            // The push stream is wired up by the IPC layer, so the service just acks.
             "subscribeEvents" => Ok(serde_json::Value::Null),
             other => Err(anyhow!("unknown method: {other}")),
         }
@@ -797,9 +797,9 @@ impl Engine {
     }
 
     fn spawn_sync_loop(self: &Arc<Self>) {
-        let engine = Arc::clone(self);
-        let generation = engine.generation.load(Ordering::SeqCst);
-        tokio::spawn(async move { engine.run_sync_loop(generation).await });
+        let service = Arc::clone(self);
+        let generation = service.generation.load(Ordering::SeqCst);
+        tokio::spawn(async move { service.run_sync_loop(generation).await });
     }
 
     async fn run_sync_loop(self: Arc<Self>, generation: u64) {
@@ -1489,35 +1489,35 @@ mod tests {
 
     #[tokio::test]
     async fn verify_passphrase_checks_the_held_session_passphrase() {
-        let engine = Engine::load(test_paths("verify"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("verify"), Arc::new(NullNotifier))
             .await
             .unwrap();
         // Nothing held (cold daemon): every guess is rejected.
-        assert!(!engine.verify_passphrase("anything").await);
+        assert!(!service.verify_passphrase("anything").await);
 
-        *engine.session_passphrase.lock().await = Some("correct horse".into());
-        assert!(engine.verify_passphrase("correct horse").await);
-        assert!(!engine.verify_passphrase("wrong").await);
+        *service.session_passphrase.lock().await = Some("correct horse".into());
+        assert!(service.verify_passphrase("correct horse").await);
+        assert!(!service.verify_passphrase("wrong").await);
     }
 
     #[tokio::test]
     async fn remove_keeps_the_session_passphrase_only_for_replace() {
-        let engine = Engine::load(test_paths("remove"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("remove"), Arc::new(NullNotifier))
             .await
             .unwrap();
 
         // Replace (keep_session) retains it, so onboarding can skip Set Password.
-        *engine.session_passphrase.lock().await = Some("pw".into());
-        engine.remove(true).await.unwrap();
+        *service.session_passphrase.lock().await = Some("pw".into());
+        service.remove(true).await.unwrap();
         assert_eq!(
-            engine.session_passphrase.lock().await.as_deref(),
+            service.session_passphrase.lock().await.as_deref(),
             Some("pw")
         );
-        assert!(engine.verify_passphrase("pw").await);
+        assert!(service.verify_passphrase("pw").await);
 
         // Start over drops it, so onboarding asks for a new passphrase.
-        engine.remove(false).await.unwrap();
-        assert!(engine.session_passphrase.lock().await.is_none());
+        service.remove(false).await.unwrap();
+        assert!(service.session_passphrase.lock().await.is_none());
     }
 
     #[test]
@@ -1548,65 +1548,65 @@ mod tests {
 
     #[tokio::test]
     async fn lock_session_arms_gate_but_keeps_the_session_key() {
-        let engine = Engine::load(test_paths("lock-session"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("lock-session"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        *engine.session_passphrase.lock().await = Some("pw".into());
-        engine.session_locked.store(false, Ordering::SeqCst);
+        *service.session_passphrase.lock().await = Some("pw".into());
+        service.session_locked.store(false, Ordering::SeqCst);
 
-        engine.lock_session();
+        service.lock_session();
 
-        assert!(engine.session_locked());
+        assert!(service.session_locked());
         // The key is retained so background sync survives the lock.
-        assert!(engine.session_passphrase.lock().await.is_some());
+        assert!(service.session_passphrase.lock().await.is_some());
     }
 
     #[tokio::test]
     async fn handle_gates_wallet_reads_while_locked() {
-        let engine = Engine::load(test_paths("gate"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("gate"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        engine.session_locked.store(true, Ordering::SeqCst);
+        service.session_locked.store(true, Ordering::SeqCst);
 
         // Lifecycle and auth stay available so the GUI can route and re-authenticate.
-        assert!(engine.handle("getWalletState", Value::Null).await.is_ok());
-        assert!(engine.handle("lock", Value::Null).await.is_ok());
+        assert!(service.handle("getWalletState", Value::Null).await.is_ok());
+        assert!(service.handle("lock", Value::Null).await.is_ok());
 
         // Wallet reads are refused while the session is locked.
-        assert!(engine.handle("getBalance", Value::Null).await.is_err());
-        assert!(engine.handle("getTransactions", Value::Null).await.is_err());
-        assert!(engine.handle("getAddresses", Value::Null).await.is_err());
+        assert!(service.handle("getBalance", Value::Null).await.is_err());
+        assert!(service.handle("getTransactions", Value::Null).await.is_err());
+        assert!(service.handle("getAddresses", Value::Null).await.is_err());
     }
 
     #[tokio::test]
     async fn last_subscriber_relocks_an_encrypted_session_only() {
-        let engine = Engine::load(test_paths("relock-enc"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("relock-enc"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        engine.encrypted.store(true, Ordering::SeqCst);
-        engine.session_locked.store(false, Ordering::SeqCst);
+        service.encrypted.store(true, Ordering::SeqCst);
+        service.session_locked.store(false, Ordering::SeqCst);
 
         // Two feeds: the first to leave is not the last, so it must not relock.
-        engine.subscriber_joined();
-        engine.subscriber_joined();
-        engine.subscriber_left();
-        assert!(!engine.session_locked());
+        service.subscriber_joined();
+        service.subscriber_joined();
+        service.subscriber_left();
+        assert!(!service.session_locked());
         // The last one out relocks, so the next GUI session re-authenticates.
-        engine.subscriber_left();
-        assert!(engine.session_locked());
+        service.subscriber_left();
+        assert!(service.session_locked());
     }
 
     #[tokio::test]
     async fn last_subscriber_does_not_relock_a_plaintext_session() {
-        let engine = Engine::load(test_paths("relock-plain"), Arc::new(NullNotifier))
+        let service = WalletService::load(test_paths("relock-plain"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        engine.encrypted.store(false, Ordering::SeqCst);
-        engine.session_locked.store(false, Ordering::SeqCst);
+        service.encrypted.store(false, Ordering::SeqCst);
+        service.session_locked.store(false, Ordering::SeqCst);
 
-        engine.subscriber_joined();
-        engine.subscriber_left();
+        service.subscriber_joined();
+        service.subscriber_left();
         // A plaintext wallet has no passphrase to demand, so it stays open.
-        assert!(!engine.session_locked());
+        assert!(!service.session_locked());
     }
 }

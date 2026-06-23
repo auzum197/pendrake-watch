@@ -8,4 +8,4 @@ The obvious shortcut is the library's `recovery_recommendation()`, whose `Server
 
 ## Consequences
 
-The classifier (`is_unreachable` in `crates/pendrake-core/src/engine.rs`) must be kept in sync with pepper-sync's `ServerError` variants by hand: a future variant that represents a genuine transport failure won't trip the flag until it's added to the match. That trade is deliberate, since the cost of a false positive (a useless CTA) is worse than a missed one (a generic error message). A future reader tempted to "simplify" this by calling `recovery_recommendation()` should not: see above.
+The classifier (`is_unreachable` in `crates/pendrake-core/src/wallet_service.rs`) must be kept in sync with pepper-sync's `ServerError` variants by hand: a future variant that represents a genuine transport failure won't trip the flag until it's added to the match. That trade is deliberate, since the cost of a false positive (a useless CTA) is worse than a missed one (a generic error message). A future reader tempted to "simplify" this by calling `recovery_recommendation()` should not: see above.
