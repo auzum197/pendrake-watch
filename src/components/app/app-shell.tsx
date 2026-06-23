@@ -8,7 +8,7 @@ import {
   IconShieldCheckFilled,
   IconWallet,
 } from "@tabler/icons-react";
-import type { SyncStatus, WalletState } from "@/lib/ipc";
+import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
 import { syncLabel } from "@/lib/format";
 
 type Section = "wallet" | "activity" | "settings";
@@ -110,7 +110,12 @@ function AppSidebar({
         <NavItem
           icon={<IconLock className="size-4" />}
           label="Sign Out"
-          onClick={() => navigate({ to: "/unlock" })}
+          onClick={async () => {
+            // Lock the daemon session (the wallet stays open and syncing), then show
+            // the unlock screen. Re-entry needs the real passphrase.
+            await lock();
+            navigate({ to: "/unlock" });
+          }}
         />
       </nav>
     </aside>
