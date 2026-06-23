@@ -1025,18 +1025,22 @@ impl Engine {
             received,
         });
 
-        // ADR-0006: during the Initial scan (synced_height below the import-pinned
-        // target) a detection is recorded silently; once live, each freshly seen txid
-        // notifies.
-        let live = {
-            let synced = self.sync.read().await.synced_height;
-            let target = self
-                .meta
-                .read()
-                .await
-                .as_ref()
-                .map_or(0, |m| m.scan_target_height);
-            synced >= target
+        // ADR-0006: a transaction inside the pinned Initial-scan range [birthday, N]
+        // is historical and stays silent; one at or past N, or still in the mempool,
+        // is post-import activity and notifies. Gating on the transaction's own height
+        // rather than synced_height is robust to pepper-sync's tip-first scan, which
+        // pushes synced_height past N before the older blocks are walked, so a stale
+        // transaction found after the jump would otherwise notify.
+        let target = self
+            .meta
+            .read()
+            .await
+            .as_ref()
+            .map_or(0, |m| m.scan_target_height);
+        let live = if summary.status.is_confirmed() {
+            u32::from(summary.blockheight) >= target
+        } else {
+            true
         };
         if let Disposition::Notify = self.notify.classify(&txid, live) {
             let amount = format_amount(summary.value);
