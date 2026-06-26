@@ -29,9 +29,17 @@ export type WalletAddress = {
 	transparent?: string;
 };
 
+// The user's raw Birthday choice. The daemon's resolver turns it into a starting
+// height (mirrors pendrake-ipc BirthdayInput), so the GUI never pre-resolves. A
+// date is unix seconds for midnight UTC of the picked day, mainnet only.
+export type BirthdayInput =
+	| { kind: "height"; value: number }
+	| { kind: "date"; value: number }
+	| { kind: "default" };
+
 export type ImportUfvkInput = {
 	ufvk: string;
-	birthday: number;
+	birthday: BirthdayInput;
 	indexerUri: string;
 	network: Network;
 	// Omitted on a post-Replace import: the daemon reuses the held session passphrase.
@@ -146,6 +154,12 @@ export function parseUfvk(ufvk: string): Promise<ParseUfvkResult> {
 // Open an encrypted wallet on this run. Rejects when the passphrase is wrong.
 export function unlock(passphrase: string): Promise<WalletState> {
 	return invoke("unlock", { passphrase });
+}
+
+// Lock the GUI session. The daemon keeps the wallet open and syncing; re-entry needs
+// the passphrase. Sign Out calls this.
+export function lock(): Promise<void> {
+	return invoke("lock");
 }
 
 // Point the Wallet at a different Indexer. The daemon connects to the new server

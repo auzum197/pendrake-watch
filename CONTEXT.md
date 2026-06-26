@@ -60,8 +60,16 @@ The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wal
 _Avoid_: server, endpoint, node
 
 **Passphrase**:
-The single secret set during onboarding. It encrypts every Wallet file at rest and gates the UI: the app is locked until the daemon is given the passphrase for the session. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
+The single secret set during onboarding. It encrypts every Wallet file at rest, and re-entering it is what clears the Session lock. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a full restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
 _Avoid_: password, PIN
+
+**Session lock**:
+The gate that holds the app on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether the Wallet is syncing: background sync and notifications keep running while locked, so a Sign Out or a closed window still catches new transactions. It arms at startup, on Sign Out, and when the app's window goes away, and is cleared only by entering the Passphrase.
+_Avoid_: logout, timeout, screen lock
+
+**Sign Out**:
+Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while the Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
+_Avoid_: log out, lock
 
 **Remove**:
 The wipe of a single Wallet and its state. Not a v0 user action: v0 exposes only Replace (swap the Wallet, in Settings) and Start over (wipe after a lost Passphrase, on the unlock screen), both named for what the user ends with rather than for the deletion, and both sharing this wipe underneath. Remove surfaces as its own action with multi-key, where a Wallet list takes one Wallet out and the others remain.
@@ -74,3 +82,11 @@ _Avoid_: switch, change, swap
 **Start over**:
 The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Remove, which takes one Wallet out with the Passphrase known.
 _Avoid_: reset, wipe
+
+**Span**:
+The selectable time window of the balance chart: ALL, 1 year, 1 month, or 1 week. A Span is always anchored at today and reaches back, so the balance carries flat to the present edge whether or not a recent transaction exists. ALL runs from the first transaction to today. Distinct from the block ranges pepper-sync scans, which is why it is not called a range.
+_Avoid_: range, window, period, timeframe
+
+**Fiat value**:
+A Wallet's balance expressed in a fiat currency (USD in v0), its balance marked against the ZEC price. The spot Fiat value uses the current price. Over a Span it is marked daily against historical prices, so it moves with the market even while the balance holds still. Always additive to the ZEC figure, never a replacement: a Wallet's balance is denominated in ZEC first, and the ZEC view always renders even when no price is available.
+_Avoid_: fiat-equivalent, worth, valuation, USD value (as the concept name)

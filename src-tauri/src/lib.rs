@@ -308,7 +308,9 @@ async fn request(method: &str, params: Value) -> Result<Value, String> {
 #[tauri::command]
 async fn import_ufvk(
     ufvk: String,
-    birthday: u32,
+    // The user's raw Birthday choice (a tagged height/date/default). The daemon's
+    // resolver settles it into a height, so the bridge just forwards it (AUZ-95).
+    birthday: Value,
     indexer_uri: String,
     network: String,
     passphrase: Option<String>,
@@ -335,6 +337,13 @@ async fn parse_ufvk(ufvk: String) -> Result<Value, String> {
 #[tauri::command]
 async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
+}
+
+/// Lock the GUI session. The daemon keeps the wallet open and syncing, but the next
+/// session must re-enter the passphrase. Sign Out calls this.
+#[tauri::command]
+async fn lock() -> Result<Value, String> {
+    request("lock", Value::Null).await
 }
 
 /// Retarget the running Wallet at a different Indexer. The daemon connects to the
@@ -456,6 +465,7 @@ pub fn run() {
             import_ufvk,
             parse_ufvk,
             unlock,
+            lock,
             set_indexer,
             verify_passphrase,
             get_wallet_state,

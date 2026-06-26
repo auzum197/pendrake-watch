@@ -29,7 +29,7 @@ the window leaves the background process running.
 | Host | Platforms | Notifications | Rebuild after an engine change |
 | --- | --- | --- | --- |
 | `pendraked` | Linux, Windows, macOS dev | a click opens the `pendrake://` deep link on Linux and Windows | `just daemon` |
-| `PendrakeSync.app` | macOS | clickable, opens the `pendrake://` deep link | `just helper` |
+| `PendrakeSync.app` | macOS | clickable, opens the `pendrake://` deep link | `just macos helper` |
 
 So `pendrake-daemon` is not obsolete now that macOS prefers the app. It remains the
 production daemon on Linux and Windows, and the fast host for engine work on macOS.
@@ -109,19 +109,36 @@ UFVK import. Start over loses the passphrase, so onboarding shows Set Password a
 The committed `crates/Cargo.lock` is required. A yanked transitive dependency only
 resolves through it, so leave it in place.
 
-## Running it
+## Usage
 
-From the repo root:
+From the repo root, install the dependencies and start the app with hot reload:
 
 ```
 just install
 just dev
 ```
 
-`just dev` builds the release daemon and launches the GUI with hot reload, pinned
-to that freshly-built `pendraked` so it runs the engine you are editing. The daemon
-does the heavy scanning, so it is built release. Run `just` on its own to see every
-task.
+`just dev` builds the release daemon and launches the GUI pinned to that
+freshly-built `pendraked`, so it runs the engine you are editing. The daemon does
+the heavy scanning, so it is built release.
+
+Tasks live in the `justfile`. Cross-platform ones run by name. Platform-specific
+ones live in modules you call as `just <platform> <task>`:
+
+| Task | What it does |
+| --- | --- |
+| `just dev` | GUI with hot reload against the release daemon |
+| `just daemon` | Build the `pendraked` daemon |
+| `just check` | Typecheck the frontend and build both Rust workspaces |
+| `just fmt` | Format the Rust code |
+| `just package` | Build release and bundle the installers |
+| `just macos run` | macOS production run: builds the Swift helper, opens the app |
+| `just linux run`, `just windows run` | Production run on Linux or Windows |
+| `just macos stop`, `just linux stop`, `just windows stop` | Stop that platform's background daemons |
+
+Every platform module loads on every host, so you can invoke another OS's task
+from yours, though it will not do anything useful there. Run `just` on its own to
+list everything, including the per-platform tasks.
 
 ## macOS
 
@@ -132,15 +149,15 @@ notifications appear, but clicking them does nothing, because a loose binary can
 drive `UNUserNotificationCenter`.
 
 For clickable notifications that open the transaction screen, build the Swift
-helper with `just helper` (`just helper debug` for a faster Swift-only build). It
-compiles the embedded engine in release and bundles `PendrakeSync.app`. The GUI
-prefers a built `PendrakeSync.app` over the binary and logs which one it spawned.
-The app carries a frozen copy of the engine, so rerun `just helper` after any
-`pendrake-core` change. A missing feature or wrong notification data is usually a
-stale app.
+helper with `just macos helper` (`just macos helper debug` for a faster Swift-only
+build). It compiles the embedded engine in release and bundles `PendrakeSync.app`.
+The GUI prefers a built `PendrakeSync.app` over the binary and logs which one it
+spawned. The app carries a frozen copy of the engine, so rerun `just macos helper`
+after any `pendrake-core` change. A missing feature or wrong notification data is
+usually a stale app.
 
 Clicking a notification only opens the transaction screen on the registered app
-bundle, which is the installed app or `just run-prod` (it builds the helper and the
+bundle, which is the installed app or `just macos run` (it builds the helper and the
 `.app`, then runs both). Under `just dev` a click focuses the window but does not
 navigate, because the hot-reload binary is not the registered URL handler.
 

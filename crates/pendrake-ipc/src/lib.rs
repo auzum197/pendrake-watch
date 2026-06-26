@@ -151,11 +151,23 @@ pub enum ParseUfvkResult {
     Malformed { reason: String },
 }
 
+/// How the user chose a Wallet's Birthday at import. The daemon's resolver is the
+/// single source of truth that turns this into a starting block height, so the GUI
+/// sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only and
+/// carries unix seconds for midnight UTC of the picked day; `Default` is blank.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", content = "value", rename_all = "lowercase")]
+pub enum BirthdayInput {
+    Height(u32),
+    Date(i64),
+    Default,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportUfvkArgs {
     pub ufvk: String,
-    pub birthday: u32,
+    pub birthday: BirthdayInput,
     pub indexer_uri: String,
     pub network: Network,
     /// Global passphrase that encrypts the wallet at rest (docs/adr/0003). It is
@@ -424,4 +436,43 @@ pub struct Tx {
     /// The transaction's outputs the Wallet can see, both directions, carried so
     /// the GUI can show per-note Pool/value/memo and the has-memo indicator.
     pub notes: Vec<Note>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The wire shape the GUI's BirthdayInput and the Tauri passthrough produce. A
+    // drift here breaks import silently, so pin all three arms.
+    #[test]
+    fn birthday_input_wire_shape() {
+        let cases = [
+            (
+                BirthdayInput::Height(12345),
+                r#"{"kind":"height","value":12345}"#,
+            ),
+            (
+                BirthdayInput::Date(1_700_000_000),
+                r#"{"kind":"date","value":1700000000}"#,
+            ),
+            (BirthdayInput::Default, r#"{"kind":"default"}"#),
+        ];
+        for (value, json) in cases {
+            assert_eq!(serde_json::to_string(&value).unwrap(), json);
+            assert_eq!(serde_json::from_str::<BirthdayInput>(json).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn import_args_carry_tagged_birthday() {
+        let json = r#"{
+            "ufvk": "uview1...",
+            "birthday": { "kind": "date", "value": 1700000000 },
+            "indexerUri": "https://zec.rocks:443",
+            "network": "mainnet"
+        }"#;
+        let args: ImportUfvkArgs = serde_json::from_str(json).unwrap();
+        assert_eq!(args.birthday, BirthdayInput::Date(1_700_000_000));
+        assert!(args.passphrase.is_none());
+    }
 }
