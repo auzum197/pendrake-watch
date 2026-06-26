@@ -1,6 +1,6 @@
 //! Pendrake background daemon, the `pendraked` binary (Linux and Windows).
 //!
-//! Supplies a desktop `Notifier`, starts the shared engine via
+//! Supplies a desktop `Notifier`, starts the shared service via
 //! `pendrake_core::run`, and parks. macOS uses the Swift helper instead.
 //!
 //! Usage:

@@ -3,12 +3,12 @@ import UserNotifications
 
 // Background-only helper (LSUIElement): no Dock icon, still a GUI-session app so
 // it can post notifications and own a notification delegate. It runs the Pendrake
-// engine in-process via the uniffi `start` call and posts a notification for each
-// engine event. Clicking one opens the pendrake:// deep link, which launches or
+// service in-process via the uniffi `start` call and posts a notification for each
+// service event. Clicking one opens the pendrake:// deep link, which launches or
 // focuses the main Tauri app.
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    private var handle: EngineHandle?
+    private var handle: ServiceHandle?
 
     static func main() {
         let app = NSApplication.shared
@@ -27,11 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         do {
             handle = try start(config: Config(dataDir: nil), notifier: SwiftNotifier())
-            NSLog("pendrake-sync: engine started")
+            NSLog("pendrake-sync: service started")
         } catch {
             // Sync still mattered less than the GUI working; log and stay alive so
             // a later relaunch can retry, but there's nothing to notify about.
-            NSLog("pendrake-sync: engine start failed: \(error)")
+            NSLog("pendrake-sync: service start failed: \(error)")
         }
     }
 

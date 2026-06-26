@@ -1,12 +1,12 @@
-//! The notification boundary. The engine decides *when* to notify and with what
+//! The notification boundary. The service decides *when* to notify and with what
 //! text and deep link; each platform supplies *how* the OS delivers it. Keeping
-//! the engine free of OS notification APIs is what lets the same core run behind
+//! the service free of OS notification APIs is what lets the same core run behind
 //! a Rust daemon, a Swift helper, or a test double.
 
 /// Delivers a user-visible notification carrying a `pendrake://` deep link the
 /// GUI can open. Click-to-open routing is wired per platform in a later milestone.
 ///
-/// `notify` returns the delivery outcome so the engine only records a transaction
+/// `notify` returns the delivery outcome so the service only records a transaction
 /// as notified once it actually reached the OS. A failure leaves the txid eligible
 /// for a later retry instead of being silently lost.
 pub trait Notifier: Send + Sync {

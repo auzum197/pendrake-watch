@@ -23,6 +23,9 @@ export function AppLayout() {
   // to show. Guarded once here rather than in each page.
   useEffect(() => {
     if (loaded && wallet && !wallet.exists) navigate({ to: "/onboarding" });
+    // A locked session must re-authenticate before any signed-in screen renders. The
+    // daemon also refuses wallet reads while locked, so this is the UX, not the guard.
+    else if (loaded && wallet?.locked) navigate({ to: "/unlock" });
   }, [loaded, wallet, navigate]);
 
   return (

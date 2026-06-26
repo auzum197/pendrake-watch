@@ -14,7 +14,11 @@ run: helper stop
     open platform/macos/PendrakeSync/build/PendrakeSync.app
     open src-tauri/target/release/bundle/macos/pendrake-watch.app
 
-# Stop any background daemons.
+# Stop any background daemons and a surviving GUI. The GUI holds a
+# single-instance lock, so a leftover process from a previous session would make
+# `open` refocus stale code (talking to the daemon we just killed) instead of
+# launching the fresh build.
 stop:
+    -pkill -x pendrake-watch
     -pkill -x pendraked
     -pkill -f PendrakeSync.app

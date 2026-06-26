@@ -2,13 +2,14 @@ import { type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconActivity,
+  IconAlertTriangle,
   IconHelpCircle,
   IconLock,
   IconSettings,
   IconShieldCheckFilled,
   IconWallet,
 } from "@tabler/icons-react";
-import type { SyncStatus, WalletState } from "@/lib/ipc";
+import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
 import { syncLabel } from "@/lib/format";
 
 type Section = "wallet" | "activity" | "settings";
@@ -41,9 +42,33 @@ export function AppShell({
           data-scroll-restoration-id="app-main"
           className="app-content absolute inset-0 overflow-y-auto rounded-2xl"
         >
-          <div className="flex min-h-full flex-col gap-6 px-8 py-7">{children}</div>
+          <div className="flex min-h-full flex-col gap-6 px-8 py-7">
+            {/* The Indexer-unreachable CTA rides on every screen but Settings, where
+                the control to fix it already sits. */}
+            {sync?.unreachable && active !== "settings" && <UnreachableBanner />}
+            {children}
+          </div>
         </main>
       </div>
+    </div>
+  );
+}
+
+function UnreachableBanner() {
+  const navigate = useNavigate();
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+      <span className="flex items-center gap-2">
+        <IconAlertTriangle className="size-4 shrink-0" />
+        Can't reach your Indexer.
+      </span>
+      <button
+        type="button"
+        onClick={() => navigate({ to: "/settings", hash: "indexer" })}
+        className="shrink-0 font-medium underline-offset-2 hover:underline"
+      >
+        Change Indexer
+      </button>
     </div>
   );
 }
@@ -110,7 +135,12 @@ function AppSidebar({
         <NavItem
           icon={<IconLock className="size-4" />}
           label="Sign Out"
-          onClick={() => navigate({ to: "/unlock" })}
+          onClick={async () => {
+            // Lock the daemon session (the wallet stays open and syncing), then show
+            // the unlock screen. Re-entry needs the real passphrase.
+            await lock();
+            navigate({ to: "/unlock" });
+          }}
         />
       </nav>
     </aside>
