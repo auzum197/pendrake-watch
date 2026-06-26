@@ -4,7 +4,7 @@
 //! and a stable fingerprint, the moment the key validates. Testnet keys are
 //! rejected (Pendrake is mainnet and regtest only) and a malformed string gets a
 //! specific reason. This is the Rust-side derivation ADR-0002 calls for: the
-//! engine and the GUI read the network from the key, not from a client field.
+//! service and the GUI read the network from the key, not from a client field.
 
 use std::fmt::{self, Write};
 

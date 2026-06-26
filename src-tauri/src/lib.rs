@@ -1,7 +1,7 @@
 //! Tauri GUI backend: a thin client over the Pendrake daemon.
 //!
-//! The `pendraked` daemon owns the wallet file. This process never links the
-//! engine. It probes the daemon's local socket (a Unix socket on Unix, a named
+//! The `pendraked` daemon owns the wallet file. This process never links
+//! pendrake-core. It probes the daemon's local socket (a Unix socket on Unix, a named
 //! pipe on Windows), spawns it if nothing answers following the SPEC's
 //! probe-and-spawn rule, then forwards request and response JSON between the
 //! webview and the socket.
@@ -156,14 +156,14 @@ async fn connect() -> Result<Conn, std::io::Error> {
     }
 }
 
-/// Launch the background engine. On macOS an explicit override wins first
-/// (`PENDRAKE_SYNC_APP`, then `PENDRAKED_BIN`, which lets `just dev` pin the engine
+/// Launch the background service. On macOS an explicit override wins first
+/// (`PENDRAKE_SYNC_APP`, then `PENDRAKED_BIN`, which lets `just dev` pin the core
 /// you're editing), then a discovered Swift `PendrakeSync.app` (the only host that
 /// delivers clickable deep-linking notifications), then the `pendraked` binary. The
-/// app's embedded engine is frozen at the last `scripts/build-macos-helper.sh` run,
+/// app's embedded core is frozen at the last `scripts/build-macos-helper.sh` run,
 /// so we log when we spawn it to keep a stale app from silently standing in for a
 /// changed `pendrake-core`.
-fn spawn_engine() -> Result<(), String> {
+fn spawn_daemon() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         if let Some(app) = std::env::var_os("PENDRAKE_SYNC_APP")
@@ -177,7 +177,7 @@ fn spawn_engine() -> Result<(), String> {
         }
         if let Some(app) = pendrake_sync_app() {
             eprintln!(
-                "pendrake: launching {}. Its engine is only as current as your last \
+                "pendrake: launching {}. Its core is only as current as your last \
                  scripts/build-macos-helper.sh run, so rerun that after pendrake-core changes",
                 app.display()
             );
@@ -216,7 +216,7 @@ async fn ensure_daemon() -> Result<Conn, String> {
         return Ok(stream);
     }
 
-    spawn_engine()?;
+    spawn_daemon()?;
 
     for _ in 0..50 {
         tokio::time::sleep(Duration::from_millis(100)).await;

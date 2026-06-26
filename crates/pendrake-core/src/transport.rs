@@ -6,7 +6,7 @@
 //! the newline-JSON protocol above this layer never sees the difference.
 //!
 //! The GUI client mirrors [`endpoint`] without depending on this crate (it must not
-//! link the engine), so the derivation has to stay deterministic across binaries.
+//! link pendrake-core), so the derivation has to stay deterministic across binaries.
 //! That rules out `DefaultHasher`, hence the inline FNV-1a.
 
 use std::path::Path;
@@ -54,7 +54,7 @@ mod imp {
 
     impl Listener {
         pub fn bind(endpoint: &str) -> io::Result<Self> {
-            // A stale socket file blocks bind; the engine is single-instance.
+            // A stale socket file blocks bind; the service is single-instance.
             let _ = std::fs::remove_file(endpoint);
             Ok(Self(UnixListener::bind(endpoint)?))
         }
