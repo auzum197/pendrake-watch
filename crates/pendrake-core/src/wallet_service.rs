@@ -1006,6 +1006,12 @@ impl WalletService {
                     u64::from(already_scanned_sapling_outputs + already_scanned_orchard_outputs);
                 view.synced_height = u32::from(sync_start_height);
                 view.chain_tip = u32::from(tip);
+                // Arm the live edge from the round's true start, before any tip-first
+                // batch can push synced_height past N. The crossing then fires only
+                // when the scan reaches the tip at finalize, not mid-round.
+                let target = self.scan_target().await;
+                self.notify
+                    .seed_live(u32::from(sync_start_height), target);
                 view.in_flight.clear();
                 view.timing_log.clear();
                 view.aggregate_log.clear();
@@ -1147,12 +1153,7 @@ impl WalletService {
         // rather than synced_height is robust to pepper-sync's tip-first scan, which
         // pushes synced_height past N before the older blocks are walked, so a stale
         // transaction found after the jump would otherwise notify.
-        let target = self
-            .meta
-            .read()
-            .await
-            .as_ref()
-            .map_or(0, |m| m.scan_target_height);
+        let target = self.scan_target().await;
         let live = if summary.status.is_confirmed() {
             u32::from(summary.blockheight) >= target
         } else {
@@ -1223,7 +1224,6 @@ impl WalletService {
             guard.unreachable = false;
             guard.clone()
         };
-        self.announce_scan_complete(status.synced_height).await;
         let _ = self.events.send(SyncEvent::Progress {
             status,
             batches: view.batch_snapshot(),
@@ -1249,16 +1249,23 @@ impl WalletService {
         status
     }
 
-    /// Emit the one-time "scan finished" toast the first time `synced_height` reaches
-    /// the import-pinned target N (ADR-0006). A legacy wallet (no target, N = 0) reads
-    /// as always live and never fires.
-    async fn announce_scan_complete(&self, synced_height: u32) {
-        let target = self
-            .meta
+    /// The import-pinned Initial-scan boundary N (ADR-0006). A legacy wallet predating
+    /// the pin has no target, so N = 0 and the wallet reads as always live.
+    async fn scan_target(&self) -> u32 {
+        self.meta
             .read()
             .await
             .as_ref()
-            .map_or(0, |m| m.scan_target_height);
+            .map_or(0, |m| m.scan_target_height)
+    }
+
+    /// Emit the one-time "scan finished" toast. Called at the end of a round with the
+    /// height the scan actually reached, after [`NotificationPolicy::seed_live`] armed
+    /// the edge at round start. Driving it off the seeded start and the true end height
+    /// keeps a tip-first scan that races `synced_height` past N mid-round from firing
+    /// early. A wallet that began at or past N was seeded live and never fires.
+    async fn announce_scan_complete(&self, synced_height: u32) {
+        let target = self.scan_target().await;
         if self.notify.crossed_to_live(synced_height, target) {
             let _ = self.notifier.notify(
                 "Wallet ready",

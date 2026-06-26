@@ -66,6 +66,19 @@ impl NotificationPolicy {
         }
     }
 
+    /// Seed the live edge from the round's start height, before any scanning moves
+    /// it. Only the first seed of a run takes; later seeds and the crossing checks
+    /// leave it alone. Seeding from the start is what stops pepper-sync's tip-first
+    /// scan from firing the crossing early: judged against the true start, a wallet
+    /// that began behind the target stays not-yet-live until the scan reaches the
+    /// tip, instead of the moment `synced_height` first races past N.
+    pub fn seed_live(&self, synced_height: u32, target: u32) {
+        let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
+        if live.is_none() {
+            *live = Some(synced_height >= target);
+        }
+    }
+
     /// True exactly once, when `synced_height` first reaches `target` this run. A run
     /// that starts already at or past `target` is already live, so it never fires.
     pub fn crossed_to_live(&self, synced_height: u32, target: u32) -> bool {
@@ -171,6 +184,32 @@ mod tests {
         let p = policy("already-live");
         // A restart resuming already live: the first reading initializes without firing.
         assert!(!p.crossed_to_live(150, 100));
+        assert!(!p.crossed_to_live(160, 100));
+    }
+
+    #[test]
+    fn seeded_behind_then_fires_once_at_completion() {
+        let p = policy("seed-behind");
+        // Seeded from the round's true start (below target), so the only crossing
+        // check, run at completion when the scan reached the tip, fires once.
+        p.seed_live(80, 100);
+        assert!(p.crossed_to_live(120, 100));
+        assert!(!p.crossed_to_live(120, 100));
+    }
+
+    #[test]
+    fn without_a_seed_a_completion_only_check_never_fires() {
+        let p = policy("no-seed");
+        // The first reading only initializes (the None-init), so a crossing observed
+        // solely at completion would be missed. Seeding at round start is what arms it.
+        assert!(!p.crossed_to_live(120, 100));
+    }
+
+    #[test]
+    fn seeding_at_or_past_target_never_fires() {
+        let p = policy("seed-live");
+        // A restart that resumes already caught up seeds live and stays quiet.
+        p.seed_live(150, 100);
         assert!(!p.crossed_to_live(160, 100));
     }
 
