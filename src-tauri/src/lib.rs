@@ -102,13 +102,19 @@ fn daemon_bin() -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn pendrake_sync_app() -> Option<PathBuf> {
-    [
-        "platform/macos/PendrakeSync/build/PendrakeSync.app",
-        "../platform/macos/PendrakeSync/build/PendrakeSync.app",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .find(|p| p.exists())
+    const REL: &str = "platform/macos/PendrakeSync/build/PendrakeSync.app";
+    // Resolve from the GUI binary, not the working directory: `just macos run`
+    // launches the bundle through `open`, which gives it CWD `/`, so CWD-relative
+    // probing never finds the helper and the daemon fallback (an unclickable
+    // pendraked toast) wins. Walking the binary's ancestors finds the repo helper
+    // whether the GUI runs from `tauri dev` (src-tauri/target/<profile>/) or the
+    // bundle it's nested several levels deeper in.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(app) = exe.ancestors().map(|dir| dir.join(REL)).find(|p| p.exists()) {
+            return Some(app);
+        }
+    }
+    PathBuf::from(REL).exists().then(|| PathBuf::from(REL))
 }
 
 fn spawn_bin(bin: &PathBuf) -> Result<(), String> {

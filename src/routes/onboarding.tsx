@@ -313,13 +313,12 @@ function ImportStep({
 								<IconInfoCircle className="size-4" />
 							</PopoverTrigger>
 							<PopoverContent className="w-80 border-ink-line bg-[#161618] text-white">
-								<p className="text-sm font-semibold uppercase tracking-wide">
+								<p className="text-sm font-semibold tracking-wide">
 									Unified Full Viewing Key
 								</p>
 								<p className="mt-1.5 text-xs leading-relaxed text-white/55">
-									A UFVK lets the wallet watch your balance and history without
-									any spending key. Pasting it creates a watch-only wallet, so
-									no funds can ever move from here.
+									A UFVK allows you to watch your wallet's balance without
+									holding any spending authority over it.
 								</p>
 							</PopoverContent>
 						</Popover>

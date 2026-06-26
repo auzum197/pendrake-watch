@@ -66,6 +66,12 @@ pub struct Meta {
     pub import_type: ImportType,
     pub view_mode: ViewMode,
     pub birthday_height: u32,
+    /// ADR-0006: the chain tip pinned at import, the end of the Initial scan. While
+    /// `synced_height` is below it, detections are silent. Defaults 0 for a wallet
+    /// imported before this existed, so it reads as already-live and always notifies,
+    /// matching the prior behavior.
+    #[serde(default)]
+    pub scan_target_height: u32,
     /// Whether the wallet file is encrypted at rest. Defaults false so a wallet
     /// imported before encryption existed still loads as plaintext.
     #[serde(default)]
