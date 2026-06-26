@@ -83,6 +83,10 @@ pub struct WalletService {
     /// Received txids already notified, so each transaction notifies exactly once
     /// across sync rounds and restarts.
     seen_txids: Mutex<HashSet<String>>,
+    /// Set once the "Indexer unreachable" notification has fired for the current
+    /// outage, so a multi-round backoff notifies once. Cleared when a round
+    /// succeeds, the Indexer changes, or a fresh sync loop starts.
+    unreachable_notified: AtomicBool,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -330,6 +334,7 @@ impl WalletService {
             balance: RwLock::new(None),
             addresses: RwLock::new(Vec::new()),
             seen_txids: Mutex::new(seen),
+            unreachable_notified: AtomicBool::new(false),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             session_locked: AtomicBool::new(false),
@@ -727,6 +732,8 @@ impl WalletService {
             s.unreachable = false;
         })
         .await;
+        // A switch starts a fresh outage episode, so a dead new Indexer notifies too.
+        self.unreachable_notified.store(false, Ordering::SeqCst);
         // Cut short any idle/backoff wait so the new round starts now.
         self.restart.notify_one();
 
@@ -812,6 +819,8 @@ impl WalletService {
             match self.sync_round(generation).await {
                 Ok(()) => {
                     backoff = BACKOFF_MIN;
+                    // A round got through, so the outage (if any) is over: a later one notifies again.
+                    self.unreachable_notified.store(false, Ordering::SeqCst);
                     // A restart signal (e.g. an Indexer change) cuts the idle wait short.
                     tokio::select! {
                         _ = tokio::time::sleep(IDLE_INTERVAL) => {}
@@ -836,6 +845,27 @@ impl WalletService {
                         message,
                         unreachable,
                     });
+                    // One desktop notification per outage: the loop re-emits the error every
+                    // backoff round, but the user only needs telling once that the Indexer is
+                    // down and where to fix it. Recovery or an Indexer change re-arms it.
+                    if unreachable && !self.unreachable_notified.swap(true, Ordering::SeqCst) {
+                        let host = self
+                            .meta
+                            .read()
+                            .await
+                            .as_ref()
+                            .and_then(|m| m.indexer_uri.parse::<http::Uri>().ok())
+                            .and_then(|u| u.host().map(str::to_owned));
+                        let body = format!(
+                            "Pendrake can't reach {}. Open to choose another server.",
+                            host.as_deref().unwrap_or("your Indexer"),
+                        );
+                        self.notifier.notify(
+                            "Can't reach your Indexer",
+                            &body,
+                            "pendrake://settings/indexer",
+                        );
+                    }
                     // A restart signal cuts the backoff short and resets it, so switching
                     // to a working Indexer recovers at once instead of after the backoff.
                     tokio::select! {
@@ -1533,7 +1563,10 @@ mod tests {
             "removeWallet",
             "subscribeEvents",
         ] {
-            assert!(allowed_while_locked(m), "{m} should be allowed while locked");
+            assert!(
+                allowed_while_locked(m),
+                "{m} should be allowed while locked"
+            );
         }
         for m in [
             "getBalance",
@@ -1574,7 +1607,10 @@ mod tests {
 
         // Wallet reads are refused while the session is locked.
         assert!(service.handle("getBalance", Value::Null).await.is_err());
-        assert!(service.handle("getTransactions", Value::Null).await.is_err());
+        assert!(service
+            .handle("getTransactions", Value::Null)
+            .await
+            .is_err());
         assert!(service.handle("getAddresses", Value::Null).await.is_err());
     }
 

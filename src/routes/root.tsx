@@ -3,62 +3,64 @@ import { Outlet, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen } from "@tauri-apps/api/event";
-import { getWalletState } from "@/lib/ipc";
-import { stashPendingTxid } from "@/lib/deep-link";
-
-// pendrake://tx?txid=<id> -> the transaction detail route.
-function txidFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.host === "tx") return parsed.searchParams.get("txid");
-  } catch {
-    // not a URL we recognize
-  }
-  return null;
-}
 
 export function RootLayout() {
-  const navigate = useNavigate();
+	const navigate = useNavigate();
 
-  useEffect(() => {
-    const go = async (urls: string[] | null) => {
-      const txid = urls?.map(txidFromUrl).find(Boolean);
-      if (!txid) return;
-      // A deep link must not skip the lock screen. If the session is locked, stash
-      // the target and let the unlock screen replay it after re-entry.
-      const { locked } = await getWalletState();
-      if (locked) {
-        stashPendingTxid(txid);
-        navigate({ to: "/unlock" });
-      } else {
-        navigate({ to: "/tx/$txid", params: { txid } });
-      }
-    };
-    // Cold start (app launched by the deep link) and warm via onOpenUrl, plus the
-    // `deep-link` event the single-instance callback forwards when the URL reaches
-    // an already-running app as an argv entry.
-    getCurrent().then(go).catch(() => {});
-    const unlistenOpen = onOpenUrl(go);
-    const unlistenForwarded = listen<string[]>("deep-link", (e) => go(e.payload));
-    return () => {
-      unlistenOpen.then((fn) => fn()).catch(() => {});
-      unlistenForwarded.then((fn) => fn()).catch(() => {});
-    };
-  }, [navigate]);
+	useEffect(() => {
+		// pendrake://tx?txid=<id> opens a transaction. pendrake://settings/indexer opens
+		// the Indexer setting. The URL arrives cold
+		// (getCurrent, the app is launched by the link), warm (onOpenUrl), and forwarded by the
+		// single-instance callback when it reaches an already-running app as an argv entry.
+		const go = (urls: string[] | null) => {
+			for (const url of urls ?? []) {
+				let parsed: URL;
+				try {
+					parsed = new URL(url);
+				} catch {
+					continue;
+				}
+				if (parsed.host === "tx") {
+					const txid = parsed.searchParams.get("txid");
+					if (txid) {
+						navigate({ to: "/tx/$txid", params: { txid } });
+						return;
+					}
+				} else if (
+					parsed.host === "settings" &&
+					parsed.pathname === "/indexer"
+				) {
+					navigate({ to: "/settings", hash: "indexer" });
+					return;
+				}
+			}
+		};
+		getCurrent()
+			.then(go)
+			.catch(() => {});
+		const unlistenOpen = onOpenUrl(go);
+		const unlistenForwarded = listen<string[]>("deep-link", (e) =>
+			go(e.payload),
+		);
+		return () => {
+			unlistenOpen.then((fn) => fn()).catch(() => {});
+			unlistenForwarded.then((fn) => fn()).catch(() => {});
+		};
+	}, [navigate]);
 
-  return <Layout />;
+	return <Layout />;
 }
 
 function Layout() {
-  return (
-    <div className="flex min-h-screen flex-col">
-      <main className="page flex-1">
-        <Outlet />
-      </main>
+	return (
+		<div className="flex min-h-screen flex-col">
+			<main className="page flex-1">
+				<Outlet />
+			</main>
 
-      {import.meta.env.DEV && (
-        <TanStackRouterDevtools position="bottom-right" />
-      )}
-    </div>
-  );
+			{import.meta.env.DEV && (
+				<TanStackRouterDevtools position="bottom-right" />
+			)}
+		</div>
+	);
 }
