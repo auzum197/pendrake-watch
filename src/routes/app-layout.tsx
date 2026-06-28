@@ -9,6 +9,7 @@ import { useWalletData } from "@/hooks/use-wallet-data";
 // while only the routed content swaps.
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/settings")) return "settings" as const;
+  if (pathname.startsWith("/notes")) return "notes" as const;
   if (pathname.startsWith("/activity") || pathname.startsWith("/tx"))
     return "activity" as const;
   return "wallet" as const;

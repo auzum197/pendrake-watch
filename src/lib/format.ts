@@ -19,6 +19,16 @@ export function formatZec(zatoshis: bigint): string {
   });
 }
 
+// ZEC at a fixed number of decimals, padded, for columns that align on the point.
+// formatZec trims trailing zeros for the headline figure. The notes debug view wants
+// every row the same width (8 places in the table, 4 in the summary cards).
+export function formatZecFixed(zatoshis: bigint, decimals: number): string {
+  return (Number(zatoshis) / 1e8).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 // At the chain tip the daemon keeps running short maintenance rounds: each new
 // block flips state to "syncing" and drops syncedHeight a block or two below the
 // tip until the round commits, flickering "Synced" <-> "Syncing 100%" once per

@@ -1,19 +1,23 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
 	IconActivity,
 	IconAlertTriangle,
 	IconHelpCircle,
+	IconListDetails,
 	IconLock,
 	IconSettings,
 	IconShieldCheckFilled,
 	IconWallet,
 } from "@tabler/icons-react";
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
+import { useFeature } from "@/lib/features";
+import { animationsEnabled } from "@/lib/motion";
 import { syncLabel } from "@/lib/format";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import "./nav-reveal.css";
 
-type Section = "wallet" | "activity" | "settings";
+type Section = "wallet" | "activity" | "notes" | "settings";
 
 export function AppShell({
 	active,
@@ -135,6 +139,10 @@ function AppSidebar({
 					active={active === "activity"}
 					onClick={() => navigate({ to: "/activity" })}
 				/>
+				<NotesNavItem
+					active={active === "notes"}
+					onClick={() => navigate({ to: "/notes" })}
+				/>
 			</nav>
 
 			<nav className="mt-auto flex flex-col gap-1">
@@ -157,6 +165,41 @@ function AppSidebar({
 				/>
 			</nav>
 		</aside>
+	);
+}
+
+// The Notes item is gated behind the experimental flag. It stays mounted rather than
+// unmounting: the flag flips rarely, and the row is last in the top nav, so its reserved
+// height just sits in the empty space above the pinned lower nav, invisible when off.
+// Switching it on materializes the whole item in place (no movement): the icon and label
+// sharpen from a blur together. The flex column keeps the button full width so the selected
+// brand fill spans the rail. When off it's inert: out of the tab order, no pointer. Motion
+// is gated on the device preference, read once at mount. With it off the reveal class drops
+// and the state snaps.
+function NotesNavItem({
+	active,
+	onClick,
+}: {
+	active: boolean;
+	onClick: () => void;
+}) {
+	const enabled = useFeature("notes");
+	const [animate] = useState(animationsEnabled);
+
+	const state = enabled ? "opacity-100 blur-none" : "opacity-0 blur-[4px]";
+
+	return (
+		<div
+			inert={!enabled}
+			className={`flex flex-col ${animate ? "nav-reveal" : ""} ${state}`}
+		>
+			<NavItem
+				icon={<IconListDetails className="size-4" />}
+				label="Notes"
+				active={active}
+				onClick={onClick}
+			/>
+		</div>
 	);
 }
 

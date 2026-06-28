@@ -1,0 +1,11 @@
+/* Reveal for the experimental Notes item in the sidebar. When the feature is switched on,
+   the item sharpens from a blur where it sits, no movement, just opacity and blur. The
+   decoupled timing is the point: opacity rises faster than the blur clears, so the item is
+   briefly visible and soft before it settles, which is what makes the blur read instead of
+   vanishing under the fade. Inlined curve since @theme inline doesn't emit --ease-out-soft
+   on :root. */
+.nav-reveal {
+  transition:
+    opacity 130ms ease-out,
+    filter 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}

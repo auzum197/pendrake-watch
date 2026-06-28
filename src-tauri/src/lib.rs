@@ -445,6 +445,11 @@ async fn get_transaction(txid: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn get_notes() -> Result<Value, String> {
+    request("getNotes", Value::Null).await
+}
+
+#[tauri::command]
 async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
     request(
         "removeWallet",
@@ -525,6 +530,7 @@ pub fn run() {
             get_balance,
             get_transactions,
             get_transaction,
+            get_notes,
             remove_wallet,
         ])
         .run(tauri::generate_context!())

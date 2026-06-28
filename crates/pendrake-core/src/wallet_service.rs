@@ -15,9 +15,10 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
-    ImportUfvkArgs, Network, Note, NoteDirection, ParseUfvkResult, Pool, PoolBalance, RemoveArgs,
-    SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind,
-    TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
+    ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
+    RemoveArgs, SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
+    Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
+    WalletNote, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -33,9 +34,11 @@ use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
+use pepper_sync::wallet::{OrchardNote, SaplingNote};
+use pepper_sync::keys::transparent::TransparentScope;
 use zingolib::wallet::output::SpendStatus;
 use zingolib::wallet::summary::data::{
-    TransactionKind, TransactionSummaries, TransactionSummary,
+    Scope, TransactionKind, TransactionSummaries, TransactionSummary,
 };
 use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
@@ -422,6 +425,7 @@ impl WalletService {
                 self.balance.read().await.clone().unwrap_or_default(),
             )?),
             "getTransactions" => Ok(to_value(self.txs.read().await.clone())?),
+            "getNotes" => Ok(to_value(self.collect_notes().await)?),
             "getAddresses" => Ok(to_value(self.addresses.read().await.clone())?),
             "getTransaction" => {
                 let txid = params
@@ -538,6 +542,80 @@ impl WalletService {
     /// one client-lock acquisition. Best-effort: a transient read failure leaves
     /// the previous snapshot in place. Called at low-contention points (load,
     /// import, end of a sync round), never on a client request path.
+    /// Enumerate every received output the Wallet controls, across pools, with its
+    /// spend state resolved. Built live (not from the cached snapshot) for the notes
+    /// debug view, which wants ground truth straight off the wallet. Returns empty
+    /// when no wallet is open. Note `idx` is assigned over the returned order, so it
+    /// is a stable row number for the default sort, not a wallet-internal id.
+    async fn collect_notes(&self) -> Vec<WalletNote> {
+        let guard = self.client.lock().await;
+        let Some(client) = guard.as_ref() else {
+            return Vec::new();
+        };
+
+        // Authoritative txid -> confirmed height, so a note spent by transaction X can
+        // report the block X landed in. An in-flight spend's transaction isn't
+        // confirmed yet, so it's absent here and the note's spent height stays null.
+        let heights: HashMap<String, u32> = match client.transaction_summaries(false).await {
+            Ok(summaries) => summaries
+                .iter()
+                .filter(|s| s.status.is_confirmed())
+                .map(|s| (s.txid.to_string(), u32::from(s.blockheight)))
+                .collect(),
+            Err(_) => HashMap::new(),
+        };
+
+        let wallet = client.wallet().read().await;
+        let mut notes = Vec::new();
+        let mut push = |pool, value, confirmed, height, spend_status, txid: &TxId, change| {
+            notes.push(map_wallet_note(
+                notes.len() as u32,
+                pool,
+                value,
+                confirmed,
+                height,
+                spend_status,
+                txid,
+                change,
+                &heights,
+            ));
+        };
+        for n in wallet.note_summaries::<OrchardNote>(true).iter() {
+            push(
+                Pool::Orchard,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
+        for n in wallet.note_summaries::<SaplingNote>(true).iter() {
+            push(
+                Pool::Sapling,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
+        for c in wallet.coin_summaries(true) {
+            push(
+                Pool::Transparent,
+                c.value,
+                c.status.is_confirmed(),
+                u32::from(c.block_height),
+                c.spend_status,
+                &c.txid,
+                matches!(c.scope, TransparentScope::Internal),
+            );
+        }
+        notes
+    }
+
     async fn refresh_snapshot(&self) {
         let guard = self.client.lock().await;
         let Some(client) = guard.as_ref() else { return };
@@ -1583,6 +1661,53 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
     notes
 }
 
+/// The transaction that consumes a note, across every stage of a spend (proposed,
+/// transmitted, in the mempool, or confirmed). `None` for an unspent note.
+fn spending_txid(status: SpendStatus) -> Option<TxId> {
+    match status {
+        SpendStatus::Unspent => None,
+        SpendStatus::CalculatedSpent(txid)
+        | SpendStatus::TransmittedSpent(txid)
+        | SpendStatus::MempoolSpent(txid)
+        | SpendStatus::Spent(txid) => Some(txid),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn map_wallet_note(
+    idx: u32,
+    pool: Pool,
+    value: u64,
+    confirmed: bool,
+    height: u32,
+    spend_status: SpendStatus,
+    txid: &TxId,
+    change: bool,
+    heights: &HashMap<String, u32>,
+) -> WalletNote {
+    // A note in an unconfirmed transaction reads as pending whatever its spend
+    // state. Only a confirmed note is either spent or spendable.
+    let status = if !confirmed {
+        NoteStatus::Pending
+    } else if matches!(spend_status, SpendStatus::Unspent) {
+        NoteStatus::Unspent
+    } else {
+        NoteStatus::Spent
+    };
+    let spent_height =
+        spending_txid(spend_status).and_then(|spender| heights.get(&spender.to_string()).copied());
+    WalletNote {
+        idx,
+        pool,
+        value_zat: value.to_string(),
+        status,
+        height: confirmed.then_some(height),
+        txid: txid.to_string(),
+        change,
+        spent_height,
+    }
+}
+
 fn map_balance(bal: &AccountBalance) -> Balance {
     Balance {
         orchard: pool_balance(bal.confirmed_orchard_balance, bal.total_orchard_balance),
@@ -1898,5 +2023,117 @@ mod tests {
             vec![(500, SpendStatus::Unspent)],
         );
         assert_eq!(net_of(&shield, &HashMap::new()), 500);
+    }
+
+    // The notes debug view's status rule: an unconfirmed note reads pending whatever
+    // its spend state, a confirmed one is spent or spendable.
+    #[test]
+    fn unconfirmed_note_is_pending_with_no_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            false,
+            0,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Pending);
+        assert_eq!(note.height, None);
+    }
+
+    #[test]
+    fn confirmed_unspent_note_is_spendable_at_its_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Sapling,
+            100,
+            true,
+            42,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Unspent);
+        assert_eq!(note.height, Some(42));
+        assert_eq!(note.spent_height, None);
+    }
+
+    #[test]
+    fn a_confirmed_spend_resolves_the_spending_block() {
+        let heights = HashMap::from([(txid(0x02).to_string(), 99u32)]);
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::Spent(txid(0x02)),
+            &txid(0x01),
+            false,
+            &heights,
+        );
+        assert_eq!(note.status, NoteStatus::Spent);
+        assert_eq!(note.spent_height, Some(99));
+    }
+
+    // An in-flight spend (transmitted, mempool, or just calculated) marks the note
+    // spent, but its spending transaction isn't confirmed, so no height is known.
+    #[test]
+    fn an_in_flight_spend_has_no_confirmed_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::MempoolSpent(txid(0x02)),
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Spent);
+        assert_eq!(note.spent_height, None);
+    }
+
+    #[test]
+    fn carries_idx_value_txid_and_change_through() {
+        let note = map_wallet_note(
+            7,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            true,
+            &HashMap::new(),
+        );
+        assert_eq!(note.idx, 7);
+        assert_eq!(note.value_zat, "100");
+        assert_eq!(note.txid, txid(0x01).to_string());
+        assert!(note.change);
+    }
+
+    #[test]
+    fn spending_txid_covers_every_spend_stage() {
+        let spender = txid(0x05);
+        assert_eq!(spending_txid(SpendStatus::Unspent), None);
+        assert_eq!(
+            spending_txid(SpendStatus::CalculatedSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(
+            spending_txid(SpendStatus::TransmittedSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(
+            spending_txid(SpendStatus::MempoolSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(spending_txid(SpendStatus::Spent(spender)), Some(spender));
     }
 }

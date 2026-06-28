@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import {
-  IconAccessible,
   IconAlertTriangle,
   IconBell,
   IconCheck,
   IconCircleCheck,
+  IconFlask,
   IconServer2,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   type Network,
 } from "@/lib/ipc";
 import { reduceMotion, setReduceMotion } from "@/lib/motion";
+import { FEATURES, setEnabled, useFeature } from "@/lib/features";
 
 // Settings, with the current Wallet's identity, the Indexer it syncs against, and a
 // danger zone for Replace.
@@ -48,7 +49,7 @@ export function SettingsPage() {
         />
       )}
 
-      <AccessibilitySection />
+      <ExperimentalSection />
 
       <section className="rounded-2xl border border-destructive/30 bg-destructive/[0.03] p-6">
         <div className="flex items-center gap-2 text-destructive">
@@ -133,12 +134,69 @@ function NotificationsSection({ enabled }: { enabled: boolean }) {
   );
 }
 
-// App-level accessibility preference, stored per device (not daemon-backed): motion is
-// a UI/device choice, not wallet state. The switch follows the OS reduce-motion setting
-// until the user sets it here, where an explicit choice persists and wins. It governs
-// the entrance animations, which only fire on mount, so a change shows on the next
-// screen opened, no reload needed.
-function AccessibilitySection() {
+// Per-device toggles (not daemon-backed): each flips a UI/device choice, not wallet
+// state, so they live in localStorage. The registered features gate in-progress UI.
+// Reduce motion is a settled accessibility preference that rides along here since it's
+// the same kind of switch. Both apply live, no reload.
+function ExperimentalSection() {
+  return (
+    <section className="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-6">
+      <div className="flex items-center gap-2 text-amber-700">
+        <IconFlask className="size-4" />
+        <h2 className="font-heading text-base font-semibold">Experimental</h2>
+      </div>
+      <p className="mt-1 text-sm text-amber-800/70">
+        Device-only toggles that aren't stable yet. They may change or disappear
+        between releases.
+      </p>
+      <div className="mt-4 flex flex-col gap-5 pl-5">
+        {FEATURES.map((feature) => (
+          <FeatureToggle key={feature.id} feature={feature} />
+        ))}
+        <ReduceMotionToggle />
+      </div>
+    </section>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-zinc-900">{label}</span>
+        <span className="text-sm text-zinc-600">{description}</span>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+    </div>
+  );
+}
+
+function FeatureToggle({ feature }: { feature: (typeof FEATURES)[number] }) {
+  const on = useFeature(feature.id);
+  return (
+    <ToggleRow
+      label={feature.label}
+      description={feature.description}
+      checked={on}
+      onChange={(next) => setEnabled(feature.id, next)}
+    />
+  );
+}
+
+// The switch follows the OS reduce-motion setting until set here, where an explicit
+// choice persists and wins. It governs the entrance animations, which fire on mount, so
+// a change shows on the next screen opened.
+function ReduceMotionToggle() {
   const [reduced, setReduced] = useState(reduceMotion);
 
   function toggle(next: boolean) {
@@ -147,27 +205,12 @@ function AccessibilitySection() {
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-card p-6">
-      <div className="flex items-center gap-2">
-        <IconAccessible className="size-4 text-zinc-500" />
-        <h2 className="font-heading text-base font-semibold">Accessibility</h2>
-      </div>
-      <div className="mt-4 flex items-center justify-between gap-6">
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-zinc-900">Reduce motion</span>
-          <span className="text-sm text-zinc-500">
-            Turn off the entrance animations when screens and transactions load,
-            for instant, motionless navigation. Follows your system setting until
-            you choose here.
-          </span>
-        </div>
-        <Switch
-          checked={reduced}
-          onCheckedChange={toggle}
-          aria-label="Reduce motion"
-        />
-      </div>
-    </section>
+    <ToggleRow
+      label="Reduce motion"
+      description="Turn off the entrance animations when screens and transactions load. Follows your system setting until you choose here."
+      checked={reduced}
+      onChange={toggle}
+    />
   );
 }
 

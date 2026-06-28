@@ -212,6 +212,30 @@ export function getTransaction(txid: string): Promise<Tx | null> {
 	return invoke("get_transaction", { txid });
 }
 
+export type NoteStatus = "unspent" | "spent" | "pending";
+
+// One received output the wallet controls, flattened across pools, for the notes
+// debug view. Distinct from `Note` (an output inside one transaction's detail):
+// this is a wallet-wide row with its spend state resolved. `height` is null while
+// the note's transaction is unconfirmed, and `spentHeight` is null unless the spend
+// has confirmed. `idx` is a stable row number the daemon assigns over the returned
+// order, the default table sort. Values are zatoshi strings.
+export type WalletNote = {
+	idx: number;
+	pool: Pool;
+	valueZat: string;
+	status: NoteStatus;
+	height: number | null;
+	txid: string;
+	change: boolean;
+	spentHeight: number | null;
+};
+
+// Every note the wallet can see, with spend status, for the notes debug view.
+export function getNotes(): Promise<WalletNote[]> {
+	return invoke("get_notes");
+}
+
 // Wipe the current Wallet. Replace passes keepSession so the daemon retains the
 // session passphrase across the wipe (docs/adr/0004); Start over leaves it false.
 export function removeWallet(keepSession = false): Promise<void> {
