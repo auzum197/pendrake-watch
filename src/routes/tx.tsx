@@ -7,18 +7,30 @@ import {
 import { IconArrowLeft } from "@tabler/icons-react";
 import { getTransaction, onSyncEvent, type Note, type Tx } from "@/lib/ipc";
 import { formatZec, splitAddress } from "@/lib/format";
+import { getCachedTx } from "@/hooks/use-wallet-data";
 import { flagReturnRow } from "@/components/app/return-flash";
+import { animationsEnabled } from "@/lib/motion";
 import "@/components/app/reveal.css";
 
 // Steps between staggered reveals, matching the transaction list's cascade.
 const STAGGER_MS = 40;
 
+// The detail view's entrance reveals, gated on the motion preference and read at call
+// time so the Settings toggle applies on the next open. When off, every element renders
+// in place with no stagger.
+const revealClass = () => (animationsEnabled() ? "reveal-up" : "");
+const revealDelay = (ms: number) =>
+  animationsEnabled() ? { animationDelay: `${ms}ms` } : undefined;
+
 export function TxDetailPage() {
   const { txid } = useParams({ strict: false }) as { txid: string };
   const router = useRouter();
   const canGoBack = useCanGoBack();
-  const [tx, setTx] = useState<Tx | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed from the list snapshot already in memory so a click renders the detail
+  // at once; the cached Tx carries its notes. A cold deep-link has no cache hit
+  // and falls back to the fetch-and-poll below.
+  const [tx, setTx] = useState<Tx | null>(() => getCachedTx(txid));
+  const [loading, setLoading] = useState(() => getCachedTx(txid) === null);
 
   // Flag this row so the list flashes it on arrival, then return to wherever the
   // detail was opened from. A real history pop lets scroll restoration put the
@@ -35,13 +47,23 @@ export function TxDetailPage() {
     async function find() {
       const found = await getTransaction(txid).catch(() => null);
       if (!active) return;
-      setTx(found);
+      // Keep a cache-seeded render if the daemon hasn't repopulated it yet, so a
+      // background refetch never blanks a tx that's already on screen.
+      if (found) setTx(found);
       setLoading(false);
       return found != null;
     }
+    // Refresh in the background even on a cache hit, so a confirmed/updated tx
+    // reflects the latest daemon state.
     find();
-    // On a cold open the daemon may still be repopulating its cache, so refetch
-    // on discovery events and a short poll until the tx resolves.
+    const hadCacheHit = getCachedTx(txid) !== null;
+    // Only a cold open (no cache hit) needs the discovery listener and poll: the
+    // daemon may still be repopulating, so retry until the tx resolves.
+    if (hadCacheHit) {
+      return () => {
+        active = false;
+      };
+    }
     const unlisten = onSyncEvent((ev) => {
       if (active && (ev.event === "transaction" || ev.event === "finished")) {
         find();
@@ -81,7 +103,7 @@ export function TxDetailPage() {
         </h1>
         {tx && (
           <span
-            className={`reveal-up font-heading text-3xl font-semibold tabular-nums ${received ? "text-green-600 dark:text-green-400" : ""}`}
+            className={`${revealClass()} font-heading text-3xl font-semibold tabular-nums ${received ? "text-green-600 dark:text-green-400" : ""}`}
           >
             {received ? "+" : "−"}
             {formatZec(BigInt(tx.valueZat))} ZEC
@@ -101,8 +123,8 @@ export function TxDetailPage() {
 
       {tx && (
         <dl
-          className="reveal-up grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm"
-          style={{ animationDelay: `${STAGGER_MS}ms` }}
+          className={`${revealClass()} grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm`}
+          style={revealDelay(STAGGER_MS)}
         >
           <dt className="text-muted-foreground">Status</dt>
           <dd className="capitalize">{tx.status}</dd>
@@ -166,8 +188,8 @@ function NoteSection({
         {notes.map((note, i) => (
           <li
             key={`${note.direction}-${note.pool}-${note.outputIndex}`}
-            className="reveal-up rounded-xl border border-border bg-card p-3"
-            style={{ animationDelay: `${baseDelay + i * STAGGER_MS}ms` }}
+            className={`${revealClass()} rounded-xl border border-border bg-card p-3`}
+            style={revealDelay(baseDelay + i * STAGGER_MS)}
           >
             <NoteCard note={note} />
           </li>

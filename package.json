@@ -17,6 +17,7 @@
     "@tabler/icons-react": "^3.44.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-router": "^1.170.11",
+    "@tanstack/react-virtual": "^3.14.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-opener": "^2",

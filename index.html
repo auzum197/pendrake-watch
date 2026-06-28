@@ -7,7 +7,9 @@
     <title>Tauri + React + Typescript</title>
   </head>
 
-  <body>
+  <!-- The ink background matches the splash and lock screens, so the moment before
+       React mounts reads as dark rather than a white flash. -->
+  <body style="background-color: #0e0e10">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

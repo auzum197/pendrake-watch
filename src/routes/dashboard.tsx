@@ -17,6 +17,7 @@ import {
 	totalConfirmed,
 } from "@/lib/format";
 import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
+import { animationsEnabled } from "@/lib/motion";
 
 // The designer's Home frame, wired to the live daemon feed through useWalletData.
 // Balance, block height, sync progress, and recent activity come from the engine.
@@ -263,7 +264,9 @@ function ChartCard({
 					No confirmed activity yet
 				</div>
 				{hasData && (
-					<div className="balance-chart-enter col-start-1 row-start-1">
+					<div
+						className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
+					>
 						<BalanceChart points={points} />
 					</div>
 				)}

@@ -12,6 +12,11 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+	HoverCard,
+	HoverCardContent,
+	HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
 	DEFAULT_INDEXER,
 	getWalletState,
 	importUfvk,
@@ -49,7 +54,7 @@ type Draft = {
 
 const INITIAL: Draft = {
 	ufvk: "",
-	syncMode: "date",
+	syncMode: "height",
 	date: "",
 	height: "",
 	indexerUri: "",
@@ -305,14 +310,13 @@ function ImportStep({
 				<label className="flex flex-col gap-2">
 					<span className="flex items-center gap-1.5">
 						<FieldLabel>Unified Full Viewing Key</FieldLabel>
-						<Popover>
-							<PopoverTrigger
-								tabIndex={-1}
-								className="text-white/40 transition-colors hover:text-white/70"
-							>
-								<IconInfoCircle className="size-4" />
-							</PopoverTrigger>
-							<PopoverContent className="w-80 border-ink-line bg-[#161618] text-white">
+						<HoverCard>
+							<HoverCardTrigger asChild>
+								<span className="cursor-help text-white/40 transition-colors hover:text-white/70">
+									<IconInfoCircle className="size-4" />
+								</span>
+							</HoverCardTrigger>
+							<HoverCardContent className="w-80 border-ink-line bg-[#161618] text-white">
 								<p className="text-sm font-semibold tracking-wide">
 									Unified Full Viewing Key
 								</p>
@@ -320,8 +324,8 @@ function ImportStep({
 									A UFVK allows you to watch your wallet's balance without
 									holding any spending authority over it.
 								</p>
-							</PopoverContent>
-						</Popover>
+							</HoverCardContent>
+						</HoverCard>
 					</span>
 					<div className="relative">
 						<textarea
@@ -412,8 +416,8 @@ function SyncFrom({
 						value={draft.syncMode}
 						onChange={(v) => set("syncMode", v)}
 						options={[
-							{ value: "date", label: "Date" },
 							{ value: "height", label: "Block Height" },
+							{ value: "date", label: "Date" },
 						]}
 					/>
 					{draft.syncMode === "date" ? (

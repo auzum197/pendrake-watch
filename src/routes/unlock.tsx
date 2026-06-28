@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import {
@@ -12,7 +12,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
+import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { takePendingTxid } from "@/lib/deep-link";
+import { Splash } from "@/components/app/splash";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
 // decrypts the wallet, so collecting it here is the lock. The real version hands
@@ -28,15 +30,32 @@ export function UnlockPage() {
   const [busy, setBusy] = useState(false);
   const [confirmStartOver, setConfirmStartOver] = useState(false);
 
+  // Reaching the lock screen with the session already open means a back navigation
+  // landed here after unlocking. Don't prompt again: resume the pending tx or go
+  // home. Read once, synchronously, so the form never flashes before the redirect.
+  const alreadyOpen = useRef(getCachedWallet()?.locked === false).current;
+  useEffect(() => {
+    if (!alreadyOpen) return;
+    const txid = takePendingTxid();
+    if (txid) navigate({ to: "/tx/$txid", params: { txid }, replace: true });
+    else navigate({ to: "/dashboard", replace: true });
+  }, [alreadyOpen, navigate]);
+
   async function submit() {
     setBusy(true);
     setError(false);
     try {
-      await unlockWallet(password);
-      // Resume a deep link that arrived while locked, otherwise land on the dashboard.
+      const state = await unlockWallet(password);
+      // Reflect the now-unlocked session in the shared cache before navigating, so
+      // the layout guard on the next screen doesn't read a stale lock and bounce
+      // straight back here.
+      setCachedWallet(state);
+      // Resume a deep link that arrived while locked, otherwise land on the
+      // dashboard. Replace so the lock screen drops out of history and backing out
+      // of the tx never re-prompts.
       const txid = takePendingTxid();
-      if (txid) navigate({ to: "/tx/$txid", params: { txid } });
-      else navigate({ to: "/dashboard" });
+      if (txid) navigate({ to: "/tx/$txid", params: { txid }, replace: true });
+      else navigate({ to: "/dashboard", replace: true });
     } catch {
       setError(true);
     } finally {
@@ -48,6 +67,10 @@ export function UnlockPage() {
     await removeWallet();
     navigate({ to: "/onboarding" });
   }
+
+  // Hold the dark splash through the one-frame redirect, so an already-open session
+  // never shows the password form.
+  if (alreadyOpen) return <Splash />;
 
   return (
     <div className="fixed inset-0 z-50 flex bg-ink text-white">

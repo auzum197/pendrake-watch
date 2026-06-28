@@ -82,6 +82,15 @@ pub struct Meta {
     /// before this was tracked.
     #[serde(default)]
     pub fingerprint: Option<String>,
+    /// Whether transaction and scan-complete notifications fire, toggled from
+    /// Settings. Defaults true so a wallet imported before this existed keeps
+    /// notifying, matching the prior always-on behavior.
+    #[serde(default = "default_true")]
+    pub notifications_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Meta {

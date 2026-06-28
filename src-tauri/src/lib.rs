@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -21,9 +21,21 @@ type Conn = tokio::net::UnixStream;
 #[cfg(windows)]
 type Conn = tokio::net::windows::named_pipe::NamedPipeClient;
 
-/// Serializes the connect-or-spawn path so the webview's concurrent requests
-/// (status, balance, history on mount) don't each spawn a daemon.
-static SPAWN_GUARD: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+/// Serializes the connect-or-spawn path (so concurrent mount requests don't each
+/// spawn) and carries when the daemon was last spawned, so a startup that's slow or
+/// that exits on the single-instance lock doesn't draw a fresh `open` per request.
+static SPAWN_GATE: LazyLock<Mutex<Option<Instant>>> = LazyLock::new(|| Mutex::new(None));
+
+/// The shortest gap between two spawn attempts. Longer than the 5s we wait for a
+/// spawn to bind, so a daemon that never comes up is retried at a slow cadence
+/// rather than launched again on every request.
+const SPAWN_COOLDOWN: Duration = Duration::from_secs(10);
+
+/// Whether enough time has elapsed since the last spawn to attempt another. Never
+/// having spawned always permits one.
+fn spawn_due(last: Option<Instant>, now: Instant, cooldown: Duration) -> bool {
+    last.map_or(true, |t| now.duration_since(t) >= cooldown)
+}
 
 /// Mirrors `pendrake_core::Paths`: same `PENDRAKE_DATA_DIR` override, same default
 /// location, so client and daemon agree on the data root. A spawned daemon inherits
@@ -110,7 +122,11 @@ fn pendrake_sync_app() -> Option<PathBuf> {
     // whether the GUI runs from `tauri dev` (src-tauri/target/<profile>/) or the
     // bundle it's nested several levels deeper in.
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(app) = exe.ancestors().map(|dir| dir.join(REL)).find(|p| p.exists()) {
+        if let Some(app) = exe
+            .ancestors()
+            .map(|dir| dir.join(REL))
+            .find(|p| p.exists())
+        {
             return Some(app);
         }
     }
@@ -141,10 +157,18 @@ fn spawn_bin(bin: &PathBuf) -> Result<(), String> {
         .map_err(|e| format!("failed to spawn {}: {e}", bin.display()))
 }
 
+/// Args for `open` that launch the helper in the background. `-g` keeps it from
+/// being brought to the foreground, so spawning the windowless daemon host never
+/// steals focus from the GUI window.
+#[cfg(target_os = "macos")]
+fn background_open_args(app: &std::path::Path) -> [&std::ffi::OsStr; 2] {
+    [std::ffi::OsStr::new("-g"), app.as_os_str()]
+}
+
 #[cfg(target_os = "macos")]
 fn open_app(app: &PathBuf) -> Result<(), String> {
     std::process::Command::new("open")
-        .arg(app)
+        .args(background_open_args(app))
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("failed to launch {}: {e}", app.display()))
@@ -216,13 +240,19 @@ async fn ensure_daemon() -> Result<Conn, String> {
         return Ok(stream);
     }
 
-    let _guard = SPAWN_GUARD.lock().await;
+    let mut last_spawn = SPAWN_GATE.lock().await;
     // Another request may have spawned the daemon while we waited for the lock.
     if let Ok(stream) = connect().await {
         return Ok(stream);
     }
 
-    spawn_daemon()?;
+    // Spawn at most once per cooldown. A daemon that's still binding, or a duplicate
+    // that exits on the single-instance lock, would otherwise draw a fresh `open` on
+    // every request; here a recent spawn means we wait for it instead of launching another.
+    if spawn_due(*last_spawn, Instant::now(), SPAWN_COOLDOWN) {
+        spawn_daemon()?;
+        *last_spawn = Some(Instant::now());
+    }
 
     for _ in 0..50 {
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -356,7 +386,21 @@ async fn lock() -> Result<Value, String> {
 /// new server before persisting, so a rejected URI surfaces here as an error.
 #[tauri::command]
 async fn set_indexer(indexer_uri: String) -> Result<Value, String> {
-    request("setIndexer", serde_json::json!({ "indexerUri": indexer_uri })).await
+    request(
+        "setIndexer",
+        serde_json::json!({ "indexerUri": indexer_uri }),
+    )
+    .await
+}
+
+/// Toggle whether transaction and scan-complete notifications fire
+#[tauri::command]
+async fn set_notifications(enabled: bool) -> Result<Value, String> {
+    request(
+        "setNotifications",
+        serde_json::json!({ "enabled": enabled }),
+    )
+    .await
 }
 
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
@@ -473,6 +517,7 @@ pub fn run() {
             unlock,
             lock,
             set_indexer,
+            set_notifications,
             verify_passphrase,
             get_wallet_state,
             get_addresses,
@@ -484,4 +529,44 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::spawn_due;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_daemon_never_spawned_is_due() {
+        assert!(spawn_due(None, Instant::now(), Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn a_recent_spawn_is_not_due_again() {
+        let spawned = Instant::now();
+        let now = spawned + Duration::from_secs(2);
+        assert!(!spawn_due(Some(spawned), now, Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn a_spawn_is_due_again_once_the_cooldown_elapses() {
+        let cooldown = Duration::from_secs(10);
+        let spawned = Instant::now();
+        // Exactly at the cooldown counts as elapsed, so a stuck daemon is retried.
+        assert!(spawn_due(Some(spawned), spawned + cooldown, cooldown));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_helper_is_launched_without_stealing_focus() {
+        use std::ffi::OsStr;
+        use std::path::Path;
+        let app = Path::new("/Applications/PendrakeSync.app");
+        // `-g` keeps the helper in the background, so launching it never pulls focus
+        // off the GUI window.
+        assert_eq!(
+            super::background_open_args(app),
+            [OsStr::new("-g"), app.as_os_str()]
+        );
+    }
 }
