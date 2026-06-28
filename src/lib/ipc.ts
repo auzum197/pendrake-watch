@@ -22,6 +22,8 @@ export type WalletState = {
 	// The Indexer this Wallet syncs against, editable from Settings. Empty when no
 	// wallet exists.
 	indexerUri: string;
+	// Whether desktop notifications are on, toggled from Settings (AUZ-61).
+	notificationsEnabled: boolean;
 };
 
 export type WalletAddress = {
@@ -167,6 +169,12 @@ export function lock(): Promise<void> {
 // malformed, leaving the current Indexer in place.
 export function setIndexer(indexerUri: string): Promise<WalletState> {
 	return invoke("set_indexer", { indexerUri });
+}
+
+// Toggle desktop notifications and persist the choice (AUZ-61). Returns the
+// refreshed wallet state carrying the saved value.
+export function setNotifications(enabled: boolean): Promise<WalletState> {
+	return invoke("set_notifications", { enabled });
 }
 
 // Re-authenticate against the held session passphrase without touching the wallet.

@@ -101,6 +101,9 @@ pub struct WalletState {
     /// The Indexer this Wallet syncs against, editable from Settings (AUZ-47).
     /// Empty when no wallet exists.
     pub indexer_uri: String,
+    /// Whether desktop notifications are on, toggled from Settings (AUZ-61). True
+    /// when no wallet exists, the default for a fresh import.
+    pub notifications_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -182,6 +185,12 @@ pub struct ImportUfvkArgs {
 #[serde(rename_all = "camelCase")]
 pub struct SetIndexerArgs {
     pub indexer_uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetNotificationsArgs {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]

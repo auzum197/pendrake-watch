@@ -359,6 +359,13 @@ async fn set_indexer(indexer_uri: String) -> Result<Value, String> {
     request("setIndexer", serde_json::json!({ "indexerUri": indexer_uri })).await
 }
 
+/// Toggle desktop notifications and persist the choice (AUZ-61). Returns the
+/// refreshed wallet state so the GUI reflects the saved value.
+#[tauri::command]
+async fn set_notifications(enabled: bool) -> Result<Value, String> {
+    request("setNotifications", serde_json::json!({ "enabled": enabled })).await
+}
+
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
 /// bool; the Replace modal gates the wipe on it.
 #[tauri::command]
@@ -473,6 +480,7 @@ pub fn run() {
             unlock,
             lock,
             set_indexer,
+            set_notifications,
             verify_passphrase,
             get_wallet_state,
             get_addresses,

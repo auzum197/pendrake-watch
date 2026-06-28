@@ -82,6 +82,15 @@ pub struct Meta {
     /// before this was tracked.
     #[serde(default)]
     pub fingerprint: Option<String>,
+    /// Whether the user wants desktop notifications (AUZ-61). The master switch the
+    /// daemon checks before delivering any toast. Defaults true so a wallet imported
+    /// before this existed keeps notifying.
+    #[serde(default = "default_true")]
+    pub notifications_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Meta {

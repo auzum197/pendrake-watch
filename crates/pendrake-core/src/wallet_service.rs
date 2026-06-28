@@ -16,8 +16,8 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, ParseUfvkResult, Pool, PoolBalance, RemoveArgs,
-    SetIndexerArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork,
-    UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
+    SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind,
+    TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -441,6 +441,10 @@ impl WalletService {
                 let args: SetIndexerArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_indexer(args.indexer_uri).await?)?)
             }
+            "setNotifications" => {
+                let args: SetNotificationsArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_notifications(args.enabled).await?)?)
+            }
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
@@ -502,6 +506,7 @@ impl WalletService {
                 network: m.network,
                 birthday_height: m.birthday_height,
                 indexer_uri: m.indexer_uri.clone(),
+                notifications_enabled: m.notifications_enabled,
             },
             None => WalletState {
                 exists: false,
@@ -513,6 +518,7 @@ impl WalletService {
                 network: Network::Mainnet,
                 birthday_height: 0,
                 indexer_uri: String::new(),
+                notifications_enabled: true,
             },
         }
     }
@@ -599,6 +605,7 @@ impl WalletService {
             scan_target_height,
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
+            notifications_enabled: true,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -755,6 +762,30 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
+    /// Toggle desktop notifications (AUZ-61) and persist the choice. A pure metadata
+    /// write: the sync loop and client are untouched, only what the daemon does on
+    /// the next discovery changes.
+    async fn set_notifications(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set notifications for"))?;
+        meta.notifications_enabled = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        Ok(self.wallet_state().await)
+    }
+
+    /// The notification master switch (AUZ-61). Defaults on, including before a wallet
+    /// exists, so a missing meta never silences a genuine receipt.
+    async fn notifications_enabled(&self) -> bool {
+        self.meta
+            .read()
+            .await
+            .as_ref()
+            .map_or(true, |m| m.notifications_enabled)
+    }
+
     /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
     /// Replace lands in onboarding without re-collecting it; Start over passes false
     /// and the passphrase is dropped (docs/adr/0004).
@@ -862,7 +893,10 @@ impl WalletService {
                     // One desktop notification per outage: the loop re-emits the error every
                     // backoff round, but the user only needs telling once that the Indexer is
                     // down and where to fix it. Recovery or an Indexer change re-arms it.
-                    if unreachable && !self.unreachable_notified.swap(true, Ordering::SeqCst) {
+                    if unreachable
+                        && self.notifications_enabled().await
+                        && !self.unreachable_notified.swap(true, Ordering::SeqCst)
+                    {
                         let host = self
                             .meta
                             .read()
@@ -1160,6 +1194,12 @@ impl WalletService {
             true
         };
         if let Disposition::Notify = self.notify.classify(&txid, live) {
+            // Notifications turned off (AUZ-61): still record the txid as seen so
+            // toggling them back on doesn't replay receipts that arrived while muted.
+            if !self.notifications_enabled().await {
+                self.notify.mark_notified(&txid);
+                return;
+            }
             let amount = format_amount(summary.value);
             let (title, body) = if received {
                 (
@@ -1266,7 +1306,7 @@ impl WalletService {
     /// early. A wallet that began at or past N was seeded live and never fires.
     async fn announce_scan_complete(&self, synced_height: u32) {
         let target = self.scan_target().await;
-        if self.notify.crossed_to_live(synced_height, target) {
+        if self.notify.crossed_to_live(synced_height, target) && self.notifications_enabled().await {
             let _ = self.notifier.notify(
                 "Wallet ready",
                 "Pendrake finished scanning. You'll be notified of new activity.",

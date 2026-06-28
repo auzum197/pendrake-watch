@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
+  IconBell,
   IconCheck,
   IconCircleCheck,
   IconServer2,
@@ -11,7 +12,12 @@ import { Input } from "@/components/ui/input";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 import { ReplaceDialog } from "@/components/settings/replace-dialog";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { MAINNET_INDEXERS, setIndexer, type Network } from "@/lib/ipc";
+import {
+  MAINNET_INDEXERS,
+  setIndexer,
+  setNotifications,
+  type Network,
+} from "@/lib/ipc";
 
 // Settings, with the current Wallet's identity, the Indexer it syncs against, and a
 // danger zone for Replace.
@@ -64,6 +70,13 @@ export function SettingsPage() {
           network={wallet.network}
           current={wallet.indexerUri}
           focusOnMount={hash === "indexer"}
+        />
+      )}
+
+      {wallet?.exists && (
+        <NotificationsSection
+          key={`notify-${wallet.fingerprint ?? "wallet"}`}
+          enabled={wallet.notificationsEnabled}
         />
       )}
 
@@ -281,6 +294,95 @@ function IndexerSection({
         </Button>
       </div>
     </section>
+  );
+}
+
+// The notification master switch (AUZ-61). The daemon owns the persisted value and
+// honors it even with the window closed, so the toggle is optimistic: flip on click,
+// send, and revert if the daemon rejects. Seeded from the loaded wallet state and
+// remounted per wallet (keyed by fingerprint upstream), so `enabled` is the real
+// value at first render.
+function NotificationsSection({ enabled }: { enabled: boolean }) {
+  const [on, setOn] = useState(enabled);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function toggle() {
+    const next = !on;
+    setOn(next);
+    setBusy(true);
+    setError(false);
+    try {
+      const state = await setNotifications(next);
+      setOn(state.notificationsEnabled);
+    } catch {
+      setOn(!next);
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-card p-6">
+      <div className="flex items-center gap-2">
+        <IconBell className="size-4 text-zinc-500" />
+        <h2 className="font-heading text-base font-semibold">Notifications</h2>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-zinc-900">
+            Desktop notifications
+          </span>
+          <span className="text-sm text-zinc-500">
+            Get notified when funds arrive or leave, even with the window closed.
+          </span>
+          {error && (
+            <span className="text-xs text-destructive">
+              Couldn't save that. Try again.
+            </span>
+          )}
+        </div>
+        <Toggle
+          checked={on}
+          disabled={busy}
+          onChange={toggle}
+          label="Desktop notifications"
+        />
+      </div>
+    </section>
+  );
+}
+
+function Toggle({
+  checked,
+  disabled,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+        checked ? "bg-brand" : "bg-zinc-300"
+      }`}
+    >
+      <span
+        className={`inline-block size-5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 
