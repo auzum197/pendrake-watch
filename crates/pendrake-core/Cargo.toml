@@ -50,3 +50,7 @@ thiserror = "1"
 tonic = "0.14"
 # Isolated data dir per single-instance test, cleaned up on drop.
 tempfile = "3"
+# ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
+# net-delta tests feed through map_tx. Pinned to the version zingolib links so the
+# type unifies (a git copy resolves to a distinct, incompatible ConfirmationStatus).
+zingo-status = "0.2"

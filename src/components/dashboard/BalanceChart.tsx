@@ -78,7 +78,7 @@ function niceAxis(peak: number): { max: number; step: number } {
 // peak (so the line reaches the top the axis is sized for), then strides evenly
 // through the middle. Each kept point holds its txid key, so the tween still tracks
 // points by identity across refetches.
-function downsampleSeries(points: BalancePoint[], cap: number): BalancePoint[] {
+export function downsampleSeries(points: BalancePoint[], cap: number): BalancePoint[] {
 	if (points.length <= cap) return points;
 	const last = points.length - 1;
 	let peak = 1;

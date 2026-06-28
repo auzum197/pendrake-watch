@@ -1777,4 +1777,126 @@ mod tests {
         // A plaintext wallet has no passphrase to demand, so it stays open.
         assert!(!service.session_locked());
     }
+
+    use zingo_status::confirmation_status::ConfirmationStatus;
+    use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
+
+    fn txid(byte: u8) -> TxId {
+        TxId::from_bytes([byte; 32])
+    }
+
+    // A confirmed transaction carrying `received` orchard notes, each (value,
+    // spend-status). `display` is the fork's `value` field, the signed amount the net
+    // delta deliberately ignores in favour of the note flows.
+    fn summary(
+        txid_byte: u8,
+        kind: TransactionKind,
+        display: u64,
+        received: Vec<(u64, SpendStatus)>,
+    ) -> TransactionSummary {
+        TransactionSummary {
+            txid: txid(txid_byte),
+            datetime: 0,
+            status: ConfirmationStatus::Confirmed(BlockHeight::from_u32(1)),
+            blockheight: BlockHeight::from_u32(1),
+            kind,
+            value: display,
+            fee: None,
+            zec_price: None,
+            orchard_notes: received
+                .into_iter()
+                .enumerate()
+                .map(|(i, (value, status))| {
+                    BasicNoteSummary::from_parts(value, status, i as u32, None)
+                })
+                .collect(),
+            sapling_notes: vec![],
+            transparent_coins: vec![],
+            outgoing_orchard_notes: vec![],
+            outgoing_sapling_notes: vec![],
+            outgoing_transparent_coins: vec![],
+        }
+    }
+
+    fn net_of(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> i64 {
+        map_tx(s, spent_by).net_zat.parse().unwrap()
+    }
+
+    // The invariant the balance chart leans on: summed over the whole history, each
+    // transaction's net delta equals the confirmed balance (the value of every unspent
+    // received note). When it holds, the reconstructed curve ends on the headline and
+    // walks back to zero.
+    #[test]
+    fn net_deltas_sum_to_the_unspent_balance() {
+        // A receives 100, later spent by B; B keeps 30 as change and sends the rest
+        // out. The only unspent note left is B's 30.
+        let a = summary(
+            0xAA,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0xBB)))],
+        );
+        let b = summary(
+            0xBB,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![a, b]);
+
+        let spent_by = spent_value_by_tx(&history);
+        let total: i64 = history.iter().map(|s| net_of(s, &spent_by)).sum();
+        assert_eq!(total, 30);
+    }
+
+    // A plain external receive credits the full received value: nothing of the wallet's
+    // is spent, so the delta is exactly what arrived.
+    #[test]
+    fn external_receive_credits_the_full_value() {
+        let s = summary(
+            0x01,
+            TransactionKind::Received,
+            500,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&s, &HashMap::new()), 500);
+    }
+
+    // A send debits the spent inputs and credits only the change that returns, so its
+    // delta is the negative of what left the wallet (the external payment plus fee),
+    // regardless of the larger signed `display` amount.
+    #[test]
+    fn send_nets_change_minus_spent_inputs() {
+        let funding = summary(
+            0x02,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0x03)))],
+        );
+        let send = summary(
+            0x03,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![funding, send.clone()]);
+        let spent_by = spent_value_by_tx(&history);
+        assert_eq!(net_of(&send, &spent_by), 30 - 100);
+    }
+
+    // The bug this delta exists to fix: income that first enters through a
+    // wallet-authored output. A shield from an unscanned transparent input (or a
+    // coinbase paid to the wallet's own shielded address) creates a received note with
+    // no matching spent note, and the fork's signed `display` nets it to roughly the
+    // fee. The note-flow delta credits the full value instead of zeroing it out.
+    #[test]
+    fn self_authored_inflow_is_credited_not_zeroed() {
+        let shield = summary(
+            0x04,
+            TransactionKind::Sent(SendType::Shield),
+            0,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&shield, &HashMap::new()), 500);
+    }
 }
