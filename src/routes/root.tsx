@@ -3,6 +3,8 @@ import { Outlet, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen } from "@tauri-apps/api/event";
+import { getWalletState } from "@/lib/ipc";
+import { stashPendingTxid } from "@/lib/deep-link";
 
 export function RootLayout() {
 	const navigate = useNavigate();
@@ -12,7 +14,7 @@ export function RootLayout() {
 		// the Indexer setting. The URL arrives cold
 		// (getCurrent, the app is launched by the link), warm (onOpenUrl), and forwarded by the
 		// single-instance callback when it reaches an already-running app as an argv entry.
-		const go = (urls: string[] | null) => {
+		const go = async (urls: string[] | null) => {
 			for (const url of urls ?? []) {
 				let parsed: URL;
 				try {
@@ -23,7 +25,19 @@ export function RootLayout() {
 				if (parsed.host === "tx") {
 					const txid = parsed.searchParams.get("txid");
 					if (txid) {
-						navigate({ to: "/tx/$txid", params: { txid } });
+						// The click can reach a locked session (the notification woke a
+						// parked wallet). Stash the txid so /unlock resumes it after
+						// re-auth instead of dropping the user on the dashboard; an open
+						// wallet jumps straight to the detail.
+						const locked = await getWalletState()
+							.then((s) => s.locked)
+							.catch(() => false);
+						if (locked) {
+							stashPendingTxid(txid);
+							navigate({ to: "/unlock" });
+						} else {
+							navigate({ to: "/tx/$txid", params: { txid } });
+						}
 						return;
 					}
 				} else if (
