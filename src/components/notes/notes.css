@@ -1,0 +1,130 @@
+/* Pool and status pills for the notes debug view. Light values come straight from
+   the design; dark values keep the same hue but sit a tinted fill under lightened
+   text so they read on the dark panel. The app toggles dark with a `.dark` class
+   on an ancestor (see index.css), not prefers-color-scheme, so the overrides hang
+   off that. */
+
+.note-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.note-badge--orchard {
+  background: #e1f5ee;
+  color: #0f6e56;
+}
+.note-badge--sapling {
+  background: #e6f1fb;
+  color: #185fa5;
+}
+.note-badge--transparent {
+  background: #f1efe8;
+  color: #5f5e5a;
+}
+.note-badge--unspent {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+.note-badge--spent {
+  background: #f1efe8;
+  color: #888780;
+}
+.note-badge--pending,
+.note-badge--mempool {
+  background: #faeeda;
+  color: #854f0b;
+}
+.note-badge--change {
+  background: #eeedfe;
+  color: #534ab7;
+}
+
+.dark .note-badge--orchard {
+  background: color-mix(in srgb, #1d9e75 22%, transparent);
+  color: #6fd9b6;
+}
+.dark .note-badge--sapling {
+  background: color-mix(in srgb, #378add 22%, transparent);
+  color: #8fbff0;
+}
+.dark .note-badge--transparent {
+  background: color-mix(in srgb, #888780 24%, transparent);
+  color: #c8c7c0;
+}
+.dark .note-badge--unspent {
+  background: color-mix(in srgb, #5aa015 24%, transparent);
+  color: #a6d273;
+}
+.dark .note-badge--spent {
+  background: color-mix(in srgb, #888780 20%, transparent);
+  color: #9a988f;
+}
+.dark .note-badge--pending,
+.dark .note-badge--mempool {
+  background: color-mix(in srgb, #c07c1a 26%, transparent);
+  color: #e8b873;
+}
+.dark .note-badge--change {
+  background: color-mix(in srgb, #534ab7 30%, transparent);
+  color: #b3adf0;
+}
+
+/* The table content fades and lifts in when the filter changes, so the row set
+   doesn't snap from one shape to another. A faint blur bridges the two states (the
+   eye reads one transform, not two lists swapping). Fast and on the brand ease-out,
+   so a rapid run through the filters never feels sluggish. Scoped to filter switches
+   only. Search and sort update in place, since those fire far more often. */
+@keyframes notes-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.notes-filter-swap {
+  /* Inlined curve: --ease-out-soft lives in @theme inline, which Tailwind v4 doesn't
+     emit on :root, so var() won't resolve in raw CSS. Same value as the token. */
+  animation: notes-swap-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the comprehension cue (a fade) but drop the movement and blur. */
+  @keyframes notes-swap-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* The 8px pool dot beside a summary-card label. Identity colors, the same in both
+   themes. */
+.pool-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.pool-dot--orchard {
+  background: #1d9e75;
+}
+.pool-dot--sapling {
+  background: #378add;
+}
+.pool-dot--transparent {
+  background: #888780;
+}

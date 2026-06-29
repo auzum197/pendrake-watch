@@ -431,6 +431,38 @@ pub struct Note {
     pub recipient: Option<String>,
 }
 
+/// The lifecycle of one of the Wallet's own received outputs, for the notes debug
+/// view. `Pending` is a note still in an unconfirmed transaction. `Spent` is one
+/// whose spend has been seen (confirmed or in flight). `Unspent` is a confirmed,
+/// still-spendable note.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum NoteStatus {
+    Unspent,
+    Spent,
+    Pending,
+}
+
+/// One received output the Wallet controls, flattened across pools with its spend
+/// state resolved, for the notes debug view. Where [`Note`] is an output within a
+/// single transaction's detail, this is a wallet-wide row: it carries the
+/// confirming `height`, the `txid` it landed in, whether it's `change`, and the
+/// height it was spent at when that spend is confirmed. `height` and `spentHeight`
+/// are null when unknown (an unconfirmed note, or an in-flight spend). Values are
+/// zatoshi strings, matching the rest of the wire.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletNote {
+    pub idx: u32,
+    pub pool: Pool,
+    pub value_zat: String,
+    pub status: NoteStatus,
+    pub height: Option<u32>,
+    pub txid: String,
+    pub change: bool,
+    pub spent_height: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tx {
