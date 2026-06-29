@@ -22,10 +22,16 @@ fn main() -> anyhow::Result<()> {
         notify::register_identity(&paths.root);
     }
 
+    // A unique txid per run so the toast mirrors distinct transactions (the daemon
+    // never re-fires the same one), which also gives each toast its own tag.
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     DesktopNotifier.notify(
         "Funds received",
         "0.42 ZEC received in your wallet.",
-        "pendrake://tx?txid=0000000000000000000000000000000000000000000000000000000000000001",
+        &format!("pendrake://tx?txid={unique:064x}"),
     )?;
     Ok(())
 }

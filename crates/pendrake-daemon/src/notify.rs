@@ -219,8 +219,26 @@ fn show_toast(title: &str, body: &str, deep_link: &str) -> windows::core::Result
     let doc = XmlDocument::new()?;
     doc.LoadXml(&HSTRING::from(xml))?;
     let toast = ToastNotification::CreateToastNotification(&doc)?;
+    // Windows drops a toast whose text matches one it showed moments ago. Tagging each
+    // by its deep link keeps notifications for different transactions distinct (the link
+    // carries the txid), so two receipts of the same amount both surface, and a repeat
+    // of the same one updates in place instead of vanishing.
+    toast.SetTag(&HSTRING::from(toast_tag(deep_link)))?;
     ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))?
         .Show(&toast)
+}
+
+/// A short, stable tag for a toast, derived from its deep link with the same FNV-1a
+/// the pipe name uses. Stays well inside the tag length limit and is distinct per
+/// transaction, since the link carries the txid.
+#[cfg(target_os = "windows")]
+fn toast_tag(deep_link: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in deep_link.bytes() {
+        hash ^= u64::from(b);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
 }
 
 /// Escape the five XML metacharacters so a deep link's `&` or a body's `<` can't
