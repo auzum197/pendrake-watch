@@ -8,11 +8,7 @@ description = "Pendrake core: zingolib watch-only wallet construction and wallet
 [dependencies]
 pendrake-ipc = { path = "../pendrake-ipc" }
 
-# zingolib stable-auz fork: adds the pepper-sync events stream consumed for live
-# progress. A committed Cargo.lock is REQUIRED across this workspace; zcash_keys
-# pulls a yanked core2 ^0.3 that only resolves when the lock pins it.
 zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
-# Same repo/branch as zingolib; the sync event stream and sync_status live here.
 pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 # GrpcIndexer + the Indexer trait, to probe a candidate Indexer with a real
 # GetLightdInfo call before saving it. Same version track as zingolib's workspace so
@@ -46,8 +42,15 @@ dirs = "5"
 tracing.workspace = true
 rustls = { version = "0.23", features = ["ring"] }
 fs2 = "0.4"
+thiserror = "1"
 
 [dev-dependencies]
 # Constructs tonic::Status values so the sync-error classifier (is_unreachable) is
 # tested against the real RequestFailed transport-failure variant.
 tonic = "0.14"
+# Isolated data dir per single-instance test, cleaned up on drop.
+tempfile = "3"
+# ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
+# net-delta tests feed through map_tx. Pinned to the version zingolib links so the
+# type unifies (a git copy resolves to a distinct, incompatible ConfirmationStatus).
+zingo-status = "0.2"

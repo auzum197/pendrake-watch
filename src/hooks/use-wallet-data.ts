@@ -34,6 +34,27 @@ const cache: Omit<WalletData, "loaded" | "error"> = {
   addresses: [],
 };
 
+// Reconcile the cached wallet after a state change made outside the hook (an
+// unlock from the lock screen). Without this the next signed-in screen reads a
+// stale `locked: true` and the layout guard bounces back to /unlock.
+export function setCachedWallet(state: WalletState) {
+  cache.wallet = state;
+}
+
+// The last known wallet state, or null before the first load. Lets the lock screen
+// tell an open session from a locked one synchronously, without a daemon round-trip.
+export function getCachedWallet(): WalletState | null {
+  return cache.wallet;
+}
+
+// The transaction from the last loaded history, if present. Lets the detail view
+// render instantly on a click from a populated list instead of waiting on a
+// daemon round-trip. Returns null on a cold deep-link, where the list never
+// loaded.
+export function getCachedTx(txid: string): Tx | null {
+  return cache.txs.find((tx) => tx.txid === txid) ?? null;
+}
+
 // Loads the wallet snapshot from the daemon and keeps it live off the pushed
 // sync-event stream, with a slow poll as a safety net. Reads only, the same
 // commands home.tsx uses, so the dashboard reflects the real engine.

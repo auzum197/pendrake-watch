@@ -15,8 +15,21 @@ pub struct Config {
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum FfiError {
+    /// A working service already owns this data dir. The host should exit quietly
+    /// rather than linger as a second, non-serving process.
+    #[error("another Pendrake service instance is already running")]
+    AlreadyRunning,
     #[error("{0}")]
     Start(String),
+}
+
+impl From<pendrake_core::StartError> for FfiError {
+    fn from(e: pendrake_core::StartError) -> Self {
+        match e {
+            pendrake_core::StartError::AlreadyRunning => FfiError::AlreadyRunning,
+            pendrake_core::StartError::Failed(e) => FfiError::Start(e.to_string()),
+        }
+    }
 }
 
 /// Raised by the Swift notifier when the OS rejects a notification, so the service
@@ -68,8 +81,7 @@ pub fn start(
     let core_config = CoreConfig {
         data_dir: config.data_dir.map(Into::into),
     };
-    let handle = pendrake_core::run(core_config, Arc::new(NotifierAdapter(notifier)))
-        .map_err(|e| FfiError::Start(e.to_string()))?;
+    let handle = pendrake_core::run(core_config, Arc::new(NotifierAdapter(notifier)))?;
     Ok(Arc::new(ServiceHandle {
         inner: Mutex::new(Some(handle)),
     }))

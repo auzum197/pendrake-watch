@@ -8,7 +8,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::ipc;
 use crate::wallet_service::WalletService;
@@ -19,6 +19,17 @@ use crate::paths::Paths;
 pub struct Config {
     /// Override the data directory. `None` uses the per-user default.
     pub data_dir: Option<PathBuf>,
+}
+
+/// Why [`run`] declined to start. A host distinguishes these: `AlreadyRunning`
+/// means a working service owns this data dir, so the caller should step aside
+/// (the macOS helper exits), while `Failed` is a real fault worth surfacing.
+#[derive(Debug, thiserror::Error)]
+pub enum StartError {
+    #[error("another Pendrake service instance is already running")]
+    AlreadyRunning,
+    #[error(transparent)]
+    Failed(#[from] anyhow::Error),
 }
 
 pub struct ServiceHandle {
@@ -40,7 +51,7 @@ impl Drop for ServiceHandle {
 
 /// Start the runtime, IPC server, and sync loop on background threads. Returns
 /// once the service is up. Errors if another instance already holds the lock.
-pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle> {
+pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle, StartError> {
     // zingolib's gRPC/TLS stack uses the rustls ring provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -53,16 +64,16 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle>
     let lock = File::options()
         .create(true)
         .write(true)
-        .open(paths.root.join("daemon.lock"))?;
+        .open(paths.root.join("daemon.lock"))
+        .map_err(anyhow::Error::from)?;
     if fs2::FileExt::try_lock_exclusive(&lock).is_err() {
-        return Err(anyhow!(
-            "another Pendrake service instance is already running"
-        ));
+        return Err(StartError::AlreadyRunning);
     }
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()?;
+        .build()
+        .map_err(anyhow::Error::from)?;
 
     let service = runtime.block_on(WalletService::load(paths.clone(), notifier))?;
     let serve_paths = paths.clone();
@@ -77,4 +88,58 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle>
         socket: paths.socket,
         _lock: lock,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::notify::NullNotifier;
+    use std::path::Path;
+
+    fn config_at(dir: &Path) -> Config {
+        Config {
+            data_dir: Some(dir.to_path_buf()),
+        }
+    }
+
+    #[test]
+    fn second_instance_is_rejected_as_already_running() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
+            .expect("the first instance starts");
+        match run(config_at(dir.path()), Arc::new(NullNotifier)) {
+            Err(StartError::AlreadyRunning) => {}
+            Err(_) => panic!("a second instance was refused, but not as AlreadyRunning"),
+            Ok(_) => panic!("a second instance on the same data dir should be refused"),
+        }
+        drop(first);
+    }
+
+    #[test]
+    fn dropping_the_handle_frees_the_data_dir_for_a_new_instance() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
+            .expect("the first instance starts");
+        drop(first);
+        run(config_at(dir.path()), Arc::new(NullNotifier))
+            .expect("a fresh instance starts once the lock is released");
+    }
+
+    #[test]
+    fn a_non_lock_startup_failure_is_reported_as_failed() {
+        // A regular file sitting where the data dir should be makes directory
+        // creation fail before the lock is ever considered. That fault must not
+        // masquerade as AlreadyRunning, or the host would wrongly step aside.
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let config = Config {
+            data_dir: Some(file.path().to_path_buf()),
+        };
+        match run(config, Arc::new(NullNotifier)) {
+            Err(StartError::Failed(_)) => {}
+            Err(StartError::AlreadyRunning) => {
+                panic!("a creation failure must not be reported as AlreadyRunning")
+            }
+            Ok(_) => panic!("run should fail when the data dir can't be created"),
+        }
+    }
 }

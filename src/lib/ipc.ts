@@ -22,6 +22,9 @@ export type WalletState = {
 	// The Indexer this Wallet syncs against, editable from Settings. Empty when no
 	// wallet exists.
 	indexerUri: string;
+	// Whether transaction and scan-complete notifications fire. The "Indexer
+	// unreachable" alert is independent of this.
+	notificationsEnabled: boolean;
 };
 
 export type WalletAddress = {
@@ -117,6 +120,10 @@ export type Tx = {
 	blockHeight?: number;
 	kind: TxKind;
 	valueZat: string;
+	// Signed net balance change in zatoshis (received +, sent/shield/self −). The
+	// chart reconstructs against this; valueZat stays the display amount. Optional so
+	// a daemon predating the field doesn't break the client (the chart falls back).
+	netZat?: string;
 	status: TxStatus;
 	notes: Note[];
 };
@@ -167,6 +174,12 @@ export function lock(): Promise<void> {
 // malformed, leaving the current Indexer in place.
 export function setIndexer(indexerUri: string): Promise<WalletState> {
 	return invoke("set_indexer", { indexerUri });
+}
+
+// Toggle transaction and scan-complete notifications. The daemon persists the
+// choice and returns the updated state.
+export function setNotifications(enabled: boolean): Promise<WalletState> {
+	return invoke("set_notifications", { enabled });
 }
 
 // Re-authenticate against the held session passphrase without touching the wallet.

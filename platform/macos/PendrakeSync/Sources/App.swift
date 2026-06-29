@@ -28,9 +28,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         do {
             handle = try start(config: Config(dataDir: nil), notifier: SwiftNotifier())
             NSLog("pendrake-sync: service started")
+        } catch FfiError.AlreadyRunning {
+            // A working service already owns this data dir, so this launch has
+            // nothing to serve. Exit instead of lingering: a windowless accessory
+            // app left alive just steals focus each time it's activated, and a pile
+            // of them builds up as the GUI re-probes the socket.
+            NSLog("pendrake-sync: another instance already running, exiting")
+            NSApp.terminate(nil)
         } catch {
-            // Sync still mattered less than the GUI working; log and stay alive so
-            // a later relaunch can retry, but there's nothing to notify about.
+            // A genuine start failure. Sync mattered less than the GUI working, so
+            // log and stay alive for a later relaunch to retry, with nothing to notify.
             NSLog("pendrake-sync: service start failed: \(error)")
         }
     }

@@ -90,7 +90,12 @@ const routeTree = rootRoute.addChildren([
 export const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",
-	defaultViewTransition: true,
+	// No page view-transition crossfade. It snapshots the outgoing page, and capturing
+	// a tall virtualized list (the Activity history) stalled every navigation away from
+	// it — WebKit rasterizes the full scroll height regardless of paint containment.
+	// Screens animate themselves in on mount instead (see lib/motion), which never
+	// touches the outgoing DOM, so navigation stays instant whatever the history size.
+	defaultViewTransition: false,
 	// Restore each route's scroll on back/forward. The app's scroll lives in a
 	// nested container (AppShell's <main>, tagged data-scroll-restoration-id), not
 	// the window, so returning from a transaction lands the list where it was.

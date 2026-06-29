@@ -77,6 +77,9 @@ export type BalancePoint = {
   t: number;
   value: number;
   label: string;
+  // The block the transaction confirmed in, for the tooltip. Absent on the
+  // synthetic leading point, which belongs to no transaction.
+  height?: number;
 };
 
 function shortDate(epoch: number): string {
@@ -87,12 +90,28 @@ function shortDate(epoch: number): string {
   });
 }
 
-// The daemon keeps no balance history, so reconstruct the confirmed balance
-// after each transaction by walking the history backward from the current
-// confirmed total. Anchoring on the live balance keeps the latest point equal
-// to the headline figure regardless of fee accounting. A leading point holds
-// the balance before the first transaction so the area grows from it. Balance
-// can never be negative, so each point is floored at zero.
+// A transaction's effect on the confirmed balance. Prefer the daemon's signed net
+// delta (received +, sent/shield/self −fee); fall back to the signed display value for
+// a daemon that predates `netZat`, so the chart renders instead of throwing on
+// BigInt(undefined). The fallback is less accurate through shields and self-sends.
+function txDelta(t: Tx): bigint {
+  if (t.netZat != null) return BigInt(t.netZat);
+  const v = BigInt(t.valueZat);
+  return t.kind === "received" ? v : -v;
+}
+
+// The daemon keeps no balance history, so reconstruct the confirmed balance after
+// each transaction by walking the history backward from the current confirmed total,
+// subtracting each transaction's net balance change. Anchoring on the live balance
+// keeps the latest point equal to the headline figure, and using the net delta (not
+// the display `valueZat`) keeps the walk honest through shields and self-sends. When
+// the transactions reconcile with the balance the residual before the first one is
+// ~0, so the curve opens at zero. If they don't reconcile (e.g. a watch-only scan
+// missing early receives), that residual is the balance the wallet must have held
+// before the first visible transaction, and it shows as the starting point — the
+// chart can't invent history it wasn't given. A leading point sits a short runway
+// before the first transaction so the area rises out of a flat run. Balance can never
+// be negative, so each point is floored at zero.
 export function balanceHistory(
   txs: Tx[],
   balance: Balance | null,
@@ -109,14 +128,24 @@ export function balanceHistory(
   let running = totalConfirmed(balance) ?? 0n;
   for (let i = confirmedTxs.length - 1; i >= 0; i--) {
     afters[i] = floor(running);
-    const delta = BigInt(confirmedTxs[i].valueZat);
-    running -= confirmedTxs[i].kind === "received" ? delta : -delta;
+    // The delta is already signed, so undoing a transaction is a plain subtraction.
+    running -= txDelta(confirmedTxs[i]);
   }
+
+  // Push the leading point back by a fraction of the series' full time span so the
+  // curve gets a flat run before the first receive. Sizing the margin off the span
+  // (the chart's own width) keeps it visibly proportional whether the history is
+  // dense or sparse, and it recomputes as the span grows while the scan streams
+  // points in. Falls back to a day when every confirmed tx shares a timestamp.
+  const first = confirmedTxs[0].datetime;
+  const last = confirmedTxs[confirmedTxs.length - 1].datetime;
+  const span = last - first;
+  const runway = span > 0 ? Math.round(span * 0.07) : 86_400;
 
   const points: BalancePoint[] = [
     {
       key: "start",
-      t: confirmedTxs[0].datetime,
+      t: first - runway,
       value: toZec(floor(running)),
       label: "",
     },
@@ -127,6 +156,7 @@ export function balanceHistory(
       t: confirmedTxs[i].datetime,
       value: toZec(afters[i]),
       label: shortDate(confirmedTxs[i].datetime),
+      height: confirmedTxs[i].blockHeight,
     });
   }
   return points;
@@ -143,8 +173,13 @@ export function athStanding(
   const ath = Math.max(...points.map((p) => p.value));
   if (ath <= 0) return null;
   const current = points[points.length - 1].value;
-  const pct = Math.round((current / ath) * 100);
-  return { pct, atPeak: pct >= 100 };
+  const raw = (current / ath) * 100;
+  const rounded = Math.round(raw);
+  // A tiny balance against a large peak rounds down to 0%, which reads as
+  // nothing left when there still is. Keep two significant digits in that
+  // sub-1% range so a real holding never shows as 0%.
+  const pct = rounded === 0 && raw > 0 ? Number(raw.toPrecision(2)) : rounded;
+  return { pct, atPeak: rounded >= 100 };
 }
 
 // A transaction trips the list's memo indicator when any of its notes carries a
@@ -172,6 +207,47 @@ export function splitAddress(addr: string, visible = 6): AddressParts {
   const data = addr.slice(prefix.length);
   if (data.length <= visible * 2) return { prefix, head: data, tail: "" };
   return { prefix, head: data.slice(0, visible), tail: data.slice(-visible) };
+}
+
+// A transaction's confirming block, for the list's block column. Pending
+// transactions have no height yet, so they read as a dash.
+export function formatBlock(height: number | undefined): string {
+  return height ? `#${height.toLocaleString()}` : "—";
+}
+
+// Zatoshis to a plain ZEC decimal with no thousands grouping, so it's safe to drop
+// into a CSV cell. Exact integer math, no float rounding. formatZec is the grouped,
+// human-facing counterpart for the UI.
+function zatToZecPlain(zat: bigint): string {
+  const neg = zat < 0n;
+  const abs = neg ? -zat : zat;
+  const frac = (abs % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");
+  return `${neg ? "-" : ""}${abs / 100_000_000n}${frac ? `.${frac}` : ""}`;
+}
+
+// The activity list as CSV text for the clipboard. Newest first, matching the list
+// on screen. No field can hold a comma (hex txid, enum kind/status, ISO date, plain
+// decimal), so rows need no quoting. Block is blank while a transaction is pending.
+export function txsToCsv(txs: Tx[]): string {
+  const header = "Block,Date,Type,Status,Amount (ZEC),Txid";
+  const ordered = [...txs].sort((a, b) => {
+    const ha = a.blockHeight ?? Infinity;
+    const hb = b.blockHeight ?? Infinity;
+    if (ha !== hb) return hb - ha;
+    return b.datetime - a.datetime;
+  });
+  const rows = ordered.map((tx) => {
+    const ms = tx.datetime < 1e12 ? tx.datetime * 1000 : tx.datetime;
+    return [
+      tx.blockHeight ?? "",
+      new Date(ms).toISOString(),
+      tx.kind,
+      tx.status,
+      zatToZecPlain(BigInt(tx.valueZat)),
+      tx.txid,
+    ].join(",");
+  });
+  return [header, ...rows].join("\n");
 }
 
 export function formatTime(epoch: number): string {

@@ -6,7 +6,7 @@
 //! pushed event, so the GUI sees progress and history update as blocks land
 //! rather than on a poll timer.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -16,8 +16,8 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, ParseUfvkResult, Pool, PoolBalance, RemoveArgs,
-    SetIndexerArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork,
-    UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
+    SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind,
+    TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -33,7 +33,10 @@ use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
-use zingolib::wallet::summary::data::{TransactionKind, TransactionSummary};
+use zingolib::wallet::output::SpendStatus;
+use zingolib::wallet::summary::data::{
+    TransactionKind, TransactionSummaries, TransactionSummary,
+};
 use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
 use zip32::AccountId;
@@ -88,6 +91,10 @@ pub struct WalletService {
     /// outage, so a multi-round backoff notifies once. Cleared when a round
     /// succeeds, the Indexer changes, or a fresh sync loop starts.
     unreachable_notified: AtomicBool,
+    /// Whether transaction and scan-complete toasts fire, mirroring
+    /// `Meta::notifications_enabled` for the hot notify path. Toggled from Settings.
+    /// The "Indexer unreachable" alert ignores this.
+    notifications_enabled: AtomicBool,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -342,6 +349,7 @@ impl WalletService {
             addresses: RwLock::new(Vec::new()),
             notify,
             unreachable_notified: AtomicBool::new(false),
+            notifications_enabled: AtomicBool::new(true),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             session_locked: AtomicBool::new(false),
@@ -353,6 +361,9 @@ impl WalletService {
 
         if let Some(meta) = Meta::load(&service.paths.meta_file)? {
             service.encrypted.store(meta.encrypted, Ordering::SeqCst);
+            service
+                .notifications_enabled
+                .store(meta.notifications_enabled, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -441,6 +452,10 @@ impl WalletService {
                 let args: SetIndexerArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_indexer(args.indexer_uri).await?)?)
             }
+            "setNotifications" => {
+                let args: SetNotificationsArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_notifications(args.enabled).await?)?)
+            }
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
@@ -502,6 +517,7 @@ impl WalletService {
                 network: m.network,
                 birthday_height: m.birthday_height,
                 indexer_uri: m.indexer_uri.clone(),
+                notifications_enabled: m.notifications_enabled,
             },
             None => WalletState {
                 exists: false,
@@ -513,6 +529,7 @@ impl WalletService {
                 network: Network::Mainnet,
                 birthday_height: 0,
                 indexer_uri: String::new(),
+                notifications_enabled: true,
             },
         }
     }
@@ -526,7 +543,9 @@ impl WalletService {
         let Some(client) = guard.as_ref() else { return };
 
         if let Ok(summaries) = client.transaction_summaries(true).await {
-            *self.txs.write().await = summaries.iter().map(map_tx).collect();
+            let spent_by = spent_value_by_tx(&summaries);
+            *self.txs.write().await =
+                summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
         }
         if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
             *self.balance.write().await = Some(map_balance(&bal));
@@ -599,6 +618,7 @@ impl WalletService {
             scan_target_height,
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
+            notifications_enabled: true,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -629,6 +649,7 @@ impl WalletService {
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
         self.encrypted.store(true, Ordering::SeqCst);
+        self.notifications_enabled.store(true, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -752,6 +773,21 @@ impl WalletService {
         // Cut short any idle/backoff wait so the new round starts now.
         self.restart.notify_one();
 
+        Ok(self.wallet_state().await)
+    }
+
+    /// Toggle whether transaction and scan-complete toasts fire. The in-memory atomic
+    /// gates the hot notify path; the meta flag persists the choice. The
+    /// "Indexer unreachable" alert is independent and keeps firing either way.
+    async fn set_notifications(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set notifications for"))?;
+        meta.notifications_enabled = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        self.notifications_enabled.store(enabled, Ordering::SeqCst);
         Ok(self.wallet_state().await)
     }
 
@@ -1010,8 +1046,7 @@ impl WalletService {
                 // batch can push synced_height past N. The crossing then fires only
                 // when the scan reaches the tip at finalize, not mid-round.
                 let target = self.scan_target().await;
-                self.notify
-                    .seed_live(u32::from(sync_start_height), target);
+                self.notify.seed_live(u32::from(sync_start_height), target);
                 view.in_flight.clear();
                 view.timing_log.clear();
                 view.aggregate_log.clear();
@@ -1132,7 +1167,17 @@ impl WalletService {
         // Upsert into the cache so this tx's detail view resolves instantly, even
         // mid-first-sync before any snapshot refresh has run.
         {
-            let tx = map_tx(&summary);
+            // A single live summary can't see which earlier notes this tx spent (that
+            // needs the full set), so the exact gained − lost isn't available yet. Use
+            // the fork's own per-tx delta as the interim: it keeps sends negative, so the
+            // chart's backward reconstruction doesn't collapse the early history to zero
+            // mid-scan the way a gained-only delta would. refresh_snapshot recomputes the
+            // exact value (gained − lost, which also credits self-authored income) at the
+            // end of the round. Falls back to gained-only when the fee is unknown.
+            let mut tx = map_tx(&summary, &HashMap::new());
+            if let Some(delta) = summary.balance_delta() {
+                tx.net_zat = delta.to_string();
+            }
             let mut txs = self.txs.write().await;
             match txs.iter_mut().find(|t| t.txid == txid) {
                 Some(slot) => *slot = tx,
@@ -1160,6 +1205,12 @@ impl WalletService {
             true
         };
         if let Disposition::Notify = self.notify.classify(&txid, live) {
+            // Notifications off: record the txid as seen so re-enabling later doesn't
+            // replay it as new, then deliver nothing.
+            if !self.notifications_enabled.load(Ordering::SeqCst) {
+                self.notify.mark_notified(&txid);
+                return;
+            }
             let amount = format_amount(summary.value);
             let (title, body) = if received {
                 (
@@ -1266,7 +1317,11 @@ impl WalletService {
     /// early. A wallet that began at or past N was seeded live and never fires.
     async fn announce_scan_complete(&self, synced_height: u32) {
         let target = self.scan_target().await;
-        if self.notify.crossed_to_live(synced_height, target) {
+        // Advance the live edge regardless, so the crossing only ever fires once even
+        // if notifications were off when the scan finished.
+        if self.notify.crossed_to_live(synced_height, target)
+            && self.notifications_enabled.load(Ordering::SeqCst)
+        {
             let _ = self.notifier.notify(
                 "Wallet ready",
                 "Pendrake finished scanning. You'll be notified of new activity.",
@@ -1285,7 +1340,7 @@ fn wallet_settings() -> WalletSettings {
     WalletSettings {
         sync_config: SyncConfig {
             transparent_address_discovery: TransparentAddressDiscovery::minimal(),
-            performance_level: PerformanceLevel::High,
+            performance_level: PerformanceLevel::Medium,
             ..SyncConfig::default()
         },
         min_confirmations: std::num::NonZeroU32::new(1).unwrap(),
@@ -1394,8 +1449,45 @@ fn pool_balance(confirmed: Option<Zatoshis>, total: Option<Zatoshis>) -> Option<
     }
 }
 
-fn map_tx(s: &TransactionSummary) -> Tx {
+/// Attribute every confirmed-spent received note (across all summaries) to the
+/// transaction that spent it, keyed by spending txid. `map_tx` subtracts a
+/// transaction's entry here from the value it gained to get the true net balance delta.
+fn spent_value_by_tx(summaries: &TransactionSummaries) -> HashMap<String, u64> {
+    let mut spent_by: HashMap<String, u64> = HashMap::new();
+    for s in summaries.iter() {
+        let outputs = s
+            .orchard_notes
+            .iter()
+            .map(|n| (n.spend_status, n.value))
+            .chain(s.sapling_notes.iter().map(|n| (n.spend_status, n.value)))
+            .chain(s.transparent_coins.iter().map(|c| (c.spend_summary, c.value)));
+        for (status, value) in outputs {
+            if let SpendStatus::Spent(txid) = status {
+                *spent_by.entry(txid.to_string()).or_insert(0) += value;
+            }
+        }
+    }
+    spent_by
+}
+
+fn map_tx(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> Tx {
     let confirmed = s.status.is_confirmed();
+    // The net change to the wallet's balance: the value of the notes this transaction
+    // creates for the wallet, minus the value of the notes it spends. Unlike `value`
+    // (a display amount that nets self-transfers to ~the fee), this credits income that
+    // first enters through a wallet-authored output — coinbase to self, or funds
+    // shielded from an unscanned transparent input — so the reconstructed history sums
+    // to the balance. Spent inputs come from each received note's spend-status,
+    // attributed by `spent_by` to the transaction that spent them.
+    let gained: u64 = s
+        .orchard_notes
+        .iter()
+        .map(|n| n.value)
+        .chain(s.sapling_notes.iter().map(|n| n.value))
+        .chain(s.transparent_coins.iter().map(|c| c.value))
+        .sum();
+    let lost = spent_by.get(&s.txid.to_string()).copied().unwrap_or(0);
+    let net = gained as i64 - lost as i64;
     Tx {
         txid: s.txid.to_string(),
         datetime: s.datetime as u64,
@@ -1405,6 +1497,7 @@ fn map_tx(s: &TransactionSummary) -> Tx {
             TransactionKind::Sent(_) => TxKind::Sent,
         },
         value_zat: s.value.to_string(),
+        net_zat: net.to_string(),
         status: if confirmed {
             TxStatus::Confirmed
         } else {
@@ -1683,5 +1776,127 @@ mod tests {
         service.subscriber_left();
         // A plaintext wallet has no passphrase to demand, so it stays open.
         assert!(!service.session_locked());
+    }
+
+    use zingo_status::confirmation_status::ConfirmationStatus;
+    use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
+
+    fn txid(byte: u8) -> TxId {
+        TxId::from_bytes([byte; 32])
+    }
+
+    // A confirmed transaction carrying `received` orchard notes, each (value,
+    // spend-status). `display` is the fork's `value` field, the signed amount the net
+    // delta deliberately ignores in favour of the note flows.
+    fn summary(
+        txid_byte: u8,
+        kind: TransactionKind,
+        display: u64,
+        received: Vec<(u64, SpendStatus)>,
+    ) -> TransactionSummary {
+        TransactionSummary {
+            txid: txid(txid_byte),
+            datetime: 0,
+            status: ConfirmationStatus::Confirmed(BlockHeight::from_u32(1)),
+            blockheight: BlockHeight::from_u32(1),
+            kind,
+            value: display,
+            fee: None,
+            zec_price: None,
+            orchard_notes: received
+                .into_iter()
+                .enumerate()
+                .map(|(i, (value, status))| {
+                    BasicNoteSummary::from_parts(value, status, i as u32, None)
+                })
+                .collect(),
+            sapling_notes: vec![],
+            transparent_coins: vec![],
+            outgoing_orchard_notes: vec![],
+            outgoing_sapling_notes: vec![],
+            outgoing_transparent_coins: vec![],
+        }
+    }
+
+    fn net_of(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> i64 {
+        map_tx(s, spent_by).net_zat.parse().unwrap()
+    }
+
+    // The invariant the balance chart leans on: summed over the whole history, each
+    // transaction's net delta equals the confirmed balance (the value of every unspent
+    // received note). When it holds, the reconstructed curve ends on the headline and
+    // walks back to zero.
+    #[test]
+    fn net_deltas_sum_to_the_unspent_balance() {
+        // A receives 100, later spent by B; B keeps 30 as change and sends the rest
+        // out. The only unspent note left is B's 30.
+        let a = summary(
+            0xAA,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0xBB)))],
+        );
+        let b = summary(
+            0xBB,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![a, b]);
+
+        let spent_by = spent_value_by_tx(&history);
+        let total: i64 = history.iter().map(|s| net_of(s, &spent_by)).sum();
+        assert_eq!(total, 30);
+    }
+
+    // A plain external receive credits the full received value: nothing of the wallet's
+    // is spent, so the delta is exactly what arrived.
+    #[test]
+    fn external_receive_credits_the_full_value() {
+        let s = summary(
+            0x01,
+            TransactionKind::Received,
+            500,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&s, &HashMap::new()), 500);
+    }
+
+    // A send debits the spent inputs and credits only the change that returns, so its
+    // delta is the negative of what left the wallet (the external payment plus fee),
+    // regardless of the larger signed `display` amount.
+    #[test]
+    fn send_nets_change_minus_spent_inputs() {
+        let funding = summary(
+            0x02,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0x03)))],
+        );
+        let send = summary(
+            0x03,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![funding, send.clone()]);
+        let spent_by = spent_value_by_tx(&history);
+        assert_eq!(net_of(&send, &spent_by), 30 - 100);
+    }
+
+    // The bug this delta exists to fix: income that first enters through a
+    // wallet-authored output. A shield from an unscanned transparent input (or a
+    // coinbase paid to the wallet's own shielded address) creates a received note with
+    // no matching spent note, and the fork's signed `display` nets it to roughly the
+    // fee. The note-flow delta credits the full value instead of zeroing it out.
+    #[test]
+    fn self_authored_inflow_is_credited_not_zeroed() {
+        let shield = summary(
+            0x04,
+            TransactionKind::Sent(SendType::Shield),
+            0,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&shield, &HashMap::new()), 500);
     }
 }

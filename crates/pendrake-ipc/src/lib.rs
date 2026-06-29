@@ -101,6 +101,9 @@ pub struct WalletState {
     /// The Indexer this Wallet syncs against, editable from Settings (AUZ-47).
     /// Empty when no wallet exists.
     pub indexer_uri: String,
+    /// Whether transaction and scan-complete notifications fire. Toggled from
+    /// Settings; the "Indexer unreachable" alert is independent of this.
+    pub notifications_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -182,6 +185,11 @@ pub struct ImportUfvkArgs {
 #[serde(rename_all = "camelCase")]
 pub struct SetIndexerArgs {
     pub indexer_uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetNotificationsArgs {
+    pub enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -432,6 +440,9 @@ pub struct Tx {
     pub block_height: Option<u32>,
     pub kind: TxKind,
     pub value_zat: String,
+    /// Signed net balance change in zatoshis (received +, sent/shield/self −).
+    /// Distinct from `value_zat`, which is the display amount.
+    pub net_zat: String,
     pub status: TxStatus,
     /// The transaction's outputs the Wallet can see, both directions, carried so
     /// the GUI can show per-note Pool/value/memo and the has-memo indicator.
