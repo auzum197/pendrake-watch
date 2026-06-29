@@ -16,11 +16,14 @@ impl Notifier for DesktopNotifier {
     #[cfg(target_os = "linux")]
     fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
         // The "default" action fires when the user clicks the notification body.
-        // Wait for it off the calling thread, then open the deep link.
+        // Wait for it off the calling thread, then open the deep link. The toast must
+        // outlive the server's default expiry: an auto-dismissed notification can't be
+        // clicked, which is the whole point here, so it stays until acted on (AUZ-101).
         let handle = notify_rust::Notification::new()
             .summary(title)
             .body(body)
             .action("default", "Open")
+            .timeout(notify_rust::Timeout::Never)
             .show()?;
         let url = deep_link.to_string();
         std::thread::spawn(move || {
