@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
 	IconAlertTriangle,
 	IconCircleCheckFilled,
@@ -124,6 +125,7 @@ function ChartCard({
 	txs: Tx[];
 	sync: SyncStatus | null;
 }) {
+	const navigate = useNavigate();
 	const [range, setRange] = useState<ChartRange>("all");
 	const total = totalConfirmed(balance);
 	// Memoised so a sync-only refresh doesn't hand the chart a fresh array and force a
@@ -170,9 +172,10 @@ function ChartCard({
 							]}
 						/>
 					</div>
-					{/* Placeholder for a future pools breakdown section. */}
+					{/* Opens the per-pool breakdown (Orchard/Sapling/Transparent). */}
 					<button
 						type="button"
+						onClick={() => navigate({ to: "/pools" })}
 						className="w-44 rounded-lg border border-border bg-muted/40 px-6 py-2.5 text-sm font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-muted-foreground/40 hover:bg-muted active:scale-[0.98]"
 					>
 						Pools

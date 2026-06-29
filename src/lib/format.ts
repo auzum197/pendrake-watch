@@ -20,6 +20,12 @@ export function formatZec(zatoshis: bigint): string {
   });
 }
 
+// The raw zatoshi count, grouped. For per-note amounts, where dust (a few hundred
+// zatoshis) rounds to a misleading 0 in ZEC.
+export function formatZat(zatoshis: bigint): string {
+  return zatoshis.toLocaleString();
+}
+
 // ZEC at a fixed number of decimals, padded, for columns that align on the point.
 // formatZec trims trailing zeros for the headline figure. The notes debug view wants
 // every row the same width (8 places in the table, 4 in the summary cards).

@@ -12,6 +12,7 @@ import { AboutPage } from "@/routes/about";
 import { TxDetailPage } from "@/routes/tx";
 import { OnboardingPage } from "@/routes/onboarding";
 import { DashboardPage } from "@/routes/dashboard";
+import { PoolsPage } from "@/routes/pools";
 import { ActivityPage } from "@/routes/activity";
 import { NotesPage } from "@/routes/notes";
 import { SettingsPage } from "@/routes/settings";
@@ -59,6 +60,12 @@ const dashboardRoute = createRoute({
 	component: DashboardPage,
 });
 
+const poolsRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/pools",
+	component: PoolsPage,
+});
+
 const activityRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/activity",
@@ -95,6 +102,7 @@ const routeTree = rootRoute.addChildren([
 	unlockRoute,
 	appLayoutRoute.addChildren([
 		dashboardRoute,
+		poolsRoute,
 		activityRoute,
 		notesRoute,
 		settingsRoute,

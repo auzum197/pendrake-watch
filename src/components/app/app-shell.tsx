@@ -151,7 +151,7 @@ function AppSidebar({
 				<span className="font-heading text-lg font-bold">Pendrake</span>
 			</div>
 
-			<div className="mt-5 flex flex-col rounded-xl bg-white/4 p-4">
+			<div className="mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
 				<div className="flex items-center gap-3">
 					{wallet?.fingerprint ? (
 						<LifeHashIcon
