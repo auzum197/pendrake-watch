@@ -15,6 +15,17 @@ export default defineConfig(async () => ({
     },
   },
 
+  // The About window is its own lightweight HTML entry, so it loads just the card
+  // instead of booting the full app a second time.
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        about: path.resolve(__dirname, "about.html"),
+      },
+    },
+  },
+
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

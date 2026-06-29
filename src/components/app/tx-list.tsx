@@ -48,7 +48,7 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
   const rows = limit ? ordered.slice(0, limit) : ordered;
 
   if (rows.length === 0) {
-    return <p className="mt-4 text-sm text-zinc-400">No transactions yet.</p>;
+    return <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>;
   }
 
   const open = (txid: string) =>
@@ -60,14 +60,14 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     return (
       <table className="mt-4 w-full text-sm">
         <thead>
-          <tr className="text-left text-xs text-zinc-400">
+          <tr className="text-left text-xs text-muted-foreground">
             <th className="pb-3 font-normal">Tx Type</th>
             <th className="pb-3 font-normal">Amount</th>
             <th className="pb-3 font-normal">Status</th>
             <th className="pb-3 font-normal">Block</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100">
+        <tbody className="divide-y divide-border">
           {rows.map((tx, i) => {
             const returning = returnTxid !== null;
             const motion = animationsEnabled();
@@ -82,7 +82,7 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
                 key={tx.txid}
                 onClick={() => open(tx.txid)}
                 style={reveal ? { animationDelay: `${delay}ms` } : undefined}
-                className={`cursor-pointer transition-colors hover:bg-zinc-50 ${
+                className={`cursor-pointer transition-colors hover:bg-muted ${
                   flash ? "tx-flash" : reveal ? "reveal-up" : ""
                 }`}
               >
@@ -90,14 +90,14 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
                   <TxType tx={tx} received={received} />
                 </td>
                 <td
-                  className={`py-3 font-mono tabular-nums ${received ? "text-green-600" : ""}`}
+                  className={`py-3 font-mono tabular-nums ${received ? "text-green-400" : ""}`}
                 >
                   <TxAmount tx={tx} received={received} />
                 </td>
                 <td className="py-3">
                   <StatusBadge status={tx.status} />
                 </td>
-                <td className="py-3 font-mono tabular-nums text-zinc-400">
+                <td className="py-3 font-mono tabular-nums text-muted-foreground">
                   {formatBlock(tx.blockHeight)}
                 </td>
               </tr>
@@ -182,7 +182,7 @@ function VirtualTxList({
 
   return (
     <div className="mt-4 text-sm">
-      <div className={`${COLS} pb-3 text-left text-xs text-zinc-400`}>
+      <div className={`${COLS} pb-3 text-left text-xs text-muted-foreground`}>
         <span>Tx Type</span>
         <span>Amount</span>
         <span>Status</span>
@@ -218,7 +218,7 @@ function VirtualTxList({
               <div
                 onClick={() => onOpen(tx.txid)}
                 style={reveal ? { animationDelay: `${delay}ms` } : undefined}
-                className={`${COLS} h-full cursor-pointer border-b border-zinc-100 transition-colors hover:bg-zinc-50 ${
+                className={`${COLS} h-full cursor-pointer border-b border-border transition-colors hover:bg-muted ${
                   flash ? "tx-flash" : reveal ? "reveal-up" : ""
                 }`}
               >
@@ -226,12 +226,12 @@ function VirtualTxList({
                   <TxType tx={tx} received={received} />
                 </span>
                 <span
-                  className={`font-mono tabular-nums ${received ? "text-green-600" : ""}`}
+                  className={`font-mono tabular-nums ${received ? "text-green-400" : ""}`}
                 >
                   <TxAmount tx={tx} received={received} />
                 </span>
                 <StatusBadge status={tx.status} />
-                <span className="font-mono tabular-nums text-zinc-400">
+                <span className="font-mono tabular-nums text-muted-foreground">
                   {formatBlock(tx.blockHeight)}
                 </span>
               </div>
@@ -248,7 +248,7 @@ function TxType({ tx, received }: { tx: Tx; received: boolean }) {
     <span className="flex items-center gap-1.5">
       {received ? "Received" : "Sent"}
       {txHasMemo(tx) && (
-        <IconMessage2 className="size-3.5 text-zinc-400" aria-label="Has memo" />
+        <IconMessage2 className="size-3.5 text-muted-foreground" aria-label="Has memo" />
       )}
     </span>
   );
@@ -266,14 +266,14 @@ function TxAmount({ tx, received }: { tx: Tx; received: boolean }) {
 function StatusBadge({ status }: { status: Tx["status"] }) {
   if (status === "confirmed") {
     return (
-      <span className="flex items-center gap-1.5 text-zinc-600">
+      <span className="flex items-center gap-1.5 text-muted-foreground">
         <IconCircleCheckFilled className="size-4 text-brand" />
         Confirmed
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1.5 text-zinc-600">
+    <span className="flex items-center gap-1.5 text-muted-foreground">
       <IconLoader2 className="size-4 animate-spin text-brand" />
       Pending
     </span>

@@ -1,95 +1,66 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/noto-sans";
-@import "@fontsource-variable/manrope";
 @import "@fontsource-variable/nunito-sans";
+@import "@fontsource-variable/space-grotesk";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* Surfaces are a soft off-white rather than pure white: the floating panel
-       (background) a touch grayer, cards a step lighter so they still lift off it. */
-    --background: oklch(0.965 0.003 286);
-    --foreground: oklch(0.141 0.005 285.823);
-    --card: oklch(0.988 0.002 286);
-    --card-foreground: oklch(0.141 0.005 285.823);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.141 0.005 285.823);
-    --primary: oklch(0.21 0.006 285.885);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.967 0.001 286.375);
-    --muted-foreground: oklch(0.552 0.016 285.938);
-    --accent: oklch(0.967 0.001 286.375);
-    --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.92 0.004 286.32);
-    --input: oklch(0.92 0.004 286.32);
-    --ring: oklch(0.705 0.015 286.067);
+    /* Dark-only palette, layered by surface. The frame and sidebar sit on --color-ink
+       (the darkest step); the content panel (--background) lifts off it, and cards
+       (--card) lift again off the panel. Borders read a step lighter than the card they
+       outline. Greens stay on the chart tokens; everything else is the new neutral ramp. */
+    --background: #161619;
+    --foreground: #fafafa;
+    --card: #1c1d21;
+    --card-foreground: #fafafa;
+    --popover: #1c1d21;
+    --popover-foreground: #fafafa;
+    --primary: #2e43ff;
+    --primary-foreground: #ffffff;
+    --secondary: #232327;
+    --secondary-foreground: #fafafa;
+    --muted: #232327;
+    --muted-foreground: #9b9ba1;
+    --accent: #232327;
+    --accent-foreground: #fafafa;
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: #2a2b30;
+    --input: #2a2b30;
+    --ring: #3a3b42;
     --chart-1: oklch(0.897 0.196 126.665);
     --chart-2: oklch(0.768 0.233 130.85);
     --chart-3: oklch(0.648 0.2 131.684);
     --chart-4: oklch(0.532 0.157 131.589);
     --chart-5: oklch(0.453 0.124 130.933);
     --radius: 0.875rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.141 0.005 285.823);
-    --sidebar-primary: oklch(0.21 0.006 285.885);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.967 0.001 286.375);
-    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-    --sidebar-border: oklch(0.92 0.004 286.32);
-    --sidebar-ring: oklch(0.705 0.015 286.067);
-}
-
-.dark {
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.21 0.006 285.885);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.92 0.004 286.32);
-    --primary-foreground: oklch(0.21 0.006 285.885);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.552 0.016 285.938);
-    --chart-1: oklch(0.897 0.196 126.665);
-    --chart-2: oklch(0.768 0.233 130.85);
-    --chart-3: oklch(0.648 0.2 131.684);
-    --chart-4: oklch(0.532 0.157 131.589);
-    --chart-5: oklch(0.453 0.124 130.933);
-    --sidebar: oklch(0.21 0.006 285.885);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.274 0.006 286.033);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.552 0.016 285.938);
+    --sidebar: #101012;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #2e43ff;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #232327;
+    --sidebar-accent-foreground: #fafafa;
+    --sidebar-border: #2a2b30;
+    --sidebar-ring: #3a3b42;
 }
 
 @theme inline {
-    --font-sans: 'Noto Sans Variable', sans-serif;
-    --font-heading: 'Nunito Sans Variable', sans-serif;
+    --font-sans: 'Nunito Sans Variable', sans-serif;
+    --font-heading: 'Space Grotesk Variable', sans-serif;
     /* Strong ease-out for reveals and entrances, punchier than the built-ins. */
     --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
     /* Pendrake brand palette, lifted from the designer's frames. Used by the
        onboarding wizard and the dashboard, independent of the light/dark tokens. */
-    --color-brand: #1a2bff;
+    --color-brand: #2e43ff;
     --color-brand-foreground: #ffffff;
-    --color-ink: #0e0e10;
+    --color-ink: #101012;
     --color-ink-soft: #1a1a1c;
     --color-ink-line: #2a2a2e;
+    /* Decorative warm gradient, lifted from the designer's frames. Used cautiously,
+       almost never (no neutral surface should reach for it). */
+    --color-accent-from: #ff610c;
+    --color-accent-to: #ef8f20;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

@@ -33,6 +33,7 @@ import {
 } from "@/lib/onboarding";
 import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import { Segmented } from "@/components/app/segmented";
 
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Indexer
 // -> Set Password). Fully dark, brand-blue accent, split layout with the 龙 mark.
@@ -574,51 +575,6 @@ function Verdict({ result }: { result: ParseUfvkResult }) {
 // rather than popping onto each. The capsule is one segment wide and rides on
 // translateX, so the move is a single GPU transform and a click mid-slide
 // retargets it. Segments are equal width to keep that translate exact.
-function Segmented<T extends string>({
-	value,
-	onChange,
-	options,
-}: {
-	value: T;
-	onChange: (v: T) => void;
-	options: { value: T; label: string }[];
-}) {
-	const active = Math.max(
-		0,
-		options.findIndex((o) => o.value === value),
-	);
-	return (
-		<div
-			className="relative grid w-full rounded-full border border-ink-line bg-ink-soft p-1"
-			style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}
-		>
-			<span
-				aria-hidden
-				className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-brand ease-out-soft motion-safe:transition-transform motion-safe:duration-200"
-				style={{
-					width: `calc((100% - 0.5rem) / ${options.length})`,
-					transform: `translateX(${active * 100}%)`,
-				}}
-			/>
-			{options.map((o) => (
-				<button
-					key={o.value}
-					type="button"
-					aria-pressed={value === o.value}
-					onClick={() => onChange(o.value)}
-					className={`relative z-10 rounded-full px-5 py-1.5 text-sm font-medium transition-colors ${
-						value === o.value
-							? "text-brand-foreground"
-							: "text-white/55 hover:text-white/80"
-					}`}
-				>
-					{o.label}
-				</button>
-			))}
-		</div>
-	);
-}
-
 function IndexerStep({
 	draft,
 	set,

@@ -1,3 +1,4 @@
+import { subDays, subMonths, subYears } from "date-fns";
 import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
 
 export function confirmed(pool: Balance["orchard"]): bigint {
@@ -170,6 +171,53 @@ export function balanceHistory(
     });
   }
   return points;
+}
+
+export type ChartRange = "all" | "year" | "month" | "week" | "day";
+
+// Clip the reconstructed balance series to a trailing time window. "all" passes the
+// full series through. For a window, keep the points inside it and prepend a baseline
+// at the window's start carrying the balance the wallet held entering it, so the area
+// opens at that level instead of dropping to zero. When no transaction lands in the
+// window the balance is flat across it (one line from the entering balance to now), and
+// when the window reaches back past the first transaction there's nothing to clip, so
+// the full series passes through.
+export function filterRange(
+  points: BalancePoint[],
+  range: ChartRange,
+): BalancePoint[] {
+  if (range === "all" || points.length === 0) return points;
+
+  const now = Date.now();
+  const startOf = {
+    year: subYears(now, 1),
+    month: subMonths(now, 1),
+    week: subDays(now, 7),
+    day: subDays(now, 1),
+  }[range].getTime();
+
+  // Points carry their time in the daemon's unit (unix seconds); match it so the
+  // cutoff lands in the same space, the way shortDate sniffs seconds vs millis.
+  const inMs = points[points.length - 1].t >= 1e12;
+  const cutoff = inMs ? startOf : Math.floor(startOf / 1000);
+
+  const before = points.filter((p) => p.t < cutoff);
+  if (before.length === 0) return points;
+
+  const enter = before[before.length - 1].value;
+  const baseline: BalancePoint = {
+    key: "range-start",
+    t: cutoff,
+    value: enter,
+    label: "",
+  };
+
+  const within = points.filter((p) => p.t >= cutoff);
+  if (within.length === 0) {
+    const nowT = inMs ? now : Math.floor(now / 1000);
+    return [baseline, { key: "range-now", t: nowT, value: enter, label: "" }];
+  }
+  return [baseline, ...within];
 }
 
 // Where the current balance sits against the highest it has ever reached (the
