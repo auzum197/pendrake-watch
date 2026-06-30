@@ -1270,46 +1270,52 @@ impl WalletService {
             received,
         });
 
-        // ADR-0006: a transaction inside the pinned Initial-scan range [birthday, N]
-        // is historical and stays silent; one at or past N, or still in the mempool,
-        // is post-import activity and notifies. Gating on the transaction's own height
-        // rather than synced_height is robust to pepper-sync's tip-first scan, which
-        // pushes synced_height past N before the older blocks are walked, so a stale
-        // transaction found after the jump would otherwise notify.
+        self.notify_tx(
+            &txid,
+            received,
+            summary.value,
+            summary.status.is_confirmed(),
+            u32::from(summary.blockheight),
+        )
+        .await;
+    }
+
+    /// Decide and deliver the per-transaction toast (ADR-0006). Split from
+    /// `on_tx_discovered` so the policy and delivery run without a live client (the
+    /// caller owns fetching the summary). `height` is unused for an unconfirmed
+    /// transaction, which always counts as live.
+    ///
+    /// A transaction inside the pinned Initial-scan range [birthday, N] is historical
+    /// and stays silent; one at or past N, or still in the mempool, is post-import
+    /// activity and notifies. Gating on the transaction's own height rather than
+    /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
+    /// `synced_height` past N before the older blocks are walked, so a stale
+    /// transaction found after the jump would otherwise notify.
+    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
         let target = self.scan_target().await;
-        let live = if summary.status.is_confirmed() {
-            u32::from(summary.blockheight) >= target
-        } else {
-            true
-        };
-        if let Disposition::Notify = self.notify.classify(&txid, live) {
+        let live = if confirmed { height >= target } else { true };
+        if let Disposition::Notify = self.notify.classify(txid, live) {
             // Notifications off: record the txid as seen so re-enabling later doesn't
             // replay it as new, then deliver nothing.
             if !self.notifications_enabled.load(Ordering::SeqCst) {
-                self.notify.mark_notified(&txid);
+                self.notify.mark_notified(txid);
                 return;
             }
-            let amount = format_amount(summary.value);
+            let amount = format_amount(value);
             let (title, body) = if received {
-                (
-                    "Funds received",
-                    format!("{amount} arrived in your wallet."),
-                )
+                ("Funds received", format!("{amount} arrived in your wallet."))
             } else {
                 ("Funds sent", format!("{amount} sent from your wallet."))
             };
-            tracing::info!(
-                "new tx {txid} ({} zat, received={received}), notifying",
-                summary.value
-            );
-            // Record the txid as notified only after delivery succeeds. A failure
-            // leaves it out of the set, so a later rediscovery (at the latest, the
-            // next restart's catch-up sync) tries again rather than losing it.
+            tracing::info!("new tx {txid} ({value} zat, received={received}), notifying");
+            // Record the txid as notified only after delivery succeeds. A failure leaves
+            // it out of the set, so a later rediscovery (at the latest, the next restart's
+            // catch-up sync) tries again rather than losing it.
             match self
                 .notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
             {
-                Ok(()) => self.notify.mark_notified(&txid),
+                Ok(()) => self.notify.mark_notified(txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
                 }
@@ -1730,6 +1736,96 @@ mod tests {
         let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         Paths::with_root(root)
+    }
+
+    // Records every delivery so a test can assert which toasts were raised.
+    struct SpyNotifier(std::sync::Mutex<Vec<(String, String, String)>>);
+
+    impl SpyNotifier {
+        fn new() -> Self {
+            Self(std::sync::Mutex::new(Vec::new()))
+        }
+        fn calls(&self) -> Vec<(String, String, String)> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl Notifier for SpyNotifier {
+        fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((title.to_owned(), body.to_owned(), deep_link.to_owned()));
+            Ok(())
+        }
+    }
+
+    // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
+    // at `target`, so `notify_tx` runs the real policy without a live client.
+    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+        let service = WalletService::load(test_paths(name), spy).await.unwrap();
+        *service.meta.write().await = Some(Meta {
+            network: Network::Mainnet,
+            indexer_uri: String::new(),
+            import_type: ImportType::Ufvk,
+            view_mode: ViewMode::Full,
+            birthday_height: 0,
+            scan_target_height: target,
+            encrypted: false,
+            fingerprint: None,
+            notifications_enabled: true,
+        });
+        service
+    }
+
+    #[tokio::test]
+    async fn a_live_transaction_raises_a_movement_toast() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-live", spy.clone(), 100).await;
+        // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
+        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, "pendrake://tx?txid=txlive");
+    }
+
+    #[tokio::test]
+    async fn a_historical_transaction_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-historical", spy.clone(), 100).await;
+        // Confirmed below N: Initial-scan history, recorded silently with no toast.
+        service.notify_tx("txold", true, 42_000_000, true, 50).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unconfirmed_transaction_is_live() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
+        // Mempool is live regardless of height, so a send notifies right away.
+        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds sent");
+    }
+
+    #[tokio::test]
+    async fn the_same_live_transaction_notifies_once() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-once", spy.clone(), 100).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        assert_eq!(spy.calls().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn notifications_off_silences_a_live_transaction() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-off", spy.clone(), 100).await;
+        service.notifications_enabled.store(false, Ordering::SeqCst);
+        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        assert!(spy.calls().is_empty());
     }
 
     use pepper_sync::error::{ServerError, SyncError};
