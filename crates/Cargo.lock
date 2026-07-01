@@ -2531,6 +2531,7 @@ dependencies = [
  "json",
  "pendrake-ipc",
  "pepper-sync",
+ "reqwest",
  "rustls 0.23.41",
  "serde",
  "serde_json",

@@ -212,16 +212,6 @@
   }
 }
 
-/* The table isn't virtualized, so every note row is in the DOM at once. content-
-   visibility lets the engine skip layout and paint for rows scrolled out of view,
-   which is what keeps a 600+ note list from stalling on first paint. The reserved
-   size matches a py-2.5 single-line row, so the scrollbar stays honest before a row
-   has rendered. Degrades to a plain row where unsupported. */
-.note-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 41px;
-}
-
 /* The 8px pool dot beside a summary-card label. Identity colors, the same in both
    themes. */
 .pool-dot {

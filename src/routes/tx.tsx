@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useCanGoBack,
   useParams,
@@ -6,8 +6,9 @@ import {
 } from "@tanstack/react-router";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { getTransaction, onSyncEvent, type Note, type Tx } from "@/lib/ipc";
-import { formatZec, splitAddress } from "@/lib/format";
-import { getCachedTx } from "@/hooks/use-wallet-data";
+import { formatUsd, formatZec, priceLookup, splitAddress } from "@/lib/format";
+import { getCachedTx, getCachedWallet } from "@/hooks/use-wallet-data";
+import { usePriceData } from "@/hooks/use-price-data";
 import { flagReturnRow } from "@/components/app/return-flash";
 import { animationsEnabled } from "@/lib/motion";
 import "@/components/app/reveal.css";
@@ -31,6 +32,20 @@ export function TxDetailPage() {
   // and falls back to the fetch-and-poll below.
   const [tx, setTx] = useState<Tx | null>(() => getCachedTx(txid));
   const [loading, setLoading] = useState(() => getCachedTx(txid) === null);
+
+  // Per-transaction USD is the ZEC amount marked against the price on the day it
+  // landed (docs/adr/0008), so it reads as the value at the time, not today. Only
+  // shown when fiat is enabled; the price series comes from the same daemon cache.
+  const fiatEnabled = getCachedWallet()?.fiatEnabled ?? false;
+  const price = usePriceData(fiatEnabled);
+  const usdAt = useMemo(() => priceLookup(price.history), [price.history]);
+  const usdAtTime =
+    fiatEnabled && tx
+      ? (() => {
+          const p = usdAt(tx.datetime);
+          return p === null ? null : (Number(BigInt(tx.valueZat)) / 1e8) * p;
+        })()
+      : null;
 
   // Flag this row so the list flashes it on arrival, then return to wherever the
   // detail was opened from. A real history pop lets scroll restoration put the
@@ -107,6 +122,11 @@ export function TxDetailPage() {
           >
             {received ? "+" : "−"}
             {formatZec(BigInt(tx.valueZat))} ZEC
+          </span>
+        )}
+        {usdAtTime !== null && (
+          <span className={`${revealClass()} text-sm text-muted-foreground`}>
+            {formatUsd(usdAtTime)} at the time
           </span>
         )}
       </header>

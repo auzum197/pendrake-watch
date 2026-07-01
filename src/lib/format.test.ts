@@ -2,16 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   athStanding,
   balanceHistory,
+  fiatSeries,
   filterRange,
   formatBlock,
   formatEta,
   isSynced,
+  priceLookup,
   splitAddress,
   txHasMemo,
   txsToCsv,
 } from "./format";
 import type { BalancePoint } from "./format";
-import type { Balance, Note, SyncStatus, Tx } from "./ipc";
+import type { Balance, Note, PricePoint, SyncStatus, Tx } from "./ipc";
 
 const ZEC = 100_000_000;
 
@@ -488,5 +490,110 @@ describe("filterRange", () => {
   it("returns the full series when the window reaches past all history", () => {
     const pts = [pt("start", 3, 0), pt("a", 2, 4), pt("b", 1, 6)];
     expect(filterRange(pts, "year")).toBe(pts);
+  });
+});
+
+// Days as unix seconds, matching the daemon's balance/point time unit.
+const daySec = (iso: string) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 1000);
+
+function price(date: string, usd: number): PricePoint {
+  return { date, usdPerZec: usd, confidence: "high" };
+}
+
+describe("priceLookup", () => {
+  const prices = [
+    price("2024-01-01", 30),
+    price("2024-01-03", 50),
+  ];
+
+  it("returns null for an empty series", () => {
+    expect(priceLookup([])(daySec("2024-01-01"))).toBeNull();
+  });
+
+  it("holds the earliest price for instants before coverage", () => {
+    expect(priceLookup(prices)(daySec("2023-06-01"))).toBe(30);
+  });
+
+  it("carries the last known price forward across a gap", () => {
+    // No 2024-01-02 mark, so it reads the prior day's price.
+    expect(priceLookup(prices)(daySec("2024-01-02"))).toBe(30);
+    expect(priceLookup(prices)(daySec("2024-01-05"))).toBe(50);
+  });
+
+  it("accepts millisecond instants too", () => {
+    expect(priceLookup(prices)(Date.parse("2024-01-03T00:00:00Z"))).toBe(50);
+  });
+});
+
+describe("fiatSeries", () => {
+  const prices = [
+    price("2024-01-01", 30),
+    price("2024-01-02", 40),
+    price("2024-01-03", 50),
+  ];
+  const nowMs = Date.parse("2024-01-03T12:00:00Z");
+
+  it("is empty when either input is empty (falls back to ZEC)", () => {
+    const bal = [{ key: "start", t: daySec("2024-01-01"), value: 2, label: "" }];
+    expect(fiatSeries(bal, [], null, "all", nowMs)).toEqual([]);
+    expect(fiatSeries([], prices, null, "all", nowMs)).toEqual([]);
+  });
+
+  it("waves with the price while the balance holds flat", () => {
+    // A constant 2 ZEC balance across a rising price must trace the price, not a flat
+    // line. Interpolated between the daily marks, the value sweeps 60 -> 100 continuously,
+    // so there are many distinct values, all within balance (2) times the price range.
+    const bal = [
+      { key: "start", t: daySec("2024-01-01"), value: 2, label: "" },
+      { key: "t1", t: daySec("2024-01-01"), value: 2, label: "" },
+    ];
+    const out = fiatSeries(bal, prices, 50, "all", nowMs);
+    const values = out.map((p) => p.value);
+    expect(new Set(values).size).toBeGreaterThan(5);
+    expect(Math.min(...values)).toBeGreaterThanOrEqual(60);
+    expect(Math.max(...values)).toBeLessThanOrEqual(100);
+    // The curve actually moves rather than holding one value.
+    expect(Math.max(...values)).toBeGreaterThan(Math.min(...values));
+  });
+
+  it("gives a continuous hover: a value and its ZEC balance at points between changes", () => {
+    const bal = [
+      { key: "start", t: daySec("2024-01-01"), value: 2, label: "" },
+      { key: "t1", t: daySec("2024-01-01"), value: 2, label: "" },
+    ];
+    const out = fiatSeries(bal, prices, 50, "all", nowMs);
+    // Dense enough that hover lands anywhere, and every sample carries its ZEC balance.
+    expect(out.length).toBeGreaterThan(100);
+    expect(out.every((p) => p.zec === 2)).toBe(true);
+  });
+
+  it("drops a sharp step flagged for a dot at a balance change", () => {
+    // A receive on 2024-01-02 (price 40) jumps the balance 0 -> 3. The step must be
+    // vertical: two points at the same instant carrying old*price and new*price, and only
+    // the new one is flagged as a change (the point that gets a dot).
+    const bal = [
+      { key: "start", t: daySec("2024-01-01"), value: 0, label: "" },
+      { key: "t1", t: daySec("2024-01-02"), value: 3, label: "" },
+    ];
+    const out = fiatSeries(bal, prices, 50, "all", nowMs);
+    const change = out.find((p) => p.change);
+    // jump is the USD size of the step (|3 - 0| * 40), which the chart tests against the
+    // axis peak to decide whether the change is big enough to dot.
+    expect(change).toMatchObject({ value: 120, zec: 3, jump: 120 });
+    const pre = out.find((p) => p.key === "t1:pre");
+    expect(pre).toMatchObject({ value: 0, zec: 0 }); // 0 * 40
+  });
+
+  it("windows to the selected Span", () => {
+    // A year of flat balance, asking for the last week, keeps only ~week of samples.
+    const bal = [
+      { key: "start", t: daySec("2023-01-01"), value: 1, label: "" },
+      { key: "t1", t: daySec("2023-01-01"), value: 1, label: "" },
+    ];
+    const yearPrices = [price("2023-01-01", 30), price("2024-01-03", 50)];
+    const week = fiatSeries(bal, yearPrices, 50, "week", nowMs);
+    const span = week[week.length - 1].t - week[0].t;
+    // Seconds in the series' unit: a week (plus a sample's slack), not a year.
+    expect(span).toBeLessThanOrEqual(8 * 86_400);
   });
 });

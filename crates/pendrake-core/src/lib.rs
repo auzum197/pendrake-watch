@@ -7,6 +7,7 @@ mod ipc;
 mod notify;
 mod notify_policy;
 mod paths;
+mod price;
 mod run;
 pub mod transport;
 mod ufvk;
