@@ -3,14 +3,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { HoldButton } from "@/components/ui/hold-button";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { takePendingTxid } from "@/lib/deep-link";
@@ -156,15 +155,17 @@ export function UnlockPage() {
             <AlertDialogDescription>
               The passphrase isn't stored anywhere and the wallet file is
               encrypted with it, so a forgotten passphrase can't be recovered.
-              Starting over wipes the wallet store and returns to onboarding. It's
-              watch-only, so re-importing the UFVK restores it, with no funds at
-              risk.
+              Starting over wipes every wallet and returns to onboarding. It's
+              watch-only, so no funds are at risk, but you'll need your viewing
+              keys again to re-import.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <div className="flex flex-col gap-2">
+            <HoldButton onConfirm={startOver}>
+              Hold to start over
+            </HoldButton>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startOver}>Start over</AlertDialogAction>
-          </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>
