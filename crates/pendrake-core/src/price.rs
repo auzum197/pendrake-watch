@@ -28,6 +28,13 @@ const TAIL_CSV: &str = include_str!("../assets/zec-usd-daily-tail.csv");
 
 const COINBASE_FLOOR: &str = "2020-12-08";
 
+/// A common desktop-browser User-Agent, so price requests blend into ordinary web traffic
+/// instead of announcing the wallet. A distinctive UA like `pendrake-watch` fingerprints
+/// every fetch as this app to the provider and its CDN, tying the app to the source IP,
+/// which is the metadata leak docs/adr/0008 sets out to bound. Windows Chrome is the single
+/// largest UA share, so it's the widest crowd to hide in.
+const BROWSER_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
+
 /// The reconciled price state the daemon caches and serves. Persisted to `price_cache.json`
 /// as plaintext (it holds nothing secret), mirroring `notified.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -55,6 +62,20 @@ impl PriceCache {
         std::fs::write(&tmp, &bytes).context("writing price_cache.json.tmp")?;
         std::fs::rename(&tmp, path).context("renaming price_cache.json")?;
         Ok(())
+    }
+
+    /// The date to fetch the daily series from. Once the deep history is backfilled (the
+    /// oldest Coinbase day is present), only the newest cached day forward, so a routine
+    /// refresh is one request instead of paging to the 2020 floor every day. `None` before
+    /// backfill, asking for the full range. Gated on the Coinbase floor day, not the newest
+    /// key: the CSV tail always seeds days back to 2020-12-07, and CoinGecko can seed the
+    /// last year, so a newest key of "today" doesn't imply the middle stretch is covered.
+    pub fn daily_since(&self) -> Option<String> {
+        if self.daily.contains_key(COINBASE_FLOOR) {
+            self.daily.keys().next_back().cloned()
+        } else {
+            None
+        }
     }
 
     /// Seed the tail once from the bundled CSV, filling only days not already present so a
@@ -149,7 +170,7 @@ pub struct PriceFetcher {
 impl PriceFetcher {
     pub fn new() -> Result<Self> {
         let http = reqwest::Client::builder()
-            .user_agent("pendrake-watch")
+            .user_agent(BROWSER_USER_AGENT)
             .timeout(Duration::from_secs(15))
             .build()
             .context("building price HTTP client")?;
@@ -188,11 +209,12 @@ impl PriceFetcher {
 
     /// Fetch the daily series each provider can serve and reconcile it. Coinbase reaches
     /// back to 2020-12-08; the bundled CSV covers before that. A provider that fails is
-    /// skipped, not fatal.
-    pub async fn daily(&self) -> BTreeMap<String, PricePoint> {
+    /// skipped, not fatal. `since` bounds Coinbase's paging to the newest cached day once the
+    /// deep history is backfilled, so a routine refresh is one request rather than ~8.
+    pub async fn daily(&self, since: Option<&str>) -> BTreeMap<String, PricePoint> {
         let mut samples = Vec::new();
         for (name, result) in [
-            ("coinbase", self.coinbase_daily().await),
+            ("coinbase", self.coinbase_daily(since).await),
             ("coingecko", self.coingecko_daily().await),
         ] {
             match result {
@@ -234,14 +256,17 @@ impl PriceFetcher {
             .context("kraken spot: missing last-trade price")
     }
 
-    /// Coinbase daily candles, paged back to its floor. Each page returns up to 300
-    /// `[time, low, high, open, close, volume]` rows newest-first.
-    async fn coinbase_daily(&self) -> Result<Vec<DailySample>> {
+    /// Coinbase daily candles, paged back to the floor (its 2020-12-08 ZEC-USD start, or a
+    /// later `since` once the deep history is cached). Each page returns up to 300
+    /// `[time, low, high, open, close, volume]` rows newest-first. Clamping each page's start
+    /// to the floor keeps a routine `since = yesterday` refresh to a single small request.
+    async fn coinbase_daily(&self, since: Option<&str>) -> Result<Vec<DailySample>> {
         let mut out = Vec::new();
         let mut end = now_secs();
-        let floor = day_start_secs(COINBASE_FLOOR);
+        let floor =
+            day_start_secs(COINBASE_FLOOR).max(since.map(day_start_secs).unwrap_or(0));
         loop {
-            let start = end.saturating_sub(300 * 86_400);
+            let start = end.saturating_sub(300 * 86_400).max(floor);
             let url = format!(
                 "https://api.exchange.coinbase.com/products/ZEC-USD/candles\
                  ?granularity=86400&start={start}&end={end}"
@@ -416,6 +441,41 @@ mod tests {
             .daily
             .values()
             .all(|p| p.confidence == Confidence::Low));
+    }
+
+    #[test]
+    fn daily_since_gates_on_deep_history() {
+        // Only the CSV tail seeded: the deep Coinbase history isn't cached yet, so ask for
+        // the full range even though the tail's newest key is 2020-12-07.
+        let mut cache = PriceCache::default();
+        cache.seed_tail();
+        assert_eq!(cache.daily_since(), None);
+
+        // Newest key is "today" but the middle stretch is missing (Coinbase never ran): still
+        // a full fetch, or the 2020-12-08 → last-year gap would never backfill.
+        cache.daily.insert(
+            "2026-06-30".into(),
+            PricePoint {
+                date: "2026-06-30".into(),
+                usd_per_zec: 40.0,
+                confidence: Confidence::Low,
+                diverged: false,
+            },
+        );
+        assert_eq!(cache.daily_since(), None);
+
+        // Deep history present (the Coinbase floor day is cached): fetch only from the newest
+        // cached day forward.
+        cache.daily.insert(
+            COINBASE_FLOOR.into(),
+            PricePoint {
+                date: COINBASE_FLOOR.into(),
+                usd_per_zec: 60.0,
+                confidence: Confidence::High,
+                diverged: false,
+            },
+        );
+        assert_eq!(cache.daily_since().as_deref(), Some("2026-06-30"));
     }
 
     #[test]

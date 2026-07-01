@@ -1082,7 +1082,10 @@ impl WalletService {
     /// Returns whether anything came back, so a failed fetch retries next tick rather than
     /// marking the day done.
     async fn refresh_daily(&self, fetcher: &PriceFetcher) -> bool {
-        let fresh = fetcher.daily().await;
+        // Once the deep history is cached, fetch only from the newest cached day forward, so
+        // the daily refresh stops re-paging Coinbase back to 2020 every day (docs/adr/0008).
+        let since = self.price_cache.read().await.daily_since();
+        let fresh = fetcher.daily(since.as_deref()).await;
         if fresh.is_empty() {
             return false;
         }
