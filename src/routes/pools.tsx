@@ -10,7 +10,7 @@ import { RingsIcon } from "@/components/pools/rings-icon";
 import { Sparkline } from "@/components/pools/sparkline";
 import { useNotesData } from "@/hooks/use-notes-data";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { formatZat, formatZec } from "@/lib/format";
+import { formatNoteAmount, formatZec } from "@/lib/format";
 import type { Pool } from "@/lib/ipc";
 import { type PoolStat, poolStats } from "@/lib/pools";
 import { animationsEnabled } from "@/lib/motion";
@@ -160,13 +160,15 @@ function PoolCard({ stat }: { stat: PoolStat }) {
 					<div className="mt-5 grid grid-cols-2 gap-x-12 gap-y-5 border-t border-border pt-5 sm:grid-cols-4">
 						<Stat
 							label="Largest note"
-							value={stat.largest != null ? formatZat(stat.largest) : "—"}
-							unit={stat.largest != null ? "zat" : undefined}
+							{...(stat.largest != null
+								? formatNoteAmount(stat.largest)
+								: { value: "—" })}
 						/>
 						<Stat
 							label="Smallest note"
-							value={stat.smallest != null ? formatZat(stat.smallest) : "—"}
-							unit={stat.smallest != null ? "zat" : undefined}
+							{...(stat.smallest != null
+								? formatNoteAmount(stat.smallest)
+								: { value: "—" })}
 						/>
 						<Stat label="Notes" value={String(stat.noteCount)} />
 						<NetFlow flow={stat.netFlow} />

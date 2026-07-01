@@ -26,6 +26,21 @@ export function formatZat(zatoshis: bigint): string {
   return zatoshis.toLocaleString();
 }
 
+// Below this, ZEC notation is all leading zeros and reads as dust, so show the raw
+// zatoshi count instead.
+const ZEC_DISPLAY_FLOOR = 100_000n;
+
+// A note amount in whichever unit reads better: ZEC once it's at least 0.001 ZEC,
+// otherwise the raw zatoshi count.
+export function formatNoteAmount(zatoshis: bigint): {
+  value: string;
+  unit: string;
+} {
+  return zatoshis >= ZEC_DISPLAY_FLOOR
+    ? { value: formatZec(zatoshis), unit: "ZEC" }
+    : { value: formatZat(zatoshis), unit: "zat" };
+}
+
 // ZEC at a fixed number of decimals, padded, for columns that align on the point.
 // formatZec trims trailing zeros for the headline figure. The notes debug view wants
 // every row the same width (8 places in the table, 4 in the summary cards).
@@ -280,9 +295,9 @@ export function formatBlock(height: number | undefined): string {
 }
 
 // Zatoshis to a plain ZEC decimal with no thousands grouping, so it's safe to drop
-// into a CSV cell. Exact integer math, no float rounding. formatZec is the grouped,
-// human-facing counterpart for the UI.
-function zatToZecPlain(zat: bigint): string {
+// into a CSV cell or the clipboard. Exact integer math, no float rounding. formatZec
+// is the grouped, human-facing counterpart for the UI.
+export function zatToZecPlain(zat: bigint): string {
   const neg = zat < 0n;
   const abs = neg ? -zat : zat;
   const frac = (abs % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");

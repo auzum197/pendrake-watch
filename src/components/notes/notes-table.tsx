@@ -1,7 +1,10 @@
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { WalletNote } from "@/lib/ipc";
-import { formatZecFixed } from "@/lib/format";
+import { formatZec, zatToZecPlain } from "@/lib/format";
 import type { Sort, SortKey } from "@/lib/notes";
+import { cn } from "@/lib/utils";
 import { ChangeBadge, MempoolBadge, PoolBadge, StatusBadge } from "./badges";
+import "./notes.css";
 
 type Column = {
   key: SortKey | "txid";
@@ -37,6 +40,70 @@ const COLUMNS: Column[] = [
 
 function shortTxid(txid: string): string {
   return txid.length > 13 ? `${txid.slice(0, 6)}…${txid.slice(-4)}` : txid;
+}
+
+// A cell whose content copies to the clipboard on click, rolling a muted "Copied"
+// up into its place and back a beat later. WKWebView resolves navigator.clipboard on
+// the click gesture, so no Tauri plugin is needed (the CSV export leans on the same
+// thing). `copy` is the exact text put on the clipboard, which can differ from the
+// shown, shortened `children`. The `step` counter re-keys the track so its keyframe
+// replays on each switch; the arriving label always rides the bottom row, so the
+// motion travels upward whichever way it swaps.
+function CopyCell({
+  copy,
+  className,
+  children,
+}: {
+  copy: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [step, setStep] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  async function onCopy() {
+    await navigator.clipboard.writeText(copy);
+    // Re-clicking while it already reads "Copied" just extends the window, so the
+    // label doesn't flicker back through the value on the way to itself.
+    if (!copied) {
+      setCopied(true);
+      setStep((s) => s + 1);
+    }
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      setCopied(false);
+      setStep((s) => s + 1);
+    }, 1200);
+  }
+
+  const flag = <span className="text-muted-foreground">Copied</span>;
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      title="Copy"
+      className={cn(
+        "copy-roll transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-[0.97]",
+        className,
+      )}
+    >
+      {step === 0 ? (
+        // Untouched cells stay a bare label, so a full table doesn't mount a rolling
+        // track per copyable cell up front. The track appears once a cell is clicked.
+        children
+      ) : (
+        <span className="copy-roll__track" key={step} data-animate>
+          <span className="copy-roll__row" aria-hidden>
+            {copied ? children : flag}
+          </span>
+          <span className="copy-roll__row">{copied ? flag : children}</span>
+        </span>
+      )}
+    </button>
+  );
 }
 
 export function NotesTable({
@@ -106,16 +173,24 @@ function NoteRow({ note }: { note: WalletNote }) {
         <PoolBadge pool={note.pool} />
       </td>
       <td className="py-2.5 pr-6 text-right font-mono tabular-nums">
-        {formatZecFixed(BigInt(note.valueZat), 8)}
+        <CopyCell copy={zatToZecPlain(BigInt(note.valueZat))}>
+          {formatZec(BigInt(note.valueZat))}
+        </CopyCell>
       </td>
       <td className="py-2.5">
         <StatusBadge status={note.status} />
       </td>
       <td className="py-2.5 font-mono tabular-nums">
-        {note.height != null ? note.height.toLocaleString() : <MempoolBadge />}
+        {note.height != null ? (
+          <CopyCell copy={String(note.height)}>
+            {note.height.toLocaleString()}
+          </CopyCell>
+        ) : (
+          <MempoolBadge />
+        )}
       </td>
       <td className="py-2.5 font-mono text-muted-foreground">
-        {shortTxid(note.txid)}
+        <CopyCell copy={note.txid}>{shortTxid(note.txid)}</CopyCell>
       </td>
       <td className="py-2.5">
         {note.change ? (
@@ -126,7 +201,9 @@ function NoteRow({ note }: { note: WalletNote }) {
       </td>
       <td className="py-2.5 font-mono tabular-nums">
         {note.spentHeight != null ? (
-          note.spentHeight.toLocaleString()
+          <CopyCell copy={String(note.spentHeight)}>
+            {note.spentHeight.toLocaleString()}
+          </CopyCell>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
