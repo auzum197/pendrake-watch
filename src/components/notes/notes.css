@@ -111,17 +111,17 @@
   }
 }
 
-/* Click-to-copy cells roll their label up and out while the new one rises into its
-   place from below. Always upward, both directions, so the switch reads the same
-   whichever way it goes. A fixed-height clipped window (one row) holds the cell height
-   steady while a two-row track slides, so the table never reflows. The keyframe (not
-   a transition) replays via a React key on each switch; copy clicks are isolated, so
-   there's nothing rapid to interrupt. */
+/* Click-to-copy cells run a single roll: the value lifts away, "Copied" rises into
+   its place, holds, then lifts away as the value returns. Always upward, since the
+   track is three rows (value, Copied, value) and the keyframe only ever travels one
+   way. A fixed-height clipped window (one row) holds the cell height steady while the
+   track slides, so the table never reflows. The keyframe (not a transition) replays
+   via a React key on each click; copy clicks are isolated, so there's nothing rapid
+   to interrupt. */
 .copy-roll {
   display: inline-block;
   /* One row of the table's text-sm line box. Not `1lh`: that unit doesn't resolve in
-     this WebKit, which collapsed the clip and left the parked "Copied" row showing in
-     every cell. */
+     this WebKit, which collapsed the clip and left the parked rows showing. */
   height: 1.25rem;
   overflow: hidden;
   /* An overflow-clipped inline-block otherwise takes its baseline from the bottom
@@ -132,38 +132,94 @@
 }
 
 .copy-roll__track {
-  /* Rest showing the bottom row (the current label). The track is two rows tall, so
-     -50% lifts it by exactly one. */
-  transform: translateY(-50%);
-}
-
-.copy-roll__track[data-animate="true"] {
-  /* Inlined curve: --ease-out-soft lives in @theme inline, which Tailwind v4 doesn't
-     emit on :root, so var() won't resolve in raw CSS. Same value as the token. */
-  animation: copy-roll-up 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* A vertical strip of the three rows (value, Copied, value). Spans are inline by
+     default, which lays the rows out side by side and gives the roll no column to
+     travel; stacking them makes the track three rows tall so translateY rolls through
+     them. The roll is split into phases so a re-copy while "Copied" is up holds it
+     longer instead of restarting the roll-in (the phase machine lives in CopyCell). */
+  display: flex;
+  flex-direction: column;
 }
 
 .copy-roll__row {
+  flex: none;
   height: 1.25rem;
   line-height: 1.25rem;
   white-space: nowrap;
   text-align: inherit;
 }
 
-@keyframes copy-roll-up {
-  from {
+/* Roll in: the value lifts away, "Copied" rides a touch past its row then settles back,
+   like a reel dropping into its detent, thinning mid-travel so it reads as lifting off
+   rather than teleporting. Inlined curve, since --ease-out-soft lives in @theme inline
+   and Tailwind v4 doesn't emit it on :root. Track is three rows, so each -33.333% lifts
+   it one row. */
+.copy-roll__track[data-phase="in"] {
+  animation: copy-roll-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Parked on "Copied" between the two rolls, held by a timer a re-copy resets. */
+.copy-roll__track[data-phase="hold"] {
+  transform: translateY(-33.333%);
+}
+
+/* Roll out: "Copied" lifts away and the value returns. No overshoot, since there's no
+   row below the last to ride into (a bounce there would flash the card behind). */
+.copy-roll__track[data-phase="out"] {
+  animation: copy-roll-out 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes copy-roll-in {
+  0% {
     transform: translateY(0);
+    opacity: 1;
   }
-  to {
-    transform: translateY(-50%);
+  45% {
+    opacity: 0.55;
+  }
+  70% {
+    transform: translateY(-36%);
+  }
+  100% {
+    transform: translateY(-33.333%);
+    opacity: 1;
+  }
+}
+
+@keyframes copy-roll-out {
+  0% {
+    transform: translateY(-33.333%);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(-66.666%);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Snap to the new label with no travel. */
-  .copy-roll__track[data-animate="true"] {
-    animation: none;
+  /* Keep the label swap (value, Copied, value) but drop the travel and the fade: jump
+     straight to each parked row. The animation still runs, so its end still advances
+     the phase. */
+  .copy-roll__track[data-phase="in"] {
+    animation: copy-roll-in 200ms steps(1, start) both;
   }
+  .copy-roll__track[data-phase="out"] {
+    animation: copy-roll-out 200ms steps(1, start) both;
+  }
+}
+
+/* The table isn't virtualized, so every note row is in the DOM at once. content-
+   visibility lets the engine skip layout and paint for rows scrolled out of view,
+   which is what keeps a 600+ note list from stalling on first paint. The reserved
+   size matches a py-2.5 single-line row, so the scrollbar stays honest before a row
+   has rendered. Degrades to a plain row where unsupported. */
+.note-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 41px;
 }
 
 /* The 8px pool dot beside a summary-card label. Identity colors, the same in both
