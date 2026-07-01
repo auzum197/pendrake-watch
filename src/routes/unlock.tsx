@@ -63,7 +63,12 @@ export function UnlockPage() {
   }
 
   async function startOver() {
+    // Wipe the wallet, then let the confirm modal animate closed before leaving.
+    // Navigating right away unmounts this whole screen and cuts the exit
+    // animation, so hold the route until the 150ms close has played.
     await removeWallet();
+    setConfirmStartOver(false);
+    await new Promise((resolve) => setTimeout(resolve, 200));
     navigate({ to: "/onboarding" });
   }
 
@@ -160,11 +165,11 @@ export function UnlockPage() {
               keys again to re-import.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex flex-col gap-2">
-            <HoldButton onConfirm={startOver}>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel className="px-4">Cancel</AlertDialogCancel>
+            <HoldButton onConfirm={startOver} className="h-9 w-auto px-4">
               Hold to start over
             </HoldButton>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
           </div>
         </AlertDialogContent>
       </AlertDialog>

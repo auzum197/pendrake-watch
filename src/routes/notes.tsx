@@ -73,7 +73,7 @@ export function NotesPage() {
 			</div>
 
 			{error && (
-				<p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
+				<p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
 					Can't reach the background process: {error}
 				</p>
 			)}

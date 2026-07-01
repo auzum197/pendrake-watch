@@ -12,11 +12,11 @@ export function ActivityPage() {
     <>
       <h1 className="font-heading text-xl font-bold">Activity</h1>
       {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
+        <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           Can't reach the background process: {error}
         </p>
       )}
-      <section className="rounded-2xl border border-zinc-200 bg-card p-6">
+      <section className="rounded-2xl border border-border bg-card p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-base font-semibold">
             Transaction history
@@ -47,7 +47,7 @@ function ExportButton({ txs }: { txs: Tx[] }) {
       type="button"
       onClick={copy}
       disabled={txs.length === 0}
-      className="flex items-center gap-1.5 rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-40"
+      className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-40"
     >
       {copied ? (
         <IconCheck className="size-3.5 text-brand" />

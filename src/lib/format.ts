@@ -1,3 +1,4 @@
+import { subDays, subMonths, subYears } from "date-fns";
 import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
 
 export function confirmed(pool: Balance["orchard"]): bigint {
@@ -17,6 +18,27 @@ export function formatZec(zatoshis: bigint): string {
   return (Number(zatoshis) / 1e8).toLocaleString(undefined, {
     maximumFractionDigits: 8,
   });
+}
+
+// The raw zatoshi count, grouped. For per-note amounts, where dust (a few hundred
+// zatoshis) rounds to a misleading 0 in ZEC.
+export function formatZat(zatoshis: bigint): string {
+  return zatoshis.toLocaleString();
+}
+
+// Below this, ZEC notation is all leading zeros and reads as dust, so show the raw
+// zatoshi count instead.
+const ZEC_DISPLAY_FLOOR = 100_000n;
+
+// A note amount in whichever unit reads better: ZEC once it's at least 0.001 ZEC,
+// otherwise the raw zatoshi count.
+export function formatNoteAmount(zatoshis: bigint): {
+  value: string;
+  unit: string;
+} {
+  return zatoshis >= ZEC_DISPLAY_FLOOR
+    ? { value: formatZec(zatoshis), unit: "ZEC" }
+    : { value: formatZat(zatoshis), unit: "zat" };
 }
 
 // ZEC at a fixed number of decimals, padded, for columns that align on the point.
@@ -172,6 +194,53 @@ export function balanceHistory(
   return points;
 }
 
+export type ChartRange = "all" | "year" | "month" | "week" | "day";
+
+// Clip the reconstructed balance series to a trailing time window. "all" passes the
+// full series through. For a window, keep the points inside it and prepend a baseline
+// at the window's start carrying the balance the wallet held entering it, so the area
+// opens at that level instead of dropping to zero. When no transaction lands in the
+// window the balance is flat across it (one line from the entering balance to now), and
+// when the window reaches back past the first transaction there's nothing to clip, so
+// the full series passes through.
+export function filterRange(
+  points: BalancePoint[],
+  range: ChartRange,
+): BalancePoint[] {
+  if (range === "all" || points.length === 0) return points;
+
+  const now = Date.now();
+  const startOf = {
+    year: subYears(now, 1),
+    month: subMonths(now, 1),
+    week: subDays(now, 7),
+    day: subDays(now, 1),
+  }[range].getTime();
+
+  // Points carry their time in the daemon's unit (unix seconds); match it so the
+  // cutoff lands in the same space, the way shortDate sniffs seconds vs millis.
+  const inMs = points[points.length - 1].t >= 1e12;
+  const cutoff = inMs ? startOf : Math.floor(startOf / 1000);
+
+  const before = points.filter((p) => p.t < cutoff);
+  if (before.length === 0) return points;
+
+  const enter = before[before.length - 1].value;
+  const baseline: BalancePoint = {
+    key: "range-start",
+    t: cutoff,
+    value: enter,
+    label: "",
+  };
+
+  const within = points.filter((p) => p.t >= cutoff);
+  if (within.length === 0) {
+    const nowT = inMs ? now : Math.floor(now / 1000);
+    return [baseline, { key: "range-now", t: nowT, value: enter, label: "" }];
+  }
+  return [baseline, ...within];
+}
+
 // Where the current balance sits against the highest it has ever reached (the
 // all-time high). Returns the percent of that peak and whether we're at it.
 // Null when there's no positive history to compare against. The history is
@@ -226,9 +295,9 @@ export function formatBlock(height: number | undefined): string {
 }
 
 // Zatoshis to a plain ZEC decimal with no thousands grouping, so it's safe to drop
-// into a CSV cell. Exact integer math, no float rounding. formatZec is the grouped,
-// human-facing counterpart for the UI.
-function zatToZecPlain(zat: bigint): string {
+// into a CSV cell or the clipboard. Exact integer math, no float rounding. formatZec
+// is the grouped, human-facing counterpart for the UI.
+export function zatToZecPlain(zat: bigint): string {
   const neg = zat < 0n;
   const abs = neg ? -zat : zat;
   const frac = (abs % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");

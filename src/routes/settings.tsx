@@ -58,10 +58,10 @@ export function SettingsPage() {
         </div>
         <div className="mt-4 flex items-start justify-between gap-6">
           <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-zinc-900">
+            <span className="text-sm font-medium text-foreground">
               Replace Wallet
             </span>
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted-foreground">
               Import a different UFVK in place of this one. Erases the current
               Wallet's identity and history. This can't be undone.
             </span>
@@ -108,17 +108,17 @@ function NotificationsSection({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-card p-6">
+    <section className="rounded-2xl border border-border bg-card p-6">
       <div className="flex items-center gap-2">
-        <IconBell className="size-4 text-zinc-500" />
+        <IconBell className="size-4 text-muted-foreground" />
         <h2 className="font-heading text-base font-semibold">Notifications</h2>
       </div>
       <div className="mt-4 flex items-center justify-between gap-6">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-zinc-900">
+          <span className="text-sm font-medium text-foreground">
             Transaction alerts
           </span>
-          <span className="text-sm text-zinc-500">
+          <span className="text-sm text-muted-foreground">
             A desktop notification when funds arrive or leave, and once the
             initial scan finishes. Connectivity warnings are always shown.
           </span>
@@ -140,12 +140,12 @@ function NotificationsSection({ enabled }: { enabled: boolean }) {
 // the same kind of switch. Both apply live, no reload.
 function ExperimentalSection() {
   return (
-    <section className="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-6">
-      <div className="flex items-center gap-2 text-amber-700">
+    <section className="rounded-2xl border border-amber-400/30 bg-amber-400/6 p-6">
+      <div className="flex items-center gap-2 text-amber-300">
         <IconFlask className="size-4" />
         <h2 className="font-heading text-base font-semibold">Experimental</h2>
       </div>
-      <p className="mt-1 text-sm text-amber-800/70">
+      <p className="mt-1 text-sm text-amber-200/60">
         Device-only toggles that aren't stable yet. They may change or disappear
         between releases.
       </p>
@@ -173,8 +173,8 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-6">
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-zinc-900">{label}</span>
-        <span className="text-sm text-zinc-600">{description}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        <span className="text-sm text-muted-foreground">{description}</span>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>
@@ -308,13 +308,13 @@ function IndexerSection({
   return (
     <section
       ref={sectionRef}
-      className="rounded-2xl border border-zinc-200 bg-card p-6"
+      className="rounded-2xl border border-border bg-card p-6"
     >
       <div className="flex items-center gap-2">
-        <IconServer2 className="size-4 text-zinc-500" />
+        <IconServer2 className="size-4 text-muted-foreground" />
         <h2 className="font-heading text-base font-semibold">Indexer</h2>
       </div>
-      <p className="mt-1 text-sm text-zinc-500">
+      <p className="mt-1 text-sm text-muted-foreground">
         {isMainnet
           ? "The Indexer this Wallet syncs from. Switching connects to the new one before saving."
           : "This regtest Wallet has no public default, so point it at your own Indexer."}
@@ -365,7 +365,7 @@ function IndexerSection({
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="min-w-0 text-xs">
           {status === "saved" && (
-            <span className="flex items-center gap-1.5 text-emerald-600">
+            <span className="flex items-center gap-1.5 text-emerald-400">
               <IconCircleCheck className="size-3.5" />
               Connected and saved.
             </span>
@@ -418,16 +418,16 @@ function IndexerRow({
         className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-50 ${
           selected
             ? "border-brand bg-brand/5"
-            : "border-zinc-200 hover:border-zinc-300"
+            : "border-border hover:border-muted-foreground/40"
         }`}
       >
         <span className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium text-zinc-900">{label}</span>
-          <span className="truncate font-mono text-xs text-zinc-400">{sub}</span>
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="truncate font-mono text-xs text-muted-foreground">{sub}</span>
         </span>
         <span
           className={`ml-auto flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-            selected ? "border-brand bg-brand text-white" : "border-zinc-300"
+            selected ? "border-brand bg-brand text-white" : "border-muted-foreground/40"
           }`}
         >
           {selected && <IconCheck className="size-3.5" />}

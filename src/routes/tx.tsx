@@ -160,7 +160,7 @@ export function TxDetailPage() {
       )}
 
       <a
-        href={`https://mainnet.zcashexplorer.app/transactions/${txid}`}
+        href={`https://cipherscan.app/tx/${txid}`}
         target="_blank"
         rel="noreferrer"
         className="text-sm text-primary underline-offset-4 hover:underline"

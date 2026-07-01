@@ -172,26 +172,16 @@ function useTweenedData(target: Datum[]): Datum[] {
 	return shown;
 }
 
-// Keys present now that weren't a render ago. Seeded with the initial set so the
-// chart's first appearance pings nothing (that's the empty-state crossfade's job).
-// Only genuinely new arrivals ping.
-function useFreshKeys(keys: string[]): Set<string> {
-	const seen = useRef(new Set(keys));
-	const [fresh, setFresh] = useState<Set<string>>(new Set());
-	const sig = keys.join("|");
-
-	useEffect(() => {
-		const next = new Set<string>();
-		for (const k of keys) if (!seen.current.has(k)) next.add(k);
-		seen.current = new Set(keys);
-		setFresh(next);
-		// Recompute against the key set, not its array identity.
-	}, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
-
-	return fresh;
-}
-
-function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
+function BalanceChartImpl({
+	points,
+	freshKeys,
+}: {
+	points: BalancePoint[];
+	// Keys for transactions newly added to the full history, so only a genuine new
+	// arrival pings, not a point a period switch brought back into view. Tracked by the
+	// caller over the whole series (see useFreshTxKeys in dashboard).
+	freshKeys: Set<string>;
+}) {
 	// Axis bounds come off the full history so the peak is never clipped, but the line
 	// itself renders a thinned series so recharts isn't handed thousands of points.
 	const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
@@ -215,7 +205,7 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 	}));
 
 	const tweened = useTweenedData(target);
-	const fresh = useFreshKeys(view.map((p) => p.key));
+	const fresh = freshKeys;
 	// One render can land before the tween realigns its array, so fall back to the
 	// target then to keep the series complete.
 	const data = tweened.length === target.length ? tweened : target;

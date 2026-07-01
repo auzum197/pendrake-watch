@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   athStanding,
   balanceHistory,
+  filterRange,
   formatBlock,
   formatEta,
   isSynced,
@@ -446,5 +447,46 @@ describe("balanceHistory", () => {
       expect(points[1].height).toBe(2_500_000);
       expect(points[1].label).not.toBe("");
     });
+  });
+});
+
+describe("filterRange", () => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const DAY = 86_400;
+  const pt = (key: string, daysAgo: number, value: number): BalancePoint => ({
+    key,
+    t: nowSec - daysAgo * DAY,
+    value,
+    label: "",
+  });
+
+  it("passes the full series through for 'all'", () => {
+    const pts = [pt("start", 100, 0), pt("a", 50, 1), pt("b", 1, 2)];
+    expect(filterRange(pts, "all")).toBe(pts);
+  });
+
+  it("returns empty input untouched", () => {
+    expect(filterRange([], "week")).toEqual([]);
+  });
+
+  it("clips to the window and opens at the entering balance", () => {
+    const pts = [pt("start", 100, 0), pt("a", 30, 5), pt("b", 2, 8)];
+    const out = filterRange(pts, "week");
+    expect(out[0].key).toBe("range-start");
+    expect(out[0].value).toBe(5);
+    expect(out.slice(1).map((p) => p.key)).toEqual(["b"]);
+  });
+
+  it("draws a flat line when nothing lands in the window", () => {
+    const pts = [pt("start", 100, 0), pt("a", 30, 7)];
+    const out = filterRange(pts, "week");
+    expect(out).toHaveLength(2);
+    expect(out.map((p) => p.key)).toEqual(["range-start", "range-now"]);
+    expect(out.every((p) => p.value === 7)).toBe(true);
+  });
+
+  it("returns the full series when the window reaches past all history", () => {
+    const pts = [pt("start", 3, 0), pt("a", 2, 4), pt("b", 1, 6)];
+    expect(filterRange(pts, "year")).toBe(pts);
   });
 });
