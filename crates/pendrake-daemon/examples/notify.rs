@@ -2,8 +2,8 @@
 //! real `DesktopNotifier`. It exits non-zero if delivery to the OS fails, so it
 //! catches a broken notification path (no D-Bus session, unsigned bundle). Whether
 //! the toast actually renders and its click opens the deep link still needs a human
-//! watching the desktop, so it stays up for ten seconds before exiting. Run with
-//! `cargo run -p pendrake-daemon --example notify`.
+//! watching the desktop, so on Linux it stays up for ten seconds before exiting. Run
+//! with `cargo run -p pendrake-daemon --example notify`.
 
 // This binary crate has no library target, so reuse the daemon's notify module
 // by path rather than importing it.
@@ -35,10 +35,12 @@ fn main() -> anyhow::Result<()> {
         &format!("pendrake://tx?txid={unique:064x}"),
     )?;
 
-    // Keep the process alive so the toast outlives this one-shot run. notify_rust
-    // serves the click action over a D-Bus connection the sender must hold open, and a
-    // sender that exits has its action-carrying notification withdrawn by some servers
-    // (KDE). The real daemon stays parked, so mirror it long enough to watch and click.
+    // Linux only: notify_rust serves the click action over a D-Bus connection the
+    // sender must hold open, and some servers (KDE) withdraw an action-carrying
+    // notification once the sender exits. Stay parked like the real daemon so the toast
+    // survives long enough to watch and click. Windows hands the toast to the OS and
+    // macOS to Notification Center, so neither needs the process kept alive.
+    #[cfg(target_os = "linux")]
     std::thread::sleep(std::time::Duration::from_secs(10));
     Ok(())
 }
