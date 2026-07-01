@@ -9,6 +9,7 @@ import { useWalletData } from "@/hooks/use-wallet-data";
 // while only the routed content swaps.
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/settings")) return "settings" as const;
+  if (pathname.startsWith("/notes")) return "notes" as const;
   if (pathname.startsWith("/activity") || pathname.startsWith("/tx"))
     return "activity" as const;
   return "wallet" as const;
@@ -25,7 +26,8 @@ export function AppLayout() {
     if (loaded && wallet && !wallet.exists) navigate({ to: "/onboarding" });
     // A locked session must re-authenticate before any signed-in screen renders. The
     // daemon also refuses wallet reads while locked, so this is the UX, not the guard.
-    else if (loaded && wallet?.locked) navigate({ to: "/unlock" });
+    // Replace so the lock screen doesn't stack onto history as a back target.
+    else if (loaded && wallet?.locked) navigate({ to: "/unlock", replace: true });
   }, [loaded, wallet, navigate]);
 
   return (

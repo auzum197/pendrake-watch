@@ -2,7 +2,9 @@ import {
 	createRootRoute,
 	createRoute,
 	createRouter,
+	redirect,
 } from "@tanstack/react-router";
+import { isEnabled } from "@/lib/features";
 import { RootLayout } from "@/routes/root";
 import { AppLayout } from "@/routes/app-layout";
 import { StartGate } from "@/routes/start";
@@ -11,6 +13,7 @@ import { TxDetailPage } from "@/routes/tx";
 import { OnboardingPage } from "@/routes/onboarding";
 import { DashboardPage } from "@/routes/dashboard";
 import { ActivityPage } from "@/routes/activity";
+import { NotesPage } from "@/routes/notes";
 import { SettingsPage } from "@/routes/settings";
 import { UnlockPage } from "@/routes/unlock";
 
@@ -62,6 +65,17 @@ const activityRoute = createRoute({
 	component: ActivityPage,
 });
 
+const notesRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/notes",
+	// Notes is an opt-in experimental feature. With its flag off the screen is gone, not
+	// just hidden from the sidebar, so a direct visit or a restored route bounces home.
+	beforeLoad: () => {
+		if (!isEnabled("notes")) throw redirect({ to: "/dashboard" });
+	},
+	component: NotesPage,
+});
+
 const settingsRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/settings",
@@ -82,6 +96,7 @@ const routeTree = rootRoute.addChildren([
 	appLayoutRoute.addChildren([
 		dashboardRoute,
 		activityRoute,
+		notesRoute,
 		settingsRoute,
 		txRoute,
 	]),
@@ -90,7 +105,12 @@ const routeTree = rootRoute.addChildren([
 export const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",
-	defaultViewTransition: true,
+	// No page view-transition crossfade. It snapshots the outgoing page, and capturing
+	// a tall virtualized list (the Activity history) stalled every navigation away from
+	// it — WebKit rasterizes the full scroll height regardless of paint containment.
+	// Screens animate themselves in on mount instead (see lib/motion), which never
+	// touches the outgoing DOM, so navigation stays instant whatever the history size.
+	defaultViewTransition: false,
 	// Restore each route's scroll on back/forward. The app's scroll lives in a
 	// nested container (AppShell's <main>, tagged data-scroll-restoration-id), not
 	// the window, so returning from a transaction lands the list where it was.

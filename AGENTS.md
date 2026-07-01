@@ -33,7 +33,7 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 - Assert plainly. Cut reflexive hedging and over-qualification.
 
 #### Vocabulary to avoid
-- delve, tapestry, realm, landscape, navigate/navigating, leverage, robust, seamless, crucial, vital, pivotal, testament, boasts, nestled, foster, harness, unlock, elevate, embark, showcase, underscore, spearhead, treasure trove, game-changer, cheap, liveness, gap, shape, correctness, alive, honest, simple, probe, contact.
+- delve, tapestry, realm, landscape, navigate/navigating, leverage, robust, seamless, crucial, vital, pivotal, testament, boasts, nestled, foster, harness, unlock, elevate, embark, showcase, underscore, spearhead, treasure trove, game-changer, cheap, liveness, gap, shape, correctness, alive, honest, simple, probe, contact, stay.
 
 #### Formatting
 - Don't bold the lead phrase of every bullet.

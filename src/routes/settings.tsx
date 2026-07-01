@@ -2,16 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
+  IconBell,
   IconCheck,
   IconCircleCheck,
+  IconFlask,
   IconServer2,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import { Switch } from "@/components/ui/switch";
 import { ReplaceDialog } from "@/components/settings/replace-dialog";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { MAINNET_INDEXERS, setIndexer, type Network } from "@/lib/ipc";
+import {
+  MAINNET_INDEXERS,
+  setIndexer,
+  setNotifications,
+  type Network,
+} from "@/lib/ipc";
+import { reduceMotion, setReduceMotion } from "@/lib/motion";
+import { FEATURES, setEnabled, useFeature } from "@/lib/features";
 
 // Settings, with the current Wallet's identity, the Indexer it syncs against, and a
 // danger zone for Replace.
@@ -24,39 +33,12 @@ export function SettingsPage() {
     <>
       <h1 className="font-heading text-xl font-bold">Settings</h1>
 
-      <section className="rounded-2xl border border-zinc-200 bg-card p-6">
-        <h2 className="font-heading text-base font-semibold">Wallet</h2>
-        <div className="mt-4 flex items-center gap-4">
-          {wallet?.fingerprint ? (
-            <LifeHashIcon
-              fingerprint={wallet.fingerprint}
-              className="size-14 shrink-0 rounded-full"
-            />
-          ) : (
-            <div className="size-14 shrink-0 rounded-full bg-zinc-100" />
-          )}
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <span className="inline-flex w-fit items-center rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-medium capitalize text-brand">
-              {wallet?.network ?? "—"}
-            </span>
-            <span className="truncate font-mono text-xs text-zinc-400">
-              {wallet?.fingerprint ?? "No wallet"}
-            </span>
-          </div>
-        </div>
-
-        {wallet?.exists && (
-          // The block the daemon's resolver settled the import choice into and
-          // scans from (docs/adr/0002). The height is what's actually loaded,
-          // whether the user gave a date, a height, or left it blank.
-          <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-4">
-            <span className="text-sm text-zinc-500">Birthday</span>
-            <span className="font-mono text-sm text-zinc-700">
-              Block {wallet.birthdayHeight.toLocaleString()}
-            </span>
-          </div>
-        )}
-      </section>
+      {wallet?.exists && (
+        <NotificationsSection
+          key={`notify-${wallet.fingerprint ?? "wallet"}`}
+          enabled={wallet.notificationsEnabled}
+        />
+      )}
 
       {wallet?.exists && (
         <IndexerSection
@@ -66,6 +48,8 @@ export function SettingsPage() {
           focusOnMount={hash === "indexer"}
         />
       )}
+
+      <ExperimentalSection />
 
       <section className="rounded-2xl border border-destructive/30 bg-destructive/[0.03] p-6">
         <div className="flex items-center gap-2 text-destructive">
@@ -99,6 +83,134 @@ export function SettingsPage() {
         network={wallet?.network ?? "mainnet"}
       />
     </>
+  );
+}
+
+// The desktop-notification toggle (ADR-0006). The daemon persists the choice and is
+// the source of truth, so the switch tracks local state optimistically and reverts
+// if the call fails. Transaction and "scan finished" toasts are gated; the
+// "Indexer unreachable" alert keeps firing regardless.
+function NotificationsSection({ enabled }: { enabled: boolean }) {
+  const [on, setOn] = useState(enabled);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle(next: boolean) {
+    setOn(next);
+    setBusy(true);
+    try {
+      const state = await setNotifications(next);
+      setOn(state.notificationsEnabled);
+    } catch {
+      setOn(!next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-card p-6">
+      <div className="flex items-center gap-2">
+        <IconBell className="size-4 text-zinc-500" />
+        <h2 className="font-heading text-base font-semibold">Notifications</h2>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-zinc-900">
+            Transaction alerts
+          </span>
+          <span className="text-sm text-zinc-500">
+            A desktop notification when funds arrive or leave, and once the
+            initial scan finishes. Connectivity warnings are always shown.
+          </span>
+        </div>
+        <Switch
+          checked={on}
+          disabled={busy}
+          onCheckedChange={toggle}
+          aria-label="Transaction notifications"
+        />
+      </div>
+    </section>
+  );
+}
+
+// Per-device toggles (not daemon-backed): each flips a UI/device choice, not wallet
+// state, so they live in localStorage. The registered features gate in-progress UI.
+// Reduce motion is a settled accessibility preference that rides along here since it's
+// the same kind of switch. Both apply live, no reload.
+function ExperimentalSection() {
+  return (
+    <section className="rounded-2xl border border-amber-300/60 bg-amber-50/60 p-6">
+      <div className="flex items-center gap-2 text-amber-700">
+        <IconFlask className="size-4" />
+        <h2 className="font-heading text-base font-semibold">Experimental</h2>
+      </div>
+      <p className="mt-1 text-sm text-amber-800/70">
+        Device-only toggles that aren't stable yet. They may change or disappear
+        between releases.
+      </p>
+      <div className="mt-4 flex flex-col gap-5 pl-5">
+        {FEATURES.map((feature) => (
+          <FeatureToggle key={feature.id} feature={feature} />
+        ))}
+        <ReduceMotionToggle />
+      </div>
+    </section>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6">
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-zinc-900">{label}</span>
+        <span className="text-sm text-zinc-600">{description}</span>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+    </div>
+  );
+}
+
+function FeatureToggle({ feature }: { feature: (typeof FEATURES)[number] }) {
+  const on = useFeature(feature.id);
+  return (
+    <ToggleRow
+      label={feature.label}
+      description={feature.description}
+      checked={on}
+      onChange={(next) => setEnabled(feature.id, next)}
+    />
+  );
+}
+
+// The switch follows the OS reduce-motion setting until set here, where an explicit
+// choice persists and wins. It governs the entrance animations, which fire on mount, so
+// a change shows on the next screen opened.
+function ReduceMotionToggle() {
+  const [reduced, setReduced] = useState(reduceMotion);
+
+  function toggle(next: boolean) {
+    setReduceMotion(next);
+    setReduced(next);
+  }
+
+  return (
+    <ToggleRow
+      label="Reduce motion"
+      description="Turn off the entrance animations when screens and transactions load. Follows your system setting until you choose here."
+      checked={reduced}
+      onChange={toggle}
+    />
   );
 }
 

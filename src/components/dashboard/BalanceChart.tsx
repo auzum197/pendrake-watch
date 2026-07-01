@@ -13,7 +13,14 @@
 // draw-on animation is left off so it doesn't redraw the curve on every refetch.
 
 import { memo, useEffect, useRef, useState } from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+	Area,
+	AreaChart,
+	CartesianGrid,
+	ReferenceLine,
+	XAxis,
+	YAxis,
+} from "recharts";
 import {
 	ChartContainer,
 	ChartTooltip,
@@ -21,10 +28,17 @@ import {
 	type ChartConfig,
 } from "@/components/ui/chart";
 import type { BalancePoint } from "@/lib/format";
+import { animationsEnabled } from "@/lib/motion";
 import "./balance-chart.css";
 
 const MAX_LABELS = 6;
 const TWEEN_MS = 400;
+// The chart is ~900px wide, so points past a couple hundred fall sub-pixel and can't
+// be told apart. Feeding recharts the full history (thousands of points on a busy
+// wallet) is the dominant cost when the dashboard mounts and when a navigation has to
+// snapshot the chart for its crossfade. Cap the rendered series here; the axis bounds
+// and all-time-high still come off the full data, so only the line's resolution drops.
+const MAX_POINTS = 240;
 
 const config = {
 	value: { label: "Balance", color: "var(--color-brand)" },
@@ -42,6 +56,7 @@ type Datum = {
 	label: string;
 	value: number;
 	last: boolean;
+	height?: number;
 };
 
 // Fit the y-axis to the data. Rounding the peak straight up to a 1/2/2.5/5 multiple
@@ -56,6 +71,22 @@ function niceAxis(peak: number): { max: number; step: number } {
 	const step =
 		(n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
 	return { max: Math.ceil(peak / step) * step, step };
+}
+
+// Thin a long history down to at most `cap` points for rendering. Keeps the leading
+// point and the tip (so the curve still ends on the headline balance) and the global
+// peak (so the line reaches the top the axis is sized for), then strides evenly
+// through the middle. Each kept point holds its txid key, so the tween still tracks
+// points by identity across refetches.
+export function downsampleSeries(points: BalancePoint[], cap: number): BalancePoint[] {
+	if (points.length <= cap) return points;
+	const last = points.length - 1;
+	let peak = 1;
+	for (let i = 2; i < last; i++) if (points[i].value > points[peak].value) peak = i;
+	const keep = new Set([0, peak, last]);
+	const stride = Math.ceil((points.length - 2) / (cap - 3));
+	for (let i = 1; i < last; i += stride) keep.add(i);
+	return [...keep].sort((a, b) => a - b).map((i) => points[i]);
 }
 
 function fullDate(epoch: number): string {
@@ -100,7 +131,15 @@ function useTweenedData(target: Datum[]): Datum[] {
 			}
 		});
 
-		if (prefersReducedMotion()) {
+		// On a fresh mount (a route switch back to the dashboard) every point seeds
+		// from its own target, so nothing actually moves. Animating it anyway re-ran
+		// recharts over the whole series ~24 times across the tween, which is the bulk
+		// of the load cost on a large history. Snap to the target when no point moves.
+		const moved = dest.some((d) => {
+			const f = from.get(d.key);
+			return !f || f.x !== d.x || f.value !== d.value;
+		});
+		if (!animationsEnabled() || prefersReducedMotion() || !moved) {
 			current.current = new Map(
 				dest.map((d) => [d.key, { x: d.x, value: d.value }]),
 			);
@@ -153,26 +192,42 @@ function useFreshKeys(keys: string[]): Set<string> {
 }
 
 function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
+	// Axis bounds come off the full history so the peak is never clipped, but the line
+	// itself renders a thinned series so recharts isn't handed thousands of points.
 	const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
+	const view = downsampleSeries(points, MAX_POINTS);
 
-	// Position by real time when the series spans one. A single transaction (or a
-	// cluster sharing one timestamp) has no span, so fall back to even spacing.
-	const tMin = points[0]?.t ?? 0;
-	const span = points.length ? points[points.length - 1].t - tMin : 0;
-	const target: Datum[] = points.map((p, i) => ({
+	// Position by real time when the transactions span one. A single transaction (or
+	// a cluster sharing one timestamp) has no span, so fall back to even spacing. The
+	// synthetic leading point is excluded from the test: its runway timestamp would
+	// otherwise fake a span and collapse same-time transactions onto one x.
+	const txTimes = view.filter((p) => p.key !== "start").map((p) => p.t);
+	const tMin = view[0]?.t ?? 0;
+	const span = txTimes.length > 1 ? txTimes[txTimes.length - 1] - txTimes[0] : 0;
+	const target: Datum[] = view.map((p, i) => ({
 		key: p.key,
 		x: span > 0 ? p.t : i,
 		t: p.t,
 		label: p.label,
 		value: p.value,
-		last: i === points.length - 1,
+		last: i === view.length - 1,
+		height: p.height,
 	}));
 
 	const tweened = useTweenedData(target);
-	const fresh = useFreshKeys(points.map((p) => p.key));
+	const fresh = useFreshKeys(view.map((p) => p.key));
 	// One render can land before the tween realigns its array, so fall back to the
 	// target then to keep the series complete.
 	const data = tweened.length === target.length ? tweened : target;
+
+	// Past this many points a full-size dot per transaction crowds the line, so the
+	// dots step down a little and lean on their card-coloured ring to stay separate.
+	const denseDots = view.length > 80;
+	// Each point draws one SVG dot. Past a couple hundred they merge into a solid band
+	// along the line and stop reading as separate transactions, while still costing a
+	// node each. Drop them past this count and let the line carry the shape; the tip
+	// and any fresh-arrival ping still draw.
+	const hideDots = view.length > 200;
 
 	if (points.length === 0) return null;
 
@@ -188,7 +243,7 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 
 	// Ticks and domain come off the stable target, not the tweening data, so the
 	// axes hold still while points slide into place.
-	const labelEvery = Math.ceil(points.length / MAX_LABELS);
+	const labelEvery = Math.ceil(view.length / MAX_LABELS);
 	const labelByX = new Map(
 		target
 			.filter((d, i) => d.label && i % labelEvery === 0)
@@ -217,6 +272,14 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 					</linearGradient>
 				</defs>
 				<CartesianGrid vertical={false} strokeDasharray="4 6" />
+				{/* The zero baseline, drawn solid and a shade stronger than the dashed
+				    grid so the floor the area sits on reads clearly. */}
+				<ReferenceLine
+					y={0}
+					stroke="var(--muted-foreground)"
+					strokeOpacity={0.35}
+					strokeWidth={1.5}
+				/>
 				<XAxis
 					dataKey="x"
 					type="number"
@@ -237,13 +300,18 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 					tickMargin={8}
 				/>
 				<ChartTooltip
+					isAnimationActive={false}
 					cursor={{ stroke: "var(--color-brand)", strokeOpacity: 0.25 }}
 					content={
 						<ChartTooltipContent
 							hideIndicator
-							labelFormatter={(_, payload) =>
-								fullDate(payload?.[0]?.payload?.t ?? tMin)
-							}
+							labelFormatter={(_, payload) => {
+								const p = payload?.[0]?.payload;
+								const date = fullDate(p?.t ?? tMin);
+								return p?.height
+									? `${date} · Block #${p.height.toLocaleString()}`
+									: date;
+							}}
 							formatter={(value) => (
 								<span className="font-mono font-medium tabular-nums">
 									{fmtZec(Number(value))} ZEC
@@ -256,7 +324,7 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 					dataKey="value"
 					type="stepAfter"
 					stroke="var(--color-brand)"
-					strokeWidth={2.5}
+					strokeWidth={1.5}
 					fill="url(#balance-fill)"
 					isAnimationActive={false}
 					activeDot={{
@@ -269,7 +337,7 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 						// The leading "balance before the first tx" point isn't a transaction,
 						// so it gets no dot. The last transaction is the emphasized tip. A
 						// freshly arrived point also gets an expanding ring at where it landed.
-						const ping = fresh.has(payload.key) ? (
+						const ping = animationsEnabled() && fresh.has(payload.key) ? (
 							<circle
 								className="balance-ping"
 								cx={cx}
@@ -281,7 +349,17 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 							/>
 						) : null;
 						if (payload.key === "start") return <g key={payload.key}>{ping}</g>;
-						const r = payload.last ? 5 : 3;
+						// On a large history the per-transaction dots are dropped (they'd be a
+						// solid band and thousands of nodes); only the tip and fresh pings draw.
+						if (hideDots && !payload.last)
+							return ping ? <g key={payload.key}>{ping}</g> : null;
+						// Every transaction keeps a dot so each balance change stays visible
+						// at a glance. The card-coloured edge rings each dot in the background
+						// colour, so even on a dense history they read as separate points
+						// against the thin line instead of merging into a band. The tip is the
+						// emphasized one.
+						const tip = payload.last;
+						const r = tip ? 5 : denseDots ? 2.4 : 3;
 						return (
 							<g key={payload.key}>
 								<circle
@@ -289,9 +367,9 @@ function BalanceChartImpl({ points }: { points: BalancePoint[] }) {
 									cy={cy}
 									r={r}
 									fill="var(--color-brand)"
-									fillOpacity={payload.last ? 1 : 0.55}
+									fillOpacity={tip ? 1 : denseDots ? 0.9 : 0.55}
 									stroke="var(--card)"
-									strokeWidth={payload.last ? 2 : 1.5}
+									strokeWidth={tip ? 2 : denseDots ? 1.25 : 1.5}
 								/>
 								{ping}
 							</g>

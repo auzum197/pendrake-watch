@@ -22,6 +22,9 @@ export type WalletState = {
 	// The Indexer this Wallet syncs against, editable from Settings. Empty when no
 	// wallet exists.
 	indexerUri: string;
+	// Whether transaction and scan-complete notifications fire. The "Indexer
+	// unreachable" alert is independent of this.
+	notificationsEnabled: boolean;
 };
 
 export type WalletAddress = {
@@ -117,6 +120,10 @@ export type Tx = {
 	blockHeight?: number;
 	kind: TxKind;
 	valueZat: string;
+	// Signed net balance change in zatoshis (received +, sent/shield/self −). The
+	// chart reconstructs against this; valueZat stays the display amount. Optional so
+	// a daemon predating the field doesn't break the client (the chart falls back).
+	netZat?: string;
 	status: TxStatus;
 	notes: Note[];
 };
@@ -169,6 +176,12 @@ export function setIndexer(indexerUri: string): Promise<WalletState> {
 	return invoke("set_indexer", { indexerUri });
 }
 
+// Toggle transaction and scan-complete notifications. The daemon persists the
+// choice and returns the updated state.
+export function setNotifications(enabled: boolean): Promise<WalletState> {
+	return invoke("set_notifications", { enabled });
+}
+
 // Re-authenticate against the held session passphrase without touching the wallet.
 // Gates the Replace wipe; true only when the passphrase matches.
 export function verifyPassphrase(passphrase: string): Promise<boolean> {
@@ -197,6 +210,30 @@ export function getTransactions(): Promise<Tx[]> {
 
 export function getTransaction(txid: string): Promise<Tx | null> {
 	return invoke("get_transaction", { txid });
+}
+
+export type NoteStatus = "unspent" | "spent" | "pending";
+
+// One received output the wallet controls, flattened across pools, for the notes
+// debug view. Distinct from `Note` (an output inside one transaction's detail):
+// this is a wallet-wide row with its spend state resolved. `height` is null while
+// the note's transaction is unconfirmed, and `spentHeight` is null unless the spend
+// has confirmed. `idx` is a stable row number the daemon assigns over the returned
+// order, the default table sort. Values are zatoshi strings.
+export type WalletNote = {
+	idx: number;
+	pool: Pool;
+	valueZat: string;
+	status: NoteStatus;
+	height: number | null;
+	txid: string;
+	change: boolean;
+	spentHeight: number | null;
+};
+
+// Every note the wallet can see, with spend status, for the notes debug view.
+export function getNotes(): Promise<WalletNote[]> {
+	return invoke("get_notes");
 }
 
 // Wipe the current Wallet. Replace passes keepSession so the daemon retains the

@@ -11,7 +11,9 @@ helper profile="release":
 run: helper stop
     -rm -rf src-tauri/target/debug/bundle
     just bundle
-    open platform/macos/PendrakeSync/build/PendrakeSync.app
+    # -g launches the windowless helper in the background so it doesn't grab focus;
+    # the GUI opens last and stays the foreground app.
+    open -g platform/macos/PendrakeSync/build/PendrakeSync.app
     open src-tauri/target/release/bundle/macos/pendrake-watch.app
 
 # Stop any background daemons.

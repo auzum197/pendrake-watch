@@ -6,7 +6,7 @@
 //! pushed event, so the GUI sees progress and history update as blocks land
 //! rather than on a poll timer.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -15,9 +15,10 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
-    ImportUfvkArgs, Network, Note, NoteDirection, ParseUfvkResult, Pool, PoolBalance, RemoveArgs,
-    SetIndexerArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork,
-    UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletState,
+    ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
+    RemoveArgs, SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
+    Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
+    WalletNote, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -33,7 +34,12 @@ use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
-use zingolib::wallet::summary::data::{TransactionKind, TransactionSummary};
+use pepper_sync::wallet::{OrchardNote, SaplingNote};
+use pepper_sync::keys::transparent::TransparentScope;
+use zingolib::wallet::output::SpendStatus;
+use zingolib::wallet::summary::data::{
+    Scope, TransactionKind, TransactionSummaries, TransactionSummary,
+};
 use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
 use zip32::AccountId;
@@ -88,6 +94,10 @@ pub struct WalletService {
     /// outage, so a multi-round backoff notifies once. Cleared when a round
     /// succeeds, the Indexer changes, or a fresh sync loop starts.
     unreachable_notified: AtomicBool,
+    /// Whether transaction and scan-complete toasts fire, mirroring
+    /// `Meta::notifications_enabled` for the hot notify path. Toggled from Settings.
+    /// The "Indexer unreachable" alert ignores this.
+    notifications_enabled: AtomicBool,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -342,6 +352,7 @@ impl WalletService {
             addresses: RwLock::new(Vec::new()),
             notify,
             unreachable_notified: AtomicBool::new(false),
+            notifications_enabled: AtomicBool::new(true),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             session_locked: AtomicBool::new(false),
@@ -353,6 +364,9 @@ impl WalletService {
 
         if let Some(meta) = Meta::load(&service.paths.meta_file)? {
             service.encrypted.store(meta.encrypted, Ordering::SeqCst);
+            service
+                .notifications_enabled
+                .store(meta.notifications_enabled, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -411,6 +425,7 @@ impl WalletService {
                 self.balance.read().await.clone().unwrap_or_default(),
             )?),
             "getTransactions" => Ok(to_value(self.txs.read().await.clone())?),
+            "getNotes" => Ok(to_value(self.collect_notes().await)?),
             "getAddresses" => Ok(to_value(self.addresses.read().await.clone())?),
             "getTransaction" => {
                 let txid = params
@@ -440,6 +455,10 @@ impl WalletService {
             "setIndexer" => {
                 let args: SetIndexerArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_indexer(args.indexer_uri).await?)?)
+            }
+            "setNotifications" => {
+                let args: SetNotificationsArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_notifications(args.enabled).await?)?)
             }
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
@@ -502,6 +521,7 @@ impl WalletService {
                 network: m.network,
                 birthday_height: m.birthday_height,
                 indexer_uri: m.indexer_uri.clone(),
+                notifications_enabled: m.notifications_enabled,
             },
             None => WalletState {
                 exists: false,
@@ -513,6 +533,7 @@ impl WalletService {
                 network: Network::Mainnet,
                 birthday_height: 0,
                 indexer_uri: String::new(),
+                notifications_enabled: true,
             },
         }
     }
@@ -521,12 +542,88 @@ impl WalletService {
     /// one client-lock acquisition. Best-effort: a transient read failure leaves
     /// the previous snapshot in place. Called at low-contention points (load,
     /// import, end of a sync round), never on a client request path.
+    /// Enumerate every received output the Wallet controls, across pools, with its
+    /// spend state resolved. Built live (not from the cached snapshot) for the notes
+    /// debug view, which wants ground truth straight off the wallet. Returns empty
+    /// when no wallet is open. Note `idx` is assigned over the returned order, so it
+    /// is a stable row number for the default sort, not a wallet-internal id.
+    async fn collect_notes(&self) -> Vec<WalletNote> {
+        let guard = self.client.lock().await;
+        let Some(client) = guard.as_ref() else {
+            return Vec::new();
+        };
+
+        // Authoritative txid -> confirmed height, so a note spent by transaction X can
+        // report the block X landed in. An in-flight spend's transaction isn't
+        // confirmed yet, so it's absent here and the note's spent height stays null.
+        let heights: HashMap<String, u32> = match client.transaction_summaries(false).await {
+            Ok(summaries) => summaries
+                .iter()
+                .filter(|s| s.status.is_confirmed())
+                .map(|s| (s.txid.to_string(), u32::from(s.blockheight)))
+                .collect(),
+            Err(_) => HashMap::new(),
+        };
+
+        let wallet = client.wallet().read().await;
+        let mut notes = Vec::new();
+        let mut push = |pool, value, confirmed, height, spend_status, txid: &TxId, change| {
+            notes.push(map_wallet_note(
+                notes.len() as u32,
+                pool,
+                value,
+                confirmed,
+                height,
+                spend_status,
+                txid,
+                change,
+                &heights,
+            ));
+        };
+        for n in wallet.note_summaries::<OrchardNote>(true).iter() {
+            push(
+                Pool::Orchard,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
+        for n in wallet.note_summaries::<SaplingNote>(true).iter() {
+            push(
+                Pool::Sapling,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
+        for c in wallet.coin_summaries(true) {
+            push(
+                Pool::Transparent,
+                c.value,
+                c.status.is_confirmed(),
+                u32::from(c.block_height),
+                c.spend_status,
+                &c.txid,
+                matches!(c.scope, TransparentScope::Internal),
+            );
+        }
+        notes
+    }
+
     async fn refresh_snapshot(&self) {
         let guard = self.client.lock().await;
         let Some(client) = guard.as_ref() else { return };
 
         if let Ok(summaries) = client.transaction_summaries(true).await {
-            *self.txs.write().await = summaries.iter().map(map_tx).collect();
+            let spent_by = spent_value_by_tx(&summaries);
+            *self.txs.write().await =
+                summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
         }
         if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
             *self.balance.write().await = Some(map_balance(&bal));
@@ -599,6 +696,7 @@ impl WalletService {
             scan_target_height,
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
+            notifications_enabled: true,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -629,6 +727,7 @@ impl WalletService {
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
         self.encrypted.store(true, Ordering::SeqCst);
+        self.notifications_enabled.store(true, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -752,6 +851,21 @@ impl WalletService {
         // Cut short any idle/backoff wait so the new round starts now.
         self.restart.notify_one();
 
+        Ok(self.wallet_state().await)
+    }
+
+    /// Toggle whether transaction and scan-complete toasts fire. The in-memory atomic
+    /// gates the hot notify path; the meta flag persists the choice. The
+    /// "Indexer unreachable" alert is independent and keeps firing either way.
+    async fn set_notifications(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set notifications for"))?;
+        meta.notifications_enabled = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        self.notifications_enabled.store(enabled, Ordering::SeqCst);
         Ok(self.wallet_state().await)
     }
 
@@ -1010,8 +1124,7 @@ impl WalletService {
                 // batch can push synced_height past N. The crossing then fires only
                 // when the scan reaches the tip at finalize, not mid-round.
                 let target = self.scan_target().await;
-                self.notify
-                    .seed_live(u32::from(sync_start_height), target);
+                self.notify.seed_live(u32::from(sync_start_height), target);
                 view.in_flight.clear();
                 view.timing_log.clear();
                 view.aggregate_log.clear();
@@ -1121,6 +1234,14 @@ impl WalletService {
         // or the GUI's own refetch picks it up.
         let Some(summary) = summary else { return };
 
+        self.on_tx_summary(txid, &summary).await;
+    }
+
+    /// Handle an already-fetched summary: kind detection, cache upsert, event
+    /// broadcast, and the per-transaction toast. Split from `on_tx_discovered` so the
+    /// field extraction and downstream wiring run without a live client (the caller
+    /// owns fetching the summary and refreshing the balance).
+    async fn on_tx_summary(&self, txid: TxId, summary: &TransactionSummary) {
         let txid = txid.to_string();
         let received = matches!(summary.kind, TransactionKind::Received);
         let kind = if received {
@@ -1132,7 +1253,17 @@ impl WalletService {
         // Upsert into the cache so this tx's detail view resolves instantly, even
         // mid-first-sync before any snapshot refresh has run.
         {
-            let tx = map_tx(&summary);
+            // A single live summary can't see which earlier notes this tx spent (that
+            // needs the full set), so the exact gained − lost isn't available yet. Use
+            // the fork's own per-tx delta as the interim: it keeps sends negative, so the
+            // chart's backward reconstruction doesn't collapse the early history to zero
+            // mid-scan the way a gained-only delta would. refresh_snapshot recomputes the
+            // exact value (gained − lost, which also credits self-authored income) at the
+            // end of the round. Falls back to gained-only when the fee is unknown.
+            let mut tx = map_tx(summary, &HashMap::new());
+            if let Some(delta) = summary.balance_delta() {
+                tx.net_zat = delta.to_string();
+            }
             let mut txs = self.txs.write().await;
             match txs.iter_mut().find(|t| t.txid == txid) {
                 Some(slot) => *slot = tx,
@@ -1147,40 +1278,52 @@ impl WalletService {
             received,
         });
 
-        // ADR-0006: a transaction inside the pinned Initial-scan range [birthday, N]
-        // is historical and stays silent; one at or past N, or still in the mempool,
-        // is post-import activity and notifies. Gating on the transaction's own height
-        // rather than synced_height is robust to pepper-sync's tip-first scan, which
-        // pushes synced_height past N before the older blocks are walked, so a stale
-        // transaction found after the jump would otherwise notify.
+        self.notify_tx(
+            &txid,
+            received,
+            summary.value,
+            summary.status.is_confirmed(),
+            u32::from(summary.blockheight),
+        )
+        .await;
+    }
+
+    /// Decide and deliver the per-transaction toast (ADR-0006). Split from
+    /// `on_tx_discovered` so the policy and delivery run without a live client (the
+    /// caller owns fetching the summary). `height` is unused for an unconfirmed
+    /// transaction, which always counts as live.
+    ///
+    /// A transaction inside the pinned Initial-scan range [birthday, N] is historical
+    /// and stays silent; one at or past N, or still in the mempool, is post-import
+    /// activity and notifies. Gating on the transaction's own height rather than
+    /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
+    /// `synced_height` past N before the older blocks are walked, so a stale
+    /// transaction found after the jump would otherwise notify.
+    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
         let target = self.scan_target().await;
-        let live = if summary.status.is_confirmed() {
-            u32::from(summary.blockheight) >= target
-        } else {
-            true
-        };
-        if let Disposition::Notify = self.notify.classify(&txid, live) {
-            let amount = format_amount(summary.value);
+        let live = if confirmed { height >= target } else { true };
+        if let Disposition::Notify = self.notify.classify(txid, live) {
+            // Notifications off: record the txid as seen so re-enabling later doesn't
+            // replay it as new, then deliver nothing.
+            if !self.notifications_enabled.load(Ordering::SeqCst) {
+                self.notify.mark_notified(txid);
+                return;
+            }
+            let amount = format_amount(value);
             let (title, body) = if received {
-                (
-                    "Funds received",
-                    format!("{amount} arrived in your wallet."),
-                )
+                ("Funds received", format!("{amount} arrived in your wallet."))
             } else {
                 ("Funds sent", format!("{amount} sent from your wallet."))
             };
-            tracing::info!(
-                "new tx {txid} ({} zat, received={received}), notifying",
-                summary.value
-            );
-            // Record the txid as notified only after delivery succeeds. A failure
-            // leaves it out of the set, so a later rediscovery (at the latest, the
-            // next restart's catch-up sync) tries again rather than losing it.
+            tracing::info!("new tx {txid} ({value} zat, received={received}), notifying");
+            // Record the txid as notified only after delivery succeeds. A failure leaves
+            // it out of the set, so a later rediscovery (at the latest, the next restart's
+            // catch-up sync) tries again rather than losing it.
             match self
                 .notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
             {
-                Ok(()) => self.notify.mark_notified(&txid),
+                Ok(()) => self.notify.mark_notified(txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
                 }
@@ -1266,7 +1409,11 @@ impl WalletService {
     /// early. A wallet that began at or past N was seeded live and never fires.
     async fn announce_scan_complete(&self, synced_height: u32) {
         let target = self.scan_target().await;
-        if self.notify.crossed_to_live(synced_height, target) {
+        // Advance the live edge regardless, so the crossing only ever fires once even
+        // if notifications were off when the scan finished.
+        if self.notify.crossed_to_live(synced_height, target)
+            && self.notifications_enabled.load(Ordering::SeqCst)
+        {
             let _ = self.notifier.notify(
                 "Wallet ready",
                 "Pendrake finished scanning. You'll be notified of new activity.",
@@ -1285,7 +1432,7 @@ fn wallet_settings() -> WalletSettings {
     WalletSettings {
         sync_config: SyncConfig {
             transparent_address_discovery: TransparentAddressDiscovery::minimal(),
-            performance_level: PerformanceLevel::High,
+            performance_level: PerformanceLevel::Medium,
             ..SyncConfig::default()
         },
         min_confirmations: std::num::NonZeroU32::new(1).unwrap(),
@@ -1394,8 +1541,45 @@ fn pool_balance(confirmed: Option<Zatoshis>, total: Option<Zatoshis>) -> Option<
     }
 }
 
-fn map_tx(s: &TransactionSummary) -> Tx {
+/// Attribute every confirmed-spent received note (across all summaries) to the
+/// transaction that spent it, keyed by spending txid. `map_tx` subtracts a
+/// transaction's entry here from the value it gained to get the true net balance delta.
+fn spent_value_by_tx(summaries: &TransactionSummaries) -> HashMap<String, u64> {
+    let mut spent_by: HashMap<String, u64> = HashMap::new();
+    for s in summaries.iter() {
+        let outputs = s
+            .orchard_notes
+            .iter()
+            .map(|n| (n.spend_status, n.value))
+            .chain(s.sapling_notes.iter().map(|n| (n.spend_status, n.value)))
+            .chain(s.transparent_coins.iter().map(|c| (c.spend_summary, c.value)));
+        for (status, value) in outputs {
+            if let SpendStatus::Spent(txid) = status {
+                *spent_by.entry(txid.to_string()).or_insert(0) += value;
+            }
+        }
+    }
+    spent_by
+}
+
+fn map_tx(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> Tx {
     let confirmed = s.status.is_confirmed();
+    // The net change to the wallet's balance: the value of the notes this transaction
+    // creates for the wallet, minus the value of the notes it spends. Unlike `value`
+    // (a display amount that nets self-transfers to ~the fee), this credits income that
+    // first enters through a wallet-authored output — coinbase to self, or funds
+    // shielded from an unscanned transparent input — so the reconstructed history sums
+    // to the balance. Spent inputs come from each received note's spend-status,
+    // attributed by `spent_by` to the transaction that spent them.
+    let gained: u64 = s
+        .orchard_notes
+        .iter()
+        .map(|n| n.value)
+        .chain(s.sapling_notes.iter().map(|n| n.value))
+        .chain(s.transparent_coins.iter().map(|c| c.value))
+        .sum();
+    let lost = spent_by.get(&s.txid.to_string()).copied().unwrap_or(0);
+    let net = gained as i64 - lost as i64;
     Tx {
         txid: s.txid.to_string(),
         datetime: s.datetime as u64,
@@ -1405,6 +1589,7 @@ fn map_tx(s: &TransactionSummary) -> Tx {
             TransactionKind::Sent(_) => TxKind::Sent,
         },
         value_zat: s.value.to_string(),
+        net_zat: net.to_string(),
         status: if confirmed {
             TxStatus::Confirmed
         } else {
@@ -1490,6 +1675,53 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
     notes
 }
 
+/// The transaction that consumes a note, across every stage of a spend (proposed,
+/// transmitted, in the mempool, or confirmed). `None` for an unspent note.
+fn spending_txid(status: SpendStatus) -> Option<TxId> {
+    match status {
+        SpendStatus::Unspent => None,
+        SpendStatus::CalculatedSpent(txid)
+        | SpendStatus::TransmittedSpent(txid)
+        | SpendStatus::MempoolSpent(txid)
+        | SpendStatus::Spent(txid) => Some(txid),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn map_wallet_note(
+    idx: u32,
+    pool: Pool,
+    value: u64,
+    confirmed: bool,
+    height: u32,
+    spend_status: SpendStatus,
+    txid: &TxId,
+    change: bool,
+    heights: &HashMap<String, u32>,
+) -> WalletNote {
+    // A note in an unconfirmed transaction reads as pending whatever its spend
+    // state. Only a confirmed note is either spent or spendable.
+    let status = if !confirmed {
+        NoteStatus::Pending
+    } else if matches!(spend_status, SpendStatus::Unspent) {
+        NoteStatus::Unspent
+    } else {
+        NoteStatus::Spent
+    };
+    let spent_height =
+        spending_txid(spend_status).and_then(|spender| heights.get(&spender.to_string()).copied());
+    WalletNote {
+        idx,
+        pool,
+        value_zat: value.to_string(),
+        status,
+        height: confirmed.then_some(height),
+        txid: txid.to_string(),
+        change,
+        spent_height,
+    }
+}
+
 fn map_balance(bal: &AccountBalance) -> Balance {
     Balance {
         orchard: pool_balance(bal.confirmed_orchard_balance, bal.total_orchard_balance),
@@ -1512,6 +1744,184 @@ mod tests {
         let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         Paths::with_root(root)
+    }
+
+    // Records every delivery so a test can assert which toasts were raised.
+    struct SpyNotifier(std::sync::Mutex<Vec<(String, String, String)>>);
+
+    impl SpyNotifier {
+        fn new() -> Self {
+            Self(std::sync::Mutex::new(Vec::new()))
+        }
+        fn calls(&self) -> Vec<(String, String, String)> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl Notifier for SpyNotifier {
+        fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((title.to_owned(), body.to_owned(), deep_link.to_owned()));
+            Ok(())
+        }
+    }
+
+    // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
+    // at `target`, so `notify_tx` runs the real policy without a live client.
+    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+        let service = WalletService::load(test_paths(name), spy).await.unwrap();
+        *service.meta.write().await = Some(Meta {
+            network: Network::Mainnet,
+            indexer_uri: String::new(),
+            import_type: ImportType::Ufvk,
+            view_mode: ViewMode::Full,
+            birthday_height: 0,
+            scan_target_height: target,
+            encrypted: false,
+            fingerprint: None,
+            notifications_enabled: true,
+        });
+        service
+    }
+
+    #[tokio::test]
+    async fn a_live_transaction_raises_a_movement_toast() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-live", spy.clone(), 100).await;
+        // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
+        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, "pendrake://tx?txid=txlive");
+    }
+
+    #[tokio::test]
+    async fn a_historical_transaction_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-historical", spy.clone(), 100).await;
+        // Confirmed below N: Initial-scan history, recorded silently with no toast.
+        service.notify_tx("txold", true, 42_000_000, true, 50).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unconfirmed_transaction_is_live() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
+        // Mempool is live regardless of height, so a send notifies right away.
+        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds sent");
+    }
+
+    #[tokio::test]
+    async fn the_same_live_transaction_notifies_once() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-once", spy.clone(), 100).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        assert_eq!(spy.calls().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn notifications_off_silences_a_live_transaction() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-off", spy.clone(), 100).await;
+        service.notifications_enabled.store(false, Ordering::SeqCst);
+        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    // `summary()` pins height 1; override it so a summary can sit above or below the
+    // Initial-scan target and exercise the live-vs-historical extraction.
+    fn summary_at(
+        txid_byte: u8,
+        kind: TransactionKind,
+        value: u64,
+        height: u32,
+    ) -> TransactionSummary {
+        let mut s = summary(txid_byte, kind, value, vec![]);
+        s.status = ConfirmationStatus::Confirmed(BlockHeight::from_u32(height));
+        s.blockheight = BlockHeight::from_u32(height);
+        s
+    }
+
+    #[tokio::test]
+    async fn a_received_summary_feeds_toast_cache_and_event() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-received", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x11);
+
+        service
+            .on_tx_summary(id, &summary_at(0x11, TransactionKind::Received, 42_000_000, 120))
+            .await;
+
+        // The summary's kind, value and height flow to the movement toast.
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}"));
+        // ...and to the cache the GUI reads.
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        // ...and to the broadcast the GUI folds in.
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { txid, kind, value_zat, received } => {
+                assert_eq!(txid, id.to_string());
+                assert_eq!(kind, TxKind::Received);
+                assert_eq!(value_zat, "42000000");
+                assert!(received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_sent_summary_reads_as_sent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-sent", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+
+        service
+            .on_tx_summary(
+                txid(0x22),
+                &summary_at(0x22, TransactionKind::Sent(SendType::Send), 7_000_000, 120),
+            )
+            .await;
+
+        assert_eq!(spy.calls()[0].0, "Funds sent");
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { kind, received, .. } => {
+                assert_eq!(kind, TxKind::Sent);
+                assert!(!received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_historical_summary_updates_cache_but_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-historical", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x33);
+
+        // Confirmed below the target: the extracted height drives the policy's silent
+        // path, yet the cache and event still update so the GUI stays consistent.
+        service
+            .on_tx_summary(id, &summary_at(0x33, TransactionKind::Received, 42_000_000, 50))
+            .await;
+
+        assert!(spy.calls().is_empty());
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            SyncEvent::Transaction { .. }
+        ));
     }
 
     use pepper_sync::error::{ServerError, SyncError};
@@ -1683,5 +2093,239 @@ mod tests {
         service.subscriber_left();
         // A plaintext wallet has no passphrase to demand, so it stays open.
         assert!(!service.session_locked());
+    }
+
+    use zingo_status::confirmation_status::ConfirmationStatus;
+    use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
+
+    fn txid(byte: u8) -> TxId {
+        TxId::from_bytes([byte; 32])
+    }
+
+    // A confirmed transaction carrying `received` orchard notes, each (value,
+    // spend-status). `display` is the fork's `value` field, the signed amount the net
+    // delta deliberately ignores in favour of the note flows.
+    fn summary(
+        txid_byte: u8,
+        kind: TransactionKind,
+        display: u64,
+        received: Vec<(u64, SpendStatus)>,
+    ) -> TransactionSummary {
+        TransactionSummary {
+            txid: txid(txid_byte),
+            datetime: 0,
+            status: ConfirmationStatus::Confirmed(BlockHeight::from_u32(1)),
+            blockheight: BlockHeight::from_u32(1),
+            kind,
+            value: display,
+            fee: None,
+            zec_price: None,
+            orchard_notes: received
+                .into_iter()
+                .enumerate()
+                .map(|(i, (value, status))| {
+                    BasicNoteSummary::from_parts(value, status, i as u32, None)
+                })
+                .collect(),
+            sapling_notes: vec![],
+            transparent_coins: vec![],
+            outgoing_orchard_notes: vec![],
+            outgoing_sapling_notes: vec![],
+            outgoing_transparent_coins: vec![],
+        }
+    }
+
+    fn net_of(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> i64 {
+        map_tx(s, spent_by).net_zat.parse().unwrap()
+    }
+
+    // The invariant the balance chart leans on: summed over the whole history, each
+    // transaction's net delta equals the confirmed balance (the value of every unspent
+    // received note). When it holds, the reconstructed curve ends on the headline and
+    // walks back to zero.
+    #[test]
+    fn net_deltas_sum_to_the_unspent_balance() {
+        // A receives 100, later spent by B; B keeps 30 as change and sends the rest
+        // out. The only unspent note left is B's 30.
+        let a = summary(
+            0xAA,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0xBB)))],
+        );
+        let b = summary(
+            0xBB,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![a, b]);
+
+        let spent_by = spent_value_by_tx(&history);
+        let total: i64 = history.iter().map(|s| net_of(s, &spent_by)).sum();
+        assert_eq!(total, 30);
+    }
+
+    // A plain external receive credits the full received value: nothing of the wallet's
+    // is spent, so the delta is exactly what arrived.
+    #[test]
+    fn external_receive_credits_the_full_value() {
+        let s = summary(
+            0x01,
+            TransactionKind::Received,
+            500,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&s, &HashMap::new()), 500);
+    }
+
+    // A send debits the spent inputs and credits only the change that returns, so its
+    // delta is the negative of what left the wallet (the external payment plus fee),
+    // regardless of the larger signed `display` amount.
+    #[test]
+    fn send_nets_change_minus_spent_inputs() {
+        let funding = summary(
+            0x02,
+            TransactionKind::Received,
+            100,
+            vec![(100, SpendStatus::Spent(txid(0x03)))],
+        );
+        let send = summary(
+            0x03,
+            TransactionKind::Sent(SendType::Send),
+            70,
+            vec![(30, SpendStatus::Unspent)],
+        );
+        let history = TransactionSummaries::new(vec![funding, send.clone()]);
+        let spent_by = spent_value_by_tx(&history);
+        assert_eq!(net_of(&send, &spent_by), 30 - 100);
+    }
+
+    // The bug this delta exists to fix: income that first enters through a
+    // wallet-authored output. A shield from an unscanned transparent input (or a
+    // coinbase paid to the wallet's own shielded address) creates a received note with
+    // no matching spent note, and the fork's signed `display` nets it to roughly the
+    // fee. The note-flow delta credits the full value instead of zeroing it out.
+    #[test]
+    fn self_authored_inflow_is_credited_not_zeroed() {
+        let shield = summary(
+            0x04,
+            TransactionKind::Sent(SendType::Shield),
+            0,
+            vec![(500, SpendStatus::Unspent)],
+        );
+        assert_eq!(net_of(&shield, &HashMap::new()), 500);
+    }
+
+    // The notes debug view's status rule: an unconfirmed note reads pending whatever
+    // its spend state, a confirmed one is spent or spendable.
+    #[test]
+    fn unconfirmed_note_is_pending_with_no_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            false,
+            0,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Pending);
+        assert_eq!(note.height, None);
+    }
+
+    #[test]
+    fn confirmed_unspent_note_is_spendable_at_its_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Sapling,
+            100,
+            true,
+            42,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Unspent);
+        assert_eq!(note.height, Some(42));
+        assert_eq!(note.spent_height, None);
+    }
+
+    #[test]
+    fn a_confirmed_spend_resolves_the_spending_block() {
+        let heights = HashMap::from([(txid(0x02).to_string(), 99u32)]);
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::Spent(txid(0x02)),
+            &txid(0x01),
+            false,
+            &heights,
+        );
+        assert_eq!(note.status, NoteStatus::Spent);
+        assert_eq!(note.spent_height, Some(99));
+    }
+
+    // An in-flight spend (transmitted, mempool, or just calculated) marks the note
+    // spent, but its spending transaction isn't confirmed, so no height is known.
+    #[test]
+    fn an_in_flight_spend_has_no_confirmed_height() {
+        let note = map_wallet_note(
+            0,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::MempoolSpent(txid(0x02)),
+            &txid(0x01),
+            false,
+            &HashMap::new(),
+        );
+        assert_eq!(note.status, NoteStatus::Spent);
+        assert_eq!(note.spent_height, None);
+    }
+
+    #[test]
+    fn carries_idx_value_txid_and_change_through() {
+        let note = map_wallet_note(
+            7,
+            Pool::Orchard,
+            100,
+            true,
+            42,
+            SpendStatus::Unspent,
+            &txid(0x01),
+            true,
+            &HashMap::new(),
+        );
+        assert_eq!(note.idx, 7);
+        assert_eq!(note.value_zat, "100");
+        assert_eq!(note.txid, txid(0x01).to_string());
+        assert!(note.change);
+    }
+
+    #[test]
+    fn spending_txid_covers_every_spend_stage() {
+        let spender = txid(0x05);
+        assert_eq!(spending_txid(SpendStatus::Unspent), None);
+        assert_eq!(
+            spending_txid(SpendStatus::CalculatedSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(
+            spending_txid(SpendStatus::TransmittedSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(
+            spending_txid(SpendStatus::MempoolSpent(spender)),
+            Some(spender)
+        );
+        assert_eq!(spending_txid(SpendStatus::Spent(spender)), Some(spender));
     }
 }
