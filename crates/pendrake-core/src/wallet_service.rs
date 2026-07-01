@@ -1234,6 +1234,14 @@ impl WalletService {
         // or the GUI's own refetch picks it up.
         let Some(summary) = summary else { return };
 
+        self.on_tx_summary(txid, &summary).await;
+    }
+
+    /// Handle an already-fetched summary: kind detection, cache upsert, event
+    /// broadcast, and the per-transaction toast. Split from `on_tx_discovered` so the
+    /// field extraction and downstream wiring run without a live client (the caller
+    /// owns fetching the summary and refreshing the balance).
+    async fn on_tx_summary(&self, txid: TxId, summary: &TransactionSummary) {
         let txid = txid.to_string();
         let received = matches!(summary.kind, TransactionKind::Received);
         let kind = if received {
@@ -1252,7 +1260,7 @@ impl WalletService {
             // mid-scan the way a gained-only delta would. refresh_snapshot recomputes the
             // exact value (gained − lost, which also credits self-authored income) at the
             // end of the round. Falls back to gained-only when the fee is unknown.
-            let mut tx = map_tx(&summary, &HashMap::new());
+            let mut tx = map_tx(summary, &HashMap::new());
             if let Some(delta) = summary.balance_delta() {
                 tx.net_zat = delta.to_string();
             }
@@ -1270,46 +1278,52 @@ impl WalletService {
             received,
         });
 
-        // ADR-0006: a transaction inside the pinned Initial-scan range [birthday, N]
-        // is historical and stays silent; one at or past N, or still in the mempool,
-        // is post-import activity and notifies. Gating on the transaction's own height
-        // rather than synced_height is robust to pepper-sync's tip-first scan, which
-        // pushes synced_height past N before the older blocks are walked, so a stale
-        // transaction found after the jump would otherwise notify.
+        self.notify_tx(
+            &txid,
+            received,
+            summary.value,
+            summary.status.is_confirmed(),
+            u32::from(summary.blockheight),
+        )
+        .await;
+    }
+
+    /// Decide and deliver the per-transaction toast (ADR-0006). Split from
+    /// `on_tx_discovered` so the policy and delivery run without a live client (the
+    /// caller owns fetching the summary). `height` is unused for an unconfirmed
+    /// transaction, which always counts as live.
+    ///
+    /// A transaction inside the pinned Initial-scan range [birthday, N] is historical
+    /// and stays silent; one at or past N, or still in the mempool, is post-import
+    /// activity and notifies. Gating on the transaction's own height rather than
+    /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
+    /// `synced_height` past N before the older blocks are walked, so a stale
+    /// transaction found after the jump would otherwise notify.
+    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
         let target = self.scan_target().await;
-        let live = if summary.status.is_confirmed() {
-            u32::from(summary.blockheight) >= target
-        } else {
-            true
-        };
-        if let Disposition::Notify = self.notify.classify(&txid, live) {
+        let live = if confirmed { height >= target } else { true };
+        if let Disposition::Notify = self.notify.classify(txid, live) {
             // Notifications off: record the txid as seen so re-enabling later doesn't
             // replay it as new, then deliver nothing.
             if !self.notifications_enabled.load(Ordering::SeqCst) {
-                self.notify.mark_notified(&txid);
+                self.notify.mark_notified(txid);
                 return;
             }
-            let amount = format_amount(summary.value);
+            let amount = format_amount(value);
             let (title, body) = if received {
-                (
-                    "Funds received",
-                    format!("{amount} arrived in your wallet."),
-                )
+                ("Funds received", format!("{amount} arrived in your wallet."))
             } else {
                 ("Funds sent", format!("{amount} sent from your wallet."))
             };
-            tracing::info!(
-                "new tx {txid} ({} zat, received={received}), notifying",
-                summary.value
-            );
-            // Record the txid as notified only after delivery succeeds. A failure
-            // leaves it out of the set, so a later rediscovery (at the latest, the
-            // next restart's catch-up sync) tries again rather than losing it.
+            tracing::info!("new tx {txid} ({value} zat, received={received}), notifying");
+            // Record the txid as notified only after delivery succeeds. A failure leaves
+            // it out of the set, so a later rediscovery (at the latest, the next restart's
+            // catch-up sync) tries again rather than losing it.
             match self
                 .notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
             {
-                Ok(()) => self.notify.mark_notified(&txid),
+                Ok(()) => self.notify.mark_notified(txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
                 }
@@ -1730,6 +1744,184 @@ mod tests {
         let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         Paths::with_root(root)
+    }
+
+    // Records every delivery so a test can assert which toasts were raised.
+    struct SpyNotifier(std::sync::Mutex<Vec<(String, String, String)>>);
+
+    impl SpyNotifier {
+        fn new() -> Self {
+            Self(std::sync::Mutex::new(Vec::new()))
+        }
+        fn calls(&self) -> Vec<(String, String, String)> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl Notifier for SpyNotifier {
+        fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((title.to_owned(), body.to_owned(), deep_link.to_owned()));
+            Ok(())
+        }
+    }
+
+    // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
+    // at `target`, so `notify_tx` runs the real policy without a live client.
+    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+        let service = WalletService::load(test_paths(name), spy).await.unwrap();
+        *service.meta.write().await = Some(Meta {
+            network: Network::Mainnet,
+            indexer_uri: String::new(),
+            import_type: ImportType::Ufvk,
+            view_mode: ViewMode::Full,
+            birthday_height: 0,
+            scan_target_height: target,
+            encrypted: false,
+            fingerprint: None,
+            notifications_enabled: true,
+        });
+        service
+    }
+
+    #[tokio::test]
+    async fn a_live_transaction_raises_a_movement_toast() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-live", spy.clone(), 100).await;
+        // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
+        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, "pendrake://tx?txid=txlive");
+    }
+
+    #[tokio::test]
+    async fn a_historical_transaction_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-historical", spy.clone(), 100).await;
+        // Confirmed below N: Initial-scan history, recorded silently with no toast.
+        service.notify_tx("txold", true, 42_000_000, true, 50).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unconfirmed_transaction_is_live() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
+        // Mempool is live regardless of height, so a send notifies right away.
+        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds sent");
+    }
+
+    #[tokio::test]
+    async fn the_same_live_transaction_notifies_once() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-once", spy.clone(), 100).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        assert_eq!(spy.calls().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn notifications_off_silences_a_live_transaction() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-off", spy.clone(), 100).await;
+        service.notifications_enabled.store(false, Ordering::SeqCst);
+        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    // `summary()` pins height 1; override it so a summary can sit above or below the
+    // Initial-scan target and exercise the live-vs-historical extraction.
+    fn summary_at(
+        txid_byte: u8,
+        kind: TransactionKind,
+        value: u64,
+        height: u32,
+    ) -> TransactionSummary {
+        let mut s = summary(txid_byte, kind, value, vec![]);
+        s.status = ConfirmationStatus::Confirmed(BlockHeight::from_u32(height));
+        s.blockheight = BlockHeight::from_u32(height);
+        s
+    }
+
+    #[tokio::test]
+    async fn a_received_summary_feeds_toast_cache_and_event() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-received", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x11);
+
+        service
+            .on_tx_summary(id, &summary_at(0x11, TransactionKind::Received, 42_000_000, 120))
+            .await;
+
+        // The summary's kind, value and height flow to the movement toast.
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}"));
+        // ...and to the cache the GUI reads.
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        // ...and to the broadcast the GUI folds in.
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { txid, kind, value_zat, received } => {
+                assert_eq!(txid, id.to_string());
+                assert_eq!(kind, TxKind::Received);
+                assert_eq!(value_zat, "42000000");
+                assert!(received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_sent_summary_reads_as_sent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-sent", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+
+        service
+            .on_tx_summary(
+                txid(0x22),
+                &summary_at(0x22, TransactionKind::Sent(SendType::Send), 7_000_000, 120),
+            )
+            .await;
+
+        assert_eq!(spy.calls()[0].0, "Funds sent");
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { kind, received, .. } => {
+                assert_eq!(kind, TxKind::Sent);
+                assert!(!received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_historical_summary_updates_cache_but_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-historical", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x33);
+
+        // Confirmed below the target: the extracted height drives the policy's silent
+        // path, yet the cache and event still update so the GUI stays consistent.
+        service
+            .on_tx_summary(id, &summary_at(0x33, TransactionKind::Received, 42_000_000, 50))
+            .await;
+
+        assert!(spy.calls().is_empty());
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            SyncEvent::Transaction { .. }
+        ));
     }
 
     use pepper_sync::error::{ServerError, SyncError};
