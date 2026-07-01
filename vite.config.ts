@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import path from "node:path";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -26,9 +27,71 @@ export default defineConfig(async () => ({
     },
   },
 
+  // The pure-function tests need the node environment; the Storybook addon renders
+  // stories in a real browser. They can't share one config, so they run as two
+  // Vitest projects under a single `pnpm test`.
   test: {
-    environment: "node",
-    include: ["src/**/*.test.ts"],
+    projects: [
+      {
+        // Sub-projects don't inherit the root resolve config, so the alias is
+        // repeated here for the tests that import through "@/...".
+        resolve: {
+          alias: { "@": path.resolve(__dirname, "./src") },
+        },
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        plugins: [storybookTest({ configDir: ".storybook" })],
+        // Inline Vitest projects don't inherit the root resolve config, so the "@"
+        // alias has to be repeated here or the stories' "@/..." imports won't resolve.
+        resolve: {
+          alias: { "@": path.resolve(__dirname, "./src") },
+        },
+        // Pre-bundle everything the preview and the stories pull in. Discovered
+        // lazily, these would re-trigger Vite's dep optimizer mid-run; the chunk
+        // hashes then shift under already-loaded modules and their dynamic imports
+        // 404 (Vitest's "Vite unexpectedly reloaded a test"). Listing them up front
+        // keeps the optimize pass to one shot.
+        optimizeDeps: {
+          include: [
+            "@storybook/react-vite",
+            "@storybook/addon-a11y",
+            "@storybook/addon-themes",
+            "storybook/test",
+            "react",
+            "react-dom",
+            "react-dom/client",
+            "react/jsx-runtime",
+            "react/jsx-dev-runtime",
+            "recharts",
+            "react-day-picker",
+            "lifehash",
+            "date-fns",
+            "@tabler/icons-react",
+            "@tanstack/react-router",
+            "@tanstack/react-virtual",
+            "radix-ui",
+            "clsx",
+            "tailwind-merge",
+            "class-variance-authority",
+          ],
+        },
+        test: {
+          name: "storybook",
+          browser: {
+            enabled: true,
+            provider: "playwright",
+            headless: true,
+            instances: [{ browser: "chromium" }],
+          },
+          setupFiles: [".storybook/vitest.setup.ts"],
+        },
+      },
+    ],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
