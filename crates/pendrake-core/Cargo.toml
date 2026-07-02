@@ -41,6 +41,12 @@ anyhow.workspace = true
 dirs = "5"
 tracing.workspace = true
 rustls = { version = "0.23", features = ["ring"] }
+# Keyless HTTPS to the fiat price providers (AUZ-83). rustls-tls reuses the ring provider
+# already installed at startup instead of pulling native-tls / OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "json",
+] }
 fs2 = "0.4"
 thiserror = "1"
 

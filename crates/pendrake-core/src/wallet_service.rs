@@ -16,9 +16,9 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    RemoveArgs, SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
-    Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
-    WalletNote, WalletState,
+    PricePoint, PriceSpot, RemoveArgs, SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs,
+    SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
+    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -48,11 +48,17 @@ use crate::birthday::resolve_birthday;
 use crate::notify::Notifier;
 use crate::notify_policy::{Disposition, NotificationPolicy};
 use crate::paths::{Meta, Paths};
+use crate::price::{today, PriceCache, PriceFetcher};
 use crate::ufvk::{parse_ufvk, UfvkError};
 
 /// Gap between sync rounds once a round has finished cleanly. Kept short so a
 /// newly mined transaction is picked up within roughly this window.
 const IDLE_INTERVAL: Duration = Duration::from_secs(2);
+/// How often the price loop refreshes the spot while fiat is enabled (AUZ-83). Balanced
+/// against provider rate limits; daily history is fetched at most once per UTC day.
+const SPOT_INTERVAL: Duration = Duration::from_secs(600);
+/// A spot older than this is shown greyed with an "updated Xh ago" marker.
+const SPOT_STALE_AFTER: Duration = Duration::from_secs(3600);
 /// Reconnect backoff bounds after a failed round.
 const BACKOFF_MIN: Duration = Duration::from_secs(3);
 const BACKOFF_MAX: Duration = Duration::from_secs(120);
@@ -98,6 +104,16 @@ pub struct WalletService {
     /// `Meta::notifications_enabled` for the hot notify path. Toggled from Settings.
     /// The "Indexer unreachable" alert ignores this.
     notifications_enabled: AtomicBool,
+    /// Whether fiat price display is enabled, mirroring `Meta::fiat_enabled`. Gates the
+    /// price refresh loop: while false nothing is fetched, so a wallet stays private to
+    /// the price providers until the user consents (docs/adr/0008).
+    fiat_enabled: AtomicBool,
+    /// Reconciled spot + daily series, served to the GUI and persisted to
+    /// `price_cache.json`. Seeded from the bundled pre-2020 tail on load.
+    price_cache: RwLock<PriceCache>,
+    /// Wakes the price loop to fetch immediately, used when the user enables fiat so the
+    /// first value lands without waiting out the interval.
+    price_restart: Notify,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -341,6 +357,8 @@ impl WalletService {
         paths.ensure_dirs()?;
         let notify = NotificationPolicy::load(paths.notified_file.clone());
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
+        let mut price_cache = PriceCache::load(&paths.price_cache_file);
+        price_cache.seed_tail();
         let service = Arc::new(Self {
             notifier,
             client: Mutex::new(None),
@@ -353,6 +371,9 @@ impl WalletService {
             notify,
             unreachable_notified: AtomicBool::new(false),
             notifications_enabled: AtomicBool::new(true),
+            fiat_enabled: AtomicBool::new(false),
+            price_cache: RwLock::new(price_cache),
+            price_restart: Notify::new(),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             session_locked: AtomicBool::new(false),
@@ -367,6 +388,9 @@ impl WalletService {
             service
                 .notifications_enabled
                 .store(meta.notifications_enabled, Ordering::SeqCst);
+            service
+                .fiat_enabled
+                .store(meta.fiat_enabled, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -400,6 +424,7 @@ impl WalletService {
                 }
             }
         }
+        service.spawn_price_loop();
         Ok(service)
     }
 
@@ -460,6 +485,12 @@ impl WalletService {
                 let args: SetNotificationsArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_notifications(args.enabled).await?)?)
             }
+            "setFiatEnabled" => {
+                let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_fiat_enabled(args.enabled).await?)?)
+            }
+            "getSpotPrice" => Ok(to_value(self.spot_price().await)?),
+            "getPriceHistory" => Ok(to_value(self.price_history().await)?),
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
@@ -522,6 +553,7 @@ impl WalletService {
                 birthday_height: m.birthday_height,
                 indexer_uri: m.indexer_uri.clone(),
                 notifications_enabled: m.notifications_enabled,
+                fiat_enabled: m.fiat_enabled,
             },
             None => WalletState {
                 exists: false,
@@ -534,6 +566,7 @@ impl WalletService {
                 birthday_height: 0,
                 indexer_uri: String::new(),
                 notifications_enabled: true,
+                fiat_enabled: false,
             },
         }
     }
@@ -697,6 +730,7 @@ impl WalletService {
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
             notifications_enabled: true,
+            fiat_enabled: false,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -728,6 +762,9 @@ impl WalletService {
         *self.session_passphrase.lock().await = Some(passphrase);
         self.encrypted.store(true, Ordering::SeqCst);
         self.notifications_enabled.store(true, Ordering::SeqCst);
+        // A fresh Wallet starts private: fiat stays off until the user consents anew, so a
+        // prior wallet's choice doesn't carry over the import.
+        self.fiat_enabled.store(false, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -781,6 +818,8 @@ impl WalletService {
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
         self.session_locked.store(false, Ordering::SeqCst);
+        // Nudge the price loop: if fiat was enabled, it was parked while locked.
+        self.price_restart.notify_one();
         self.refresh_snapshot().await;
         self.sync.write().await.state = SyncState::Syncing;
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -869,6 +908,45 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
+    /// Turn fiat price display on or off. Enabling records the user's consent to the
+    /// price egress (docs/adr/0008) and wakes the price loop so the first value lands
+    /// promptly; disabling parks the loop, stopping all price requests.
+    async fn set_fiat_enabled(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set fiat display for"))?;
+        meta.fiat_enabled = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        self.fiat_enabled.store(enabled, Ordering::SeqCst);
+        if enabled {
+            self.price_restart.notify_one();
+        }
+        Ok(self.wallet_state().await)
+    }
+
+    /// The current reconciled spot, or `None` if nothing has been fetched yet. Stamps
+    /// `stale` when the last fetch is older than [`SPOT_STALE_AFTER`] so the GUI can grey it.
+    async fn spot_price(&self) -> Option<PriceSpot> {
+        let mut spot = self.price_cache.read().await.spot.clone()?;
+        let age = now_secs().saturating_sub(spot.fetched_at);
+        spot.stale = age > SPOT_STALE_AFTER.as_secs();
+        Some(spot)
+    }
+
+    /// The full reconciled daily series, oldest first. The GUI clips it to the selected
+    /// Span and multiplies each day by the balance held then.
+    async fn price_history(&self) -> Vec<PricePoint> {
+        self.price_cache
+            .read()
+            .await
+            .daily
+            .values()
+            .cloned()
+            .collect()
+    }
+
     /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
     /// Replace lands in onboarding without re-collecting it; Start over passes false
     /// and the passphrase is dropped (docs/adr/0004).
@@ -876,6 +954,9 @@ impl WalletService {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         self.encrypted.store(false, Ordering::SeqCst);
+        // Park the price loop; the reconciled prices themselves are public ZEC/USD data,
+        // not wallet-specific, so the cache file is kept to avoid re-fetching after Replace.
+        self.fiat_enabled.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         if !keep_session {
@@ -935,6 +1016,87 @@ impl WalletService {
         let service = Arc::clone(self);
         let generation = service.generation.load(Ordering::SeqCst);
         tokio::spawn(async move { service.run_sync_loop(generation).await });
+    }
+
+    /// One long-lived task per daemon. It parks while fiat is off or no wallet is loaded,
+    /// so nothing is fetched without the user's consent, and wakes to refresh the spot on
+    /// [`SPOT_INTERVAL`] once enabled. The daily series is fetched at most once per UTC day.
+    fn spawn_price_loop(self: &Arc<Self>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move { service.run_price_loop().await });
+    }
+
+    async fn run_price_loop(self: Arc<Self>) {
+        let fetcher = match PriceFetcher::new() {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!("price fetcher unavailable, fiat display disabled: {e}");
+                return;
+            }
+        };
+        let mut last_daily: Option<String> = None;
+        loop {
+            // No price egress while the session is locked: there's no fiat UI to feed, and
+            // the wallet should stay quiet to the price providers until the GUI is unlocked.
+            let active = self.fiat_enabled.load(Ordering::SeqCst)
+                && !self.session_locked.load(Ordering::SeqCst)
+                && self.meta.read().await.is_some();
+            if !active {
+                tokio::select! {
+                    _ = self.price_restart.notified() => {}
+                    _ = tokio::time::sleep(SPOT_INTERVAL) => {}
+                }
+                continue;
+            }
+
+            self.refresh_spot(&fetcher).await;
+            let today = today();
+            if last_daily.as_deref() != Some(today.as_str()) && self.refresh_daily(&fetcher).await {
+                last_daily = Some(today);
+            }
+
+            tokio::select! {
+                _ = tokio::time::sleep(SPOT_INTERVAL) => {}
+                _ = self.price_restart.notified() => {}
+            }
+        }
+    }
+
+    async fn refresh_spot(&self, fetcher: &PriceFetcher) {
+        match fetcher.spot().await {
+            Ok(spot) => {
+                {
+                    let mut cache = self.price_cache.write().await;
+                    cache.spot = Some(spot.clone());
+                    if let Err(e) = cache.save(&self.paths.price_cache_file) {
+                        tracing::warn!("persisting price cache failed: {e}");
+                    }
+                }
+                let _ = self.events.send(SyncEvent::PriceUpdate { spot });
+            }
+            Err(e) => tracing::warn!("spot refresh failed, keeping last known: {e}"),
+        }
+    }
+
+    /// Merge freshly fetched daily marks into the cache, keeping existing days immutable.
+    /// Returns whether anything came back, so a failed fetch retries next tick rather than
+    /// marking the day done.
+    async fn refresh_daily(&self, fetcher: &PriceFetcher) -> bool {
+        // Once the deep history is cached, fetch only from the newest cached day forward, so
+        // the daily refresh stops re-paging Coinbase back to 2020 every day (docs/adr/0008).
+        let since = self.price_cache.read().await.daily_since();
+        let fresh = fetcher.daily(since.as_deref()).await;
+        if fresh.is_empty() {
+            return false;
+        }
+        let mut cache = self.price_cache.write().await;
+        for (date, point) in fresh {
+            cache.daily.entry(date).or_insert(point);
+        }
+        if let Err(e) = cache.save(&self.paths.price_cache_file) {
+            tracing::warn!("persisting price cache failed: {e}");
+        }
+        true
     }
 
     async fn run_sync_loop(self: Arc<Self>, generation: u64) {

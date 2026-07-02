@@ -5,6 +5,7 @@ import {
   IconBell,
   IconCheck,
   IconCircleCheck,
+  IconCurrencyDollar,
   IconFlask,
   IconServer2,
 } from "@tabler/icons-react";
@@ -15,6 +16,7 @@ import { ReplaceDialog } from "@/components/settings/replace-dialog";
 import { useWalletData } from "@/hooks/use-wallet-data";
 import {
   MAINNET_INDEXERS,
+  setFiatEnabled,
   setIndexer,
   setNotifications,
   type Network,
@@ -37,6 +39,13 @@ export function SettingsPage() {
         <NotificationsSection
           key={`notify-${wallet.fingerprint ?? "wallet"}`}
           enabled={wallet.notificationsEnabled}
+        />
+      )}
+
+      {wallet?.exists && (
+        <FiatSection
+          key={`fiat-${wallet.fingerprint ?? "wallet"}`}
+          enabled={wallet.fiatEnabled ?? false}
         />
       )}
 
@@ -128,6 +137,54 @@ function NotificationsSection({ enabled }: { enabled: boolean }) {
           disabled={busy}
           onCheckedChange={toggle}
           aria-label="Transaction notifications"
+        />
+      </div>
+    </section>
+  );
+}
+
+// The fiat price toggle (docs/adr/0008). Turning it off stops all price egress; turning
+// it on here (rather than through the chart's consent modal) still records the same
+// consent, since the switch is an explicit opt-in. The daemon persists the choice.
+function FiatSection({ enabled }: { enabled: boolean }) {
+  const [on, setOn] = useState(enabled);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle(next: boolean) {
+    setOn(next);
+    setBusy(true);
+    try {
+      const state = await setFiatEnabled(next);
+      setOn(state.fiatEnabled ?? false);
+    } catch {
+      setOn(!next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <IconCurrencyDollar className="size-4 text-muted-foreground" />
+        <h2 className="font-heading text-base font-semibold">Fiat price</h2>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-foreground">
+            Show USD values
+          </span>
+          <span className="text-sm text-muted-foreground">
+            Prices your balance in USD using third-party price data (CoinGecko,
+            Coinbase, Kraken). Off means no price requests leave your device. Your
+            balance always shows in ZEC regardless.
+          </span>
+        </div>
+        <Switch
+          checked={on}
+          disabled={busy}
+          onCheckedChange={toggle}
+          aria-label="Fiat price display"
         />
       </div>
     </section>

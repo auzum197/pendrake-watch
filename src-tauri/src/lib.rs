@@ -449,6 +449,25 @@ async fn get_notes() -> Result<Value, String> {
     request("getNotes", Value::Null).await
 }
 
+/// Toggle fiat (USD) price display. Enabling records the user's consent to the price
+/// egress (docs/adr/0008) and starts the daemon's price refresh.
+#[tauri::command]
+async fn set_fiat_enabled(enabled: bool) -> Result<Value, String> {
+    request("setFiatEnabled", serde_json::json!({ "enabled": enabled })).await
+}
+
+/// The current reconciled ZEC/USD spot, or null if nothing has been fetched yet.
+#[tauri::command]
+async fn get_spot_price() -> Result<Value, String> {
+    request("getSpotPrice", Value::Null).await
+}
+
+/// The reconciled daily ZEC/USD series the chart marks the balance against.
+#[tauri::command]
+async fn get_price_history() -> Result<Value, String> {
+    request("getPriceHistory", Value::Null).await
+}
+
 #[tauri::command]
 async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
     request(
@@ -531,6 +550,9 @@ pub fn run() {
             get_transactions,
             get_transaction,
             get_notes,
+            set_fiat_enabled,
+            get_spot_price,
+            get_price_history,
             remove_wallet,
         ])
         .run(tauri::generate_context!())

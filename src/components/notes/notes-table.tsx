@@ -1,4 +1,11 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WalletNote } from "@/lib/ipc";
 import { formatZec, zatToZecPlain } from "@/lib/format";
 import type { Sort, SortKey } from "@/lib/notes";
@@ -11,12 +18,19 @@ type Column = {
   label: string;
   sortable: boolean;
   align?: "right";
-  // A share of the table width (Tailwind percentage). table-fixed splits its width by
-  // these, so columns scale with the window and stay put whatever the visible rows
-  // hold. Percentages, not px, so the table shrinks with a narrow window instead of
-  // overflowing. They sum to 100.
-  width: string;
 };
+
+// The list is virtualized, so it can't be a <table> (one layout box can't position
+// rows independently). Header and every row share this grid instead. The fractions are
+// the column's share of the width, so columns scale with the window the way the old
+// table-fixed percentages did. They sum to 100 and match the COLUMNS order.
+const GRID =
+  "grid grid-cols-[7fr_13fr_18fr_12fr_12fr_15fr_10fr_13fr] items-center";
+
+// Fixed row height for the virtualizer, matching a py-2.5 single-line row (the same
+// size the pre-virtualization content-visibility reserved), so estimate and actual
+// agree and nothing has to re-measure.
+const ROW_HEIGHT = 41;
 
 // Order matches the spec. The leading № leaves the left edge free for the planned
 // per-row expand toggle without shifting the rest.
@@ -30,14 +44,14 @@ type Column = {
 //               transaction, i.e. where the note actually exists on chain. Null
 //               (shown as `mempool`) until that transaction confirms.
 const COLUMNS: Column[] = [
-  { key: "idx", label: "№", sortable: true, width: "w-[7%]" },
-  { key: "pool", label: "Pool", sortable: true, width: "w-[13%]" },
-  { key: "value", label: "Value (ZEC)", sortable: true, align: "right", width: "w-[18%]" },
-  { key: "status", label: "Status", sortable: true, width: "w-[12%]" },
-  { key: "height", label: "Block", sortable: true, width: "w-[12%]" },
-  { key: "txid", label: "Txid", sortable: false, width: "w-[15%]" },
-  { key: "flags", label: "Flags", sortable: true, width: "w-[10%]" },
-  { key: "spentHeight", label: "Spent at", sortable: true, width: "w-[13%]" },
+  { key: "idx", label: "№", sortable: true },
+  { key: "pool", label: "Pool", sortable: true },
+  { key: "value", label: "Value (ZEC)", sortable: true, align: "right" },
+  { key: "status", label: "Status", sortable: true },
+  { key: "height", label: "Block", sortable: true },
+  { key: "txid", label: "Txid", sortable: false },
+  { key: "flags", label: "Flags", sortable: true },
+  { key: "spentHeight", label: "Spent at", sortable: true },
 ];
 
 function shortTxid(txid: string): string {
@@ -156,40 +170,99 @@ export function NotesTable({
 
   return (
     <div className="mt-4 overflow-x-auto">
-      <table className="w-full min-w-2xl table-fixed text-sm">
-        <thead>
-          <tr className="text-left text-xs text-muted-foreground">
-            {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                className={`pb-3 font-normal ${col.width} ${col.align === "right" ? "text-right pr-6" : ""}`}
-              >
-                {col.sortable ? (
-                  <button
-                    type="button"
-                    onClick={() => onSort(col.key as SortKey)}
-                    className={`inline-flex items-center gap-1 transition-colors hover:text-foreground active:scale-[0.97] ${
-                      col.align === "right" ? "flex-row-reverse" : ""
-                    } ${sort.key === col.key ? "text-foreground" : ""}`}
-                  >
-                    {col.label}
-                    {sort.key === col.key && (
-                      <span aria-hidden>{sort.dir === "asc" ? "↑" : "↓"}</span>
-                    )}
-                  </button>
-                ) : (
-                  col.label
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {notes.map((note) => (
-            <NoteRow key={note.idx} note={note} />
+      <div className="min-w-2xl text-sm">
+        <div
+          className={`${GRID} pb-3 text-left text-xs text-muted-foreground`}
+        >
+          {COLUMNS.map((col) => (
+            <div
+              key={col.key}
+              className={col.align === "right" ? "pr-6 text-right" : ""}
+            >
+              {col.sortable ? (
+                <button
+                  type="button"
+                  onClick={() => onSort(col.key as SortKey)}
+                  className={`inline-flex items-center gap-1 transition-colors hover:text-foreground active:scale-[0.97] ${
+                    col.align === "right" ? "flex-row-reverse" : ""
+                  } ${sort.key === col.key ? "text-foreground" : ""}`}
+                >
+                  {col.label}
+                  {sort.key === col.key && (
+                    <span aria-hidden>{sort.dir === "asc" ? "↑" : "↓"}</span>
+                  )}
+                </button>
+              ) : (
+                col.label
+              )}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+        <VirtualRows notes={notes} />
+      </div>
+    </div>
+  );
+}
+
+// Virtualizes against the routed page's scroll container (the `app-main` scroller in
+// app-shell) rather than an inner one, so only the visible rows mount. A full note list
+// is hundreds of rows, each building several copy cells, and mounting them all at once is
+// what stalled the page on first paint. The spacer reproduces the full height so the
+// scrollbar stays honest. Mirrors the Activity list (see tx-list).
+function VirtualRows({ notes }: { notes: WalletNote[] }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+  // The list's distance from the scroller's content top, so virtual offsets map onto the
+  // real scroll position. The chrome above the list is fixed for the page's lifetime, so
+  // this is measured once.
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const scroller = listRef.current?.closest<HTMLElement>(
+      '[data-scroll-restoration-id="app-main"]',
+    );
+    if (!scroller || !listRef.current) return;
+    setScrollEl(scroller);
+    // Distance from the scroller's content top to the list top. Summed off the offset
+    // chain rather than getBoundingClientRect, since the filter-swap animation transforms
+    // an ancestor and a transform would skew a rect read (offsetTop is layout, so it
+    // doesn't). The scroller is positioned, so it terminates the chain.
+    let top = 0;
+    let el: HTMLElement | null = listRef.current;
+    while (el && el !== scroller) {
+      top += el.offsetTop;
+      el = el.offsetParent as HTMLElement | null;
+    }
+    setScrollMargin(top);
+  }, []);
+
+  const virtualizer = useVirtualizer({
+    count: notes.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+    scrollMargin,
+    getItemKey: (i) => notes[i].idx,
+  });
+
+  return (
+    <div
+      ref={listRef}
+      className="relative"
+      style={{ height: virtualizer.getTotalSize() }}
+    >
+      {virtualizer.getVirtualItems().map((item) => (
+        <div
+          key={item.key}
+          style={{
+            height: ROW_HEIGHT,
+            transform: `translateY(${item.start - scrollMargin}px)`,
+          }}
+          className="absolute inset-x-0 top-0"
+        >
+          <NoteRow note={notes[item.index]} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -198,22 +271,22 @@ function NoteRow({ note }: { note: WalletNote }) {
   // Spent notes stay visible but recede, so the spendable set reads first.
   const muted = note.status === "spent" ? "text-muted-foreground" : "";
   return (
-    <tr className={cn("note-row", muted)}>
-      <td className="py-2.5 font-mono tabular-nums text-muted-foreground">
+    <div className={cn(GRID, "h-full border-b border-border", muted)}>
+      <span className="font-mono tabular-nums text-muted-foreground">
         {note.idx}
-      </td>
-      <td className="py-2.5">
+      </span>
+      <span>
         <PoolBadge pool={note.pool} />
-      </td>
-      <td className="py-2.5 pr-6 text-right font-mono tabular-nums">
+      </span>
+      <span className="pr-6 text-right font-mono tabular-nums">
         <CopyCell copy={zatToZecPlain(BigInt(note.valueZat))}>
           {formatZec(BigInt(note.valueZat))}
         </CopyCell>
-      </td>
-      <td className="py-2.5">
+      </span>
+      <span>
         <StatusBadge status={note.status} />
-      </td>
-      <td className="py-2.5 font-mono tabular-nums">
+      </span>
+      <span className="font-mono tabular-nums">
         {note.height != null ? (
           <CopyCell copy={String(note.height)}>
             {note.height.toLocaleString()}
@@ -221,18 +294,18 @@ function NoteRow({ note }: { note: WalletNote }) {
         ) : (
           <MempoolBadge />
         )}
-      </td>
-      <td className="py-2.5 font-mono text-muted-foreground">
+      </span>
+      <span className="font-mono text-muted-foreground">
         <CopyCell copy={note.txid}>{shortTxid(note.txid)}</CopyCell>
-      </td>
-      <td className="py-2.5">
+      </span>
+      <span>
         {note.change ? (
           <ChangeBadge />
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
-      </td>
-      <td className="py-2.5 font-mono tabular-nums">
+      </span>
+      <span className="font-mono tabular-nums">
         {note.spentHeight != null ? (
           <CopyCell copy={String(note.spentHeight)}>
             {note.spentHeight.toLocaleString()}
@@ -240,7 +313,7 @@ function NoteRow({ note }: { note: WalletNote }) {
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
-      </td>
-    </tr>
+      </span>
+    </div>
   );
 }

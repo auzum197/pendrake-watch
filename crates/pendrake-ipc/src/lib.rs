@@ -104,6 +104,11 @@ pub struct WalletState {
     /// Whether transaction and scan-complete notifications fire. Toggled from
     /// Settings; the "Indexer unreachable" alert is independent of this.
     pub notifications_enabled: bool,
+    /// Whether fiat (USD) price display is enabled. Off until the user consents to the
+    /// third-party price egress via the toggle's modal (docs/adr/0008). Gates the price
+    /// refresh loop, so nothing is fetched while false.
+    #[serde(default)]
+    pub fiat_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -190,6 +195,48 @@ pub struct SetIndexerArgs {
 #[derive(Debug, Deserialize)]
 pub struct SetNotificationsArgs {
     pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetFiatEnabledArgs {
+    pub enabled: bool,
+}
+
+/// How much a reconciled price can be trusted. `High` means two or more providers agreed
+/// on the point; `Low` means it came from a single source (e.g. the bundled pre-2020 tail).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Confidence {
+    High,
+    Low,
+}
+
+/// One reconciled daily price mark in USD, keyed by UTC date. `diverged` is set when the
+/// contributing sources spread beyond the reconciliation threshold, so the UI can flag it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PricePoint {
+    /// UTC `YYYY-MM-DD`.
+    pub date: String,
+    pub usd_per_zec: f64,
+    pub confidence: Confidence,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub diverged: bool,
+}
+
+/// The current reconciled spot price. `fetched_at` (unix seconds) lets the GUI show
+/// staleness; `stale` is set when it's serving a last-known value after a failed refresh.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceSpot {
+    pub usd_per_zec: f64,
+    pub fetched_at: u64,
+    /// Which providers contributed to this reconciled value.
+    pub sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub stale: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub diverged: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -374,6 +421,9 @@ pub enum SyncEvent {
         #[serde(default, skip_serializing_if = "is_false")]
         unreachable: bool,
     },
+    /// A refreshed spot price, pushed so the live balance figures and the chart tip move
+    /// without the GUI polling. Only sent while fiat is enabled.
+    PriceUpdate { spot: PriceSpot },
 }
 
 #[derive(Debug, Clone, Serialize)]

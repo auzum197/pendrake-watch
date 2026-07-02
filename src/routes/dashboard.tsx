@@ -8,20 +8,30 @@ import {
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented";
 import { TxList } from "@/components/app/tx-list";
-import { BalanceChart } from "@/components/dashboard/BalanceChart";
-import { useWalletData } from "@/hooks/use-wallet-data";
+import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
+import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
+import { usePriceData } from "@/hooks/use-price-data";
+import { setCachedWallet, useWalletData } from "@/hooks/use-wallet-data";
 import {
 	athStanding,
 	type BalancePoint,
 	balanceHistory,
 	type ChartRange,
+	fiatSeries,
 	filterRange,
+	formatUsd,
 	formatZec,
 	isSynced,
 	syncLabel,
 	totalConfirmed,
 } from "@/lib/format";
-import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
+import {
+	type Balance,
+	setFiatEnabled,
+	type SyncStatus,
+	type Tx,
+	type WalletState,
+} from "@/lib/ipc";
 import { animationsEnabled } from "@/lib/motion";
 
 // The designer's Home frame, wired to the live daemon feed through useWalletData. The
@@ -31,7 +41,7 @@ import { animationsEnabled } from "@/lib/motion";
 // reconstructed from the confirmed transaction history.
 
 export function DashboardPage() {
-	const { balance, txs, sync, error } = useWalletData();
+	const { wallet, balance, txs, sync, error } = useWalletData();
 
 	return (
 		<>
@@ -40,7 +50,7 @@ export function DashboardPage() {
 					Can't reach the background process: {error}
 				</p>
 			)}
-			<ChartCard balance={balance} txs={txs} sync={sync} />
+			<ChartCard wallet={wallet} balance={balance} txs={txs} sync={sync} />
 			<section className="rounded-2xl border border-border bg-card p-6">
 				<h2 className="font-heading text-base font-semibold">
 					Recent Activity
@@ -117,25 +127,68 @@ function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
 }
 
 function ChartCard({
+	wallet,
 	balance,
 	txs,
 	sync,
 }: {
+	wallet: WalletState | null;
 	balance: Balance | null;
 	txs: Tx[];
 	sync: SyncStatus | null;
 }) {
 	const navigate = useNavigate();
 	const [range, setRange] = useState<ChartRange>("all");
+	const [denom, setDenom] = useState<Denom>("zec");
+	const [consentOpen, setConsentOpen] = useState(false);
+	// Local mirror so the price hook and USD view switch on the instant consent is given,
+	// before the wallet-state poll catches up to the daemon's persisted flag.
+	const [enabledLocal, setEnabledLocal] = useState(false);
+	const fiatEnabled = enabledLocal || !!wallet?.fiatEnabled;
+	const price = usePriceData(fiatEnabled);
+
 	const total = totalConfirmed(balance);
 	// Memoised so a sync-only refresh doesn't hand the chart a fresh array and force a
 	// full recharts reconcile while you're hovering it.
 	const points = useMemo(() => balanceHistory(txs, balance), [txs, balance]);
-	const series = useMemo(() => filterRange(points, range), [points, range]);
+	// The USD series marks the ZEC balance against the daily price, already windowed to the
+	// selected Span and sampled densely for a continuous hover. Empty until the price data
+	// lands, so the view falls back to ZEC rather than showing a blank chart.
+	const spotUsd = price.spot?.usdPerZec ?? null;
+	const fiatPoints = useMemo(
+		() =>
+			denom === "usd"
+				? fiatSeries(points, price.history, spotUsd, range, Date.now())
+				: [],
+		[denom, points, price.history, spotUsd, range],
+	);
+	// Only render USD once its series is ready; otherwise stay on ZEC so there's no blank.
+	const showUsd = denom === "usd" && fiatPoints.length >= 2;
+	const activeDenom: Denom = showUsd ? "usd" : "zec";
+	const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
+	const series = showUsd ? fiatPoints : zecSeries;
 	// Freshness tracks the full history, so only a newly detected transaction pings,
 	// not a point a period switch brings back into view.
 	const freshKeys = useFreshTxKeys(points);
 	const hasData = series.length >= 2;
+
+	function onDenom(next: Denom) {
+		if (next === "usd" && !fiatEnabled) {
+			setConsentOpen(true);
+			return;
+		}
+		setDenom(next);
+	}
+
+	async function acceptConsent() {
+		const state = await setFiatEnabled(true);
+		setCachedWallet(state);
+		setEnabledLocal(true);
+		setDenom("usd");
+	}
+
+	const usdTotal =
+		total !== null && spotUsd !== null ? (Number(total) / 1e8) * spotUsd : null;
 	// The standing reads off the windowed series, so the high it measures against is the
 	// peak within the selected period. The history is provisional mid-sync, so a spinner
 	// marks the number as still settling rather than final.
@@ -151,21 +204,35 @@ function ChartCard({
 						</span>
 						<HeroSyncPill sync={sync} />
 					</div>
-					<span className="font-heading text-5xl font-bold leading-none tabular-nums">
-						{total === null ? "…" : formatZec(total)}{" "}
-						<span className="text-2xl font-normal text-muted-foreground">
-							ZEC
+					{activeDenom === "usd" ? (
+						<span className="font-heading text-5xl font-bold leading-none tabular-nums">
+							{usdTotal === null ? "…" : formatUsd(usdTotal)}{" "}
+							<span className="text-2xl font-normal text-muted-foreground">
+								USD
+							</span>
 						</span>
-					</span>
+					) : (
+						<span className="font-heading text-5xl font-bold leading-none tabular-nums">
+							{total === null ? "…" : formatZec(total)}{" "}
+							<span className="text-2xl font-normal text-muted-foreground">
+								ZEC
+							</span>
+						</span>
+					)}
+					{/* Reserve the freshness line's height in both denominations so switching
+					    ZEC <-> USD doesn't resize the header (and shift the chart under it). */}
+					<div className="h-4">
+						{activeDenom === "usd" && price.spot && (
+							<PriceFreshness spot={price.spot} />
+						)}
+					</div>
 				</div>
 				<div className="flex shrink-0 flex-col items-end gap-3">
-					{/* Presentational: USD stays inert until a price feed lands, so the
-              toggle is locked to ZEC. */}
 					<div className="w-44">
 						<Segmented
 							tone="neutral"
-							value="zec"
-							onChange={() => {}}
+							value={denom}
+							onChange={onDenom}
 							options={[
 								{ value: "zec", label: "ZEC" },
 								{ value: "usd", label: "USD" },
@@ -240,13 +307,49 @@ function ChartCard({
 					No confirmed activity yet
 				</div>
 				{hasData && (
+					// The USD series can't tween across a period switch (its samples are keyed
+					// by position, so tweening drags the whole curve in from the side), so it
+					// gets a clean entrance instead: keying the wrapper by range remounts it and
+					// replays the fade-and-rise. ZEC keeps one key, so its identity tween across
+					// period switches is untouched.
 					<div
+						key={activeDenom === "usd" ? `usd-${range}` : "zec"}
 						className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
 					>
-						<BalanceChart points={series} freshKeys={freshKeys} />
+						<BalanceChart
+							points={series}
+							freshKeys={freshKeys}
+							denom={activeDenom}
+						/>
 					</div>
 				)}
 			</div>
+
+			<FiatConsentDialog
+				open={consentOpen}
+				onOpenChange={setConsentOpen}
+				onAccept={acceptConsent}
+			/>
 		</section>
+	);
+}
+
+// The last-updated line under the USD total. A spot older than the daemon's staleness
+// cutoff is greyed with an "updated Xh ago" note so a stale price never reads as live.
+function PriceFreshness({ spot }: { spot: { fetchedAt: number; stale?: boolean } }) {
+	const ageMs = Date.now() - spot.fetchedAt * 1000;
+	const mins = Math.max(0, Math.round(ageMs / 60000));
+	const label =
+		mins < 1
+			? "updated just now"
+			: mins < 60
+				? `updated ${mins}m ago`
+				: `updated ${Math.round(mins / 60)}h ago`;
+	return (
+		<span
+			className={`text-xs ${spot.stale ? "text-amber-400" : "text-muted-foreground"}`}
+		>
+			{label}
+		</span>
 	);
 }
