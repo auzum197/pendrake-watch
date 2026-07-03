@@ -108,7 +108,7 @@ export function AppShell({
 				unreachable={sync?.unreachable ?? false}
 				onSettings={active === "settings"}
 			/>
-			<Toaster position="bottom-right" richColors />
+			<Toaster position="bottom-right" />
 		</div>
 	);
 }
@@ -128,7 +128,7 @@ function UnreachableToast({
 	const navigate = useNavigate();
 	useEffect(() => {
 		if (unreachable && !onSettings) {
-			toast.warning("Can't reach your Indexer.", {
+			toast("Can't reach your Indexer.", {
 				id: UNREACHABLE_TOAST,
 				duration: Infinity,
 				icon: <IconAlertTriangle className="size-4" />,
