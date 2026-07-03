@@ -324,8 +324,26 @@ async fn indexer_tip(uri: &http::Uri) -> Result<u32> {
     let info = indexer
         .get_lightd_info(INDEXER_PROBE_TIMEOUT)
         .await
-        .map_err(|e| anyhow!("that server did not respond as a Zcash indexer: {e}"))?;
+        .map_err(|e| indexer_probe_error(&e))?;
     Ok(info.block_height as u32)
+}
+
+/// Turn a GetLightdInfo probe failure into a message the user can act on, keeping the
+/// tonic/OS internals out of the UI. The gRPC connection is lazy, so a bad address
+/// surfaces here as a connect failure rather than at construction. Tell that apart from
+/// an endpoint that answers but isn't an indexer. The raw error is logged for debugging.
+fn indexer_probe_error<E: std::fmt::Display>(err: &E) -> anyhow::Error {
+    let raw = err.to_string();
+    tracing::debug!("indexer probe failed: {raw}");
+    let lower = raw.to_lowercase();
+    let unreachable = ["unavailable", "connect", "refused", "dns", "timed out", "timeout", "deadline"]
+        .iter()
+        .any(|sig| lower.contains(sig));
+    if unreachable {
+        anyhow!("couldn't reach that server. Check the address and that the server is running.")
+    } else {
+        anyhow!("that server answered but isn't a Zcash indexer.")
+    }
 }
 
 /// The reachability check alone: the [`indexer_tip`] probe with its height discarded.
