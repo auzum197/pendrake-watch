@@ -56,12 +56,28 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            crates
+            src-tauri
 
       - name: Format check
         working-directory: src-tauri
         run: cargo fmt --all --check
 
-      - name: Tests
+      # src-tauri's build script needs the pendraked sidecar (externalBin) to exist, so
+      # build the daemon and stage it under the target-triple name Tauri expects. This
+      # also proves the crates workspace compiles.
+      - name: Build and stage the daemon sidecar
+        run: |
+          cargo build --locked --manifest-path crates/Cargo.toml -p pendrake-daemon
+          triple=$(rustc -vV | sed -n 's/host: //p')
+          mkdir -p src-tauri/binaries
+          cp "crates/target/debug/pendraked" "src-tauri/binaries/pendraked-${triple}"
+
+      - name: Tests (crates)
+        working-directory: crates
+        run: cargo test --locked
+
+      - name: Tests (src-tauri)
         working-directory: src-tauri
         run: cargo test --locked
