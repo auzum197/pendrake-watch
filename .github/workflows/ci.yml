@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  frontend:
-    name: Frontend (typecheck + build)
+  typecheck-build:
+    name: TypeScript typecheck and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,16 +28,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck + build
+      - name: Typecheck and build
         run: pnpm build
 
-  backend:
-    name: Backend (fmt + tests)
+  check-format-and-test:
+    name: Rust formatting and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # System libraries required to compile the Tauri crate on Linux.
+      # The Tauri crate needs these system libraries to compile on Linux.
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
