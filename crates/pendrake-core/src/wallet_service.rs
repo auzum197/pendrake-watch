@@ -1944,6 +1944,7 @@ mod tests {
             encrypted: false,
             fingerprint: None,
             notifications_enabled: true,
+            fiat_enabled: false,
         });
         service
     }
