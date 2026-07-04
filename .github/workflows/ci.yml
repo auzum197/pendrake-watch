@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # System libraries required to compile the Tauri crate on Linux.
+      # The Tauri crate needs these system libraries to compile on Linux.
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
