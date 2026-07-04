@@ -10,6 +10,8 @@ export function Toaster(props: ComponentProps<typeof Sonner>) {
 		<Sonner
 			theme="dark"
 			className="toaster group"
+			// CSS custom properties aren't part of React's CSSProperties type, so the cast
+			// is the standard way to pass them through style (same as ui/chart.tsx).
 			style={
 				{
 					"--normal-bg": "var(--popover)",
