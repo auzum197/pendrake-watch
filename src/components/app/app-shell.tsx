@@ -1,5 +1,6 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
 	IconActivity,
 	IconAlertTriangle,
@@ -16,6 +17,7 @@ import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import { Toaster } from "@/components/ui/sonner";
 import { isSyncing, SyncBar, SyncChip } from "./sync-status";
 import "./nav-reveal.css";
 
@@ -96,36 +98,50 @@ export function AppShell({
 					className="app-content absolute inset-0 overflow-y-auto rounded-2xl"
 				>
 					<div className="flex min-h-full flex-col gap-6 px-8 py-7">
-						{/* The Indexer-unreachable CTA rides on every screen but Settings, where
-                the control to fix it already sits. */}
-						{sync?.unreachable && active !== "settings" && (
-							<UnreachableBanner />
-						)}
 						{children}
 					</div>
 				</main>
 			</div>
+			{/* The Indexer-unreachable CTA surfaces as a bottom-right toast instead of an
+          inline banner, so a dropped connection never shifts the page under the user. */}
+			<UnreachableToast
+				unreachable={sync?.unreachable ?? false}
+				onSettings={active === "settings"}
+			/>
+			<Toaster position="bottom-right" />
 		</div>
 	);
 }
 
-function UnreachableBanner() {
+const UNREACHABLE_TOAST = "indexer-unreachable";
+
+// Held open (no auto-dismiss) while the Indexer stays unreachable, cleared on recovery
+// or on Settings, where the Change Indexer control already sits. A stable id keeps a
+// flapping connection from stacking duplicate toasts.
+function UnreachableToast({
+	unreachable,
+	onSettings,
+}: {
+	unreachable: boolean;
+	onSettings: boolean;
+}) {
 	const navigate = useNavigate();
-	return (
-		<div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-300">
-			<span className="flex items-center gap-2">
-				<IconAlertTriangle className="size-4 shrink-0" />
-				Can't reach your Indexer.
-			</span>
-			<button
-				type="button"
-				onClick={() => navigate({ to: "/settings", hash: "indexer" })}
-				className="shrink-0 font-medium underline-offset-2 hover:underline"
-			>
-				Change Indexer
-			</button>
-		</div>
-	);
+	useEffect(() => {
+		if (unreachable && !onSettings) {
+			toast("Can't reach your Indexer.", {
+				id: UNREACHABLE_TOAST,
+				duration: Infinity,
+				icon: <IconAlertTriangle className="size-4" />,
+				action: {
+					label: "Change Indexer",
+					onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+				},
+			});
+		} else {
+			toast.dismiss(UNREACHABLE_TOAST);
+		}
+	}, [unreachable, onSettings, navigate]);
+	return null;
 }
 
 function AppSidebar({
