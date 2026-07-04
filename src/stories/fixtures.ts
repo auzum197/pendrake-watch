@@ -1,5 +1,5 @@
 import type { BalancePoint } from "@/lib/format";
-import type { Tx } from "@/lib/ipc";
+import type { Tx, WalletNote } from "@/lib/ipc";
 
 // A balance series for BalanceChart. Times are in milliseconds, matching the unit
 // the chart reads off the leading point.
@@ -58,5 +58,51 @@ export const txs: Tx[] = [
     notes: [
       { pool: "sapling", direction: "received", outputIndex: 0, valueZat: "5000000" },
     ],
+  },
+];
+
+// Wallet-wide notes for the debug table, one per pool plus the spend and mempool
+// edge cases the row renderer switches on: a spent (muted) note with a spentHeight, a
+// change note, and an unconfirmed one with a null height that shows the mempool badge.
+export const walletNotes: WalletNote[] = [
+  {
+    idx: 0,
+    pool: "orchard",
+    valueZat: "73450000",
+    status: "unspent",
+    height: 2_400_120,
+    txid: "a1b2c3d4e5f6a1b2c3d4",
+    change: false,
+    spentHeight: null,
+  },
+  {
+    idx: 1,
+    pool: "sapling",
+    valueZat: "21000000",
+    status: "spent",
+    height: 2_399_980,
+    txid: "f6e5d4c3b2a1f6e5d4c3",
+    change: false,
+    spentHeight: 2_400_050,
+  },
+  {
+    idx: 2,
+    pool: "orchard",
+    valueZat: "1010000",
+    status: "unspent",
+    height: 2_400_050,
+    txid: "0099aabbccdd0099aabb",
+    change: true,
+    spentHeight: null,
+  },
+  {
+    idx: 3,
+    pool: "transparent",
+    valueZat: "5000000",
+    status: "pending",
+    height: null,
+    txid: "1122334455661122334455",
+    change: false,
+    spentHeight: null,
   },
 ];
