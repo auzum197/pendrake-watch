@@ -16,9 +16,9 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    RemoveArgs, SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
-    Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
-    WalletNote, WalletState,
+    PricePoint, PriceSpot, RemoveArgs, SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs,
+    SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
+    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -48,11 +48,17 @@ use crate::birthday::resolve_birthday;
 use crate::notify::Notifier;
 use crate::notify_policy::{Disposition, NotificationPolicy};
 use crate::paths::{Meta, Paths};
+use crate::price::{today, PriceCache, PriceFetcher};
 use crate::ufvk::{parse_ufvk, UfvkError};
 
 /// Gap between sync rounds once a round has finished cleanly. Kept short so a
 /// newly mined transaction is picked up within roughly this window.
 const IDLE_INTERVAL: Duration = Duration::from_secs(2);
+/// How often the price loop refreshes the spot while fiat is enabled (AUZ-83). Balanced
+/// against provider rate limits; daily history is fetched at most once per UTC day.
+const SPOT_INTERVAL: Duration = Duration::from_secs(600);
+/// A spot older than this is shown greyed with an "updated Xh ago" marker.
+const SPOT_STALE_AFTER: Duration = Duration::from_secs(3600);
 /// Reconnect backoff bounds after a failed round.
 const BACKOFF_MIN: Duration = Duration::from_secs(3);
 const BACKOFF_MAX: Duration = Duration::from_secs(120);
@@ -98,6 +104,16 @@ pub struct WalletService {
     /// `Meta::notifications_enabled` for the hot notify path. Toggled from Settings.
     /// The "Indexer unreachable" alert ignores this.
     notifications_enabled: AtomicBool,
+    /// Whether fiat price display is enabled, mirroring `Meta::fiat_enabled`. Gates the
+    /// price refresh loop: while false nothing is fetched, so a wallet stays private to
+    /// the price providers until the user consents (docs/adr/0008).
+    fiat_enabled: AtomicBool,
+    /// Reconciled spot + daily series, served to the GUI and persisted to
+    /// `price_cache.json`. Seeded from the bundled pre-2020 tail on load.
+    price_cache: RwLock<PriceCache>,
+    /// Wakes the price loop to fetch immediately, used when the user enables fiat so the
+    /// first value lands without waiting out the interval.
+    price_restart: Notify,
     /// Bumped on every (re)import and remove so a stale sync loop retires itself.
     generation: AtomicU64,
     /// Wakes the sync loop out of its idle/backoff wait to start a fresh round at
@@ -308,8 +324,26 @@ async fn indexer_tip(uri: &http::Uri) -> Result<u32> {
     let info = indexer
         .get_lightd_info(INDEXER_PROBE_TIMEOUT)
         .await
-        .map_err(|e| anyhow!("that server did not respond as a Zcash indexer: {e}"))?;
+        .map_err(|e| indexer_probe_error(&e))?;
     Ok(info.block_height as u32)
+}
+
+/// Turn a GetLightdInfo probe failure into a message the user can act on, keeping the
+/// tonic/OS internals out of the UI. The gRPC connection is lazy, so a bad address
+/// surfaces here as a connect failure rather than at construction. Tell that apart from
+/// an endpoint that answers but isn't an indexer. The raw error is logged for debugging.
+fn indexer_probe_error<E: std::fmt::Display>(err: &E) -> anyhow::Error {
+    let raw = err.to_string();
+    tracing::debug!("indexer probe failed: {raw}");
+    let lower = raw.to_lowercase();
+    let unreachable = ["unavailable", "connect", "refused", "dns", "timed out", "timeout", "deadline"]
+        .iter()
+        .any(|sig| lower.contains(sig));
+    if unreachable {
+        anyhow!("couldn't reach that server. Check the address and that the server is running.")
+    } else {
+        anyhow!("that server answered but isn't a Zcash indexer.")
+    }
 }
 
 /// The reachability check alone: the [`indexer_tip`] probe with its height discarded.
@@ -341,6 +375,8 @@ impl WalletService {
         paths.ensure_dirs()?;
         let notify = NotificationPolicy::load(paths.notified_file.clone());
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
+        let mut price_cache = PriceCache::load(&paths.price_cache_file);
+        price_cache.seed_tail();
         let service = Arc::new(Self {
             notifier,
             client: Mutex::new(None),
@@ -353,6 +389,9 @@ impl WalletService {
             notify,
             unreachable_notified: AtomicBool::new(false),
             notifications_enabled: AtomicBool::new(true),
+            fiat_enabled: AtomicBool::new(false),
+            price_cache: RwLock::new(price_cache),
+            price_restart: Notify::new(),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
             session_locked: AtomicBool::new(false),
@@ -367,6 +406,9 @@ impl WalletService {
             service
                 .notifications_enabled
                 .store(meta.notifications_enabled, Ordering::SeqCst);
+            service
+                .fiat_enabled
+                .store(meta.fiat_enabled, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -400,6 +442,7 @@ impl WalletService {
                 }
             }
         }
+        service.spawn_price_loop();
         Ok(service)
     }
 
@@ -460,6 +503,12 @@ impl WalletService {
                 let args: SetNotificationsArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_notifications(args.enabled).await?)?)
             }
+            "setFiatEnabled" => {
+                let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_fiat_enabled(args.enabled).await?)?)
+            }
+            "getSpotPrice" => Ok(to_value(self.spot_price().await)?),
+            "getPriceHistory" => Ok(to_value(self.price_history().await)?),
             "unlock" => {
                 let args: UnlockArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.unlock(args.passphrase).await?)?)
@@ -522,6 +571,7 @@ impl WalletService {
                 birthday_height: m.birthday_height,
                 indexer_uri: m.indexer_uri.clone(),
                 notifications_enabled: m.notifications_enabled,
+                fiat_enabled: m.fiat_enabled,
             },
             None => WalletState {
                 exists: false,
@@ -534,6 +584,7 @@ impl WalletService {
                 birthday_height: 0,
                 indexer_uri: String::new(),
                 notifications_enabled: true,
+                fiat_enabled: false,
             },
         }
     }
@@ -697,6 +748,7 @@ impl WalletService {
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
             notifications_enabled: true,
+            fiat_enabled: false,
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -728,6 +780,9 @@ impl WalletService {
         *self.session_passphrase.lock().await = Some(passphrase);
         self.encrypted.store(true, Ordering::SeqCst);
         self.notifications_enabled.store(true, Ordering::SeqCst);
+        // A fresh Wallet starts private: fiat stays off until the user consents anew, so a
+        // prior wallet's choice doesn't carry over the import.
+        self.fiat_enabled.store(false, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -781,6 +836,8 @@ impl WalletService {
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
         self.session_locked.store(false, Ordering::SeqCst);
+        // Nudge the price loop: if fiat was enabled, it was parked while locked.
+        self.price_restart.notify_one();
         self.refresh_snapshot().await;
         self.sync.write().await.state = SyncState::Syncing;
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -869,6 +926,45 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
+    /// Turn fiat price display on or off. Enabling records the user's consent to the
+    /// price egress (docs/adr/0008) and wakes the price loop so the first value lands
+    /// promptly; disabling parks the loop, stopping all price requests.
+    async fn set_fiat_enabled(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set fiat display for"))?;
+        meta.fiat_enabled = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        self.fiat_enabled.store(enabled, Ordering::SeqCst);
+        if enabled {
+            self.price_restart.notify_one();
+        }
+        Ok(self.wallet_state().await)
+    }
+
+    /// The current reconciled spot, or `None` if nothing has been fetched yet. Stamps
+    /// `stale` when the last fetch is older than [`SPOT_STALE_AFTER`] so the GUI can grey it.
+    async fn spot_price(&self) -> Option<PriceSpot> {
+        let mut spot = self.price_cache.read().await.spot.clone()?;
+        let age = now_secs().saturating_sub(spot.fetched_at);
+        spot.stale = age > SPOT_STALE_AFTER.as_secs();
+        Some(spot)
+    }
+
+    /// The full reconciled daily series, oldest first. The GUI clips it to the selected
+    /// Span and multiplies each day by the balance held then.
+    async fn price_history(&self) -> Vec<PricePoint> {
+        self.price_cache
+            .read()
+            .await
+            .daily
+            .values()
+            .cloned()
+            .collect()
+    }
+
     /// Wipe the current Wallet. `keep_session` retains the in-memory passphrase so a
     /// Replace lands in onboarding without re-collecting it; Start over passes false
     /// and the passphrase is dropped (docs/adr/0004).
@@ -876,6 +972,9 @@ impl WalletService {
         self.generation.fetch_add(1, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         self.encrypted.store(false, Ordering::SeqCst);
+        // Park the price loop; the reconciled prices themselves are public ZEC/USD data,
+        // not wallet-specific, so the cache file is kept to avoid re-fetching after Replace.
+        self.fiat_enabled.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         if !keep_session {
@@ -935,6 +1034,87 @@ impl WalletService {
         let service = Arc::clone(self);
         let generation = service.generation.load(Ordering::SeqCst);
         tokio::spawn(async move { service.run_sync_loop(generation).await });
+    }
+
+    /// One long-lived task per daemon. It parks while fiat is off or no wallet is loaded,
+    /// so nothing is fetched without the user's consent, and wakes to refresh the spot on
+    /// [`SPOT_INTERVAL`] once enabled. The daily series is fetched at most once per UTC day.
+    fn spawn_price_loop(self: &Arc<Self>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move { service.run_price_loop().await });
+    }
+
+    async fn run_price_loop(self: Arc<Self>) {
+        let fetcher = match PriceFetcher::new() {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!("price fetcher unavailable, fiat display disabled: {e}");
+                return;
+            }
+        };
+        let mut last_daily: Option<String> = None;
+        loop {
+            // No price egress while the session is locked: there's no fiat UI to feed, and
+            // the wallet should stay quiet to the price providers until the GUI is unlocked.
+            let active = self.fiat_enabled.load(Ordering::SeqCst)
+                && !self.session_locked.load(Ordering::SeqCst)
+                && self.meta.read().await.is_some();
+            if !active {
+                tokio::select! {
+                    _ = self.price_restart.notified() => {}
+                    _ = tokio::time::sleep(SPOT_INTERVAL) => {}
+                }
+                continue;
+            }
+
+            self.refresh_spot(&fetcher).await;
+            let today = today();
+            if last_daily.as_deref() != Some(today.as_str()) && self.refresh_daily(&fetcher).await {
+                last_daily = Some(today);
+            }
+
+            tokio::select! {
+                _ = tokio::time::sleep(SPOT_INTERVAL) => {}
+                _ = self.price_restart.notified() => {}
+            }
+        }
+    }
+
+    async fn refresh_spot(&self, fetcher: &PriceFetcher) {
+        match fetcher.spot().await {
+            Ok(spot) => {
+                {
+                    let mut cache = self.price_cache.write().await;
+                    cache.spot = Some(spot.clone());
+                    if let Err(e) = cache.save(&self.paths.price_cache_file) {
+                        tracing::warn!("persisting price cache failed: {e}");
+                    }
+                }
+                let _ = self.events.send(SyncEvent::PriceUpdate { spot });
+            }
+            Err(e) => tracing::warn!("spot refresh failed, keeping last known: {e}"),
+        }
+    }
+
+    /// Merge freshly fetched daily marks into the cache, keeping existing days immutable.
+    /// Returns whether anything came back, so a failed fetch retries next tick rather than
+    /// marking the day done.
+    async fn refresh_daily(&self, fetcher: &PriceFetcher) -> bool {
+        // Once the deep history is cached, fetch only from the newest cached day forward, so
+        // the daily refresh stops re-paging Coinbase back to 2020 every day (docs/adr/0008).
+        let since = self.price_cache.read().await.daily_since();
+        let fresh = fetcher.daily(since.as_deref()).await;
+        if fresh.is_empty() {
+            return false;
+        }
+        let mut cache = self.price_cache.write().await;
+        for (date, point) in fresh {
+            cache.daily.entry(date).or_insert(point);
+        }
+        if let Err(e) = cache.save(&self.paths.price_cache_file) {
+            tracing::warn!("persisting price cache failed: {e}");
+        }
+        true
     }
 
     async fn run_sync_loop(self: Arc<Self>, generation: u64) {
@@ -1234,6 +1414,14 @@ impl WalletService {
         // or the GUI's own refetch picks it up.
         let Some(summary) = summary else { return };
 
+        self.on_tx_summary(txid, &summary).await;
+    }
+
+    /// Handle an already-fetched summary: kind detection, cache upsert, event
+    /// broadcast, and the per-transaction toast. Split from `on_tx_discovered` so the
+    /// field extraction and downstream wiring run without a live client (the caller
+    /// owns fetching the summary and refreshing the balance).
+    async fn on_tx_summary(&self, txid: TxId, summary: &TransactionSummary) {
         let txid = txid.to_string();
         let received = matches!(summary.kind, TransactionKind::Received);
         let kind = if received {
@@ -1252,7 +1440,7 @@ impl WalletService {
             // mid-scan the way a gained-only delta would. refresh_snapshot recomputes the
             // exact value (gained − lost, which also credits self-authored income) at the
             // end of the round. Falls back to gained-only when the fee is unknown.
-            let mut tx = map_tx(&summary, &HashMap::new());
+            let mut tx = map_tx(summary, &HashMap::new());
             if let Some(delta) = summary.balance_delta() {
                 tx.net_zat = delta.to_string();
             }
@@ -1270,46 +1458,52 @@ impl WalletService {
             received,
         });
 
-        // ADR-0006: a transaction inside the pinned Initial-scan range [birthday, N]
-        // is historical and stays silent; one at or past N, or still in the mempool,
-        // is post-import activity and notifies. Gating on the transaction's own height
-        // rather than synced_height is robust to pepper-sync's tip-first scan, which
-        // pushes synced_height past N before the older blocks are walked, so a stale
-        // transaction found after the jump would otherwise notify.
+        self.notify_tx(
+            &txid,
+            received,
+            summary.value,
+            summary.status.is_confirmed(),
+            u32::from(summary.blockheight),
+        )
+        .await;
+    }
+
+    /// Decide and deliver the per-transaction toast (ADR-0006). Split from
+    /// `on_tx_discovered` so the policy and delivery run without a live client (the
+    /// caller owns fetching the summary). `height` is unused for an unconfirmed
+    /// transaction, which always counts as live.
+    ///
+    /// A transaction inside the pinned Initial-scan range [birthday, N] is historical
+    /// and stays silent; one at or past N, or still in the mempool, is post-import
+    /// activity and notifies. Gating on the transaction's own height rather than
+    /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
+    /// `synced_height` past N before the older blocks are walked, so a stale
+    /// transaction found after the jump would otherwise notify.
+    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
         let target = self.scan_target().await;
-        let live = if summary.status.is_confirmed() {
-            u32::from(summary.blockheight) >= target
-        } else {
-            true
-        };
-        if let Disposition::Notify = self.notify.classify(&txid, live) {
+        let live = if confirmed { height >= target } else { true };
+        if let Disposition::Notify = self.notify.classify(txid, live) {
             // Notifications off: record the txid as seen so re-enabling later doesn't
             // replay it as new, then deliver nothing.
             if !self.notifications_enabled.load(Ordering::SeqCst) {
-                self.notify.mark_notified(&txid);
+                self.notify.mark_notified(txid);
                 return;
             }
-            let amount = format_amount(summary.value);
+            let amount = format_amount(value);
             let (title, body) = if received {
-                (
-                    "Funds received",
-                    format!("{amount} arrived in your wallet."),
-                )
+                ("Funds received", format!("{amount} arrived in your wallet."))
             } else {
                 ("Funds sent", format!("{amount} sent from your wallet."))
             };
-            tracing::info!(
-                "new tx {txid} ({} zat, received={received}), notifying",
-                summary.value
-            );
-            // Record the txid as notified only after delivery succeeds. A failure
-            // leaves it out of the set, so a later rediscovery (at the latest, the
-            // next restart's catch-up sync) tries again rather than losing it.
+            tracing::info!("new tx {txid} ({value} zat, received={received}), notifying");
+            // Record the txid as notified only after delivery succeeds. A failure leaves
+            // it out of the set, so a later rediscovery (at the latest, the next restart's
+            // catch-up sync) tries again rather than losing it.
             match self
                 .notifier
                 .notify(title, &body, &format!("pendrake://tx?txid={txid}"))
             {
-                Ok(()) => self.notify.mark_notified(&txid),
+                Ok(()) => self.notify.mark_notified(txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
                 }
@@ -1730,6 +1924,185 @@ mod tests {
         let root = std::env::temp_dir().join(format!("pendrake-test-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         Paths::with_root(root)
+    }
+
+    // Records every delivery so a test can assert which toasts were raised.
+    struct SpyNotifier(std::sync::Mutex<Vec<(String, String, String)>>);
+
+    impl SpyNotifier {
+        fn new() -> Self {
+            Self(std::sync::Mutex::new(Vec::new()))
+        }
+        fn calls(&self) -> Vec<(String, String, String)> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl Notifier for SpyNotifier {
+        fn notify(&self, title: &str, body: &str, deep_link: &str) -> anyhow::Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .push((title.to_owned(), body.to_owned(), deep_link.to_owned()));
+            Ok(())
+        }
+    }
+
+    // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
+    // at `target`, so `notify_tx` runs the real policy without a live client.
+    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+        let service = WalletService::load(test_paths(name), spy).await.unwrap();
+        *service.meta.write().await = Some(Meta {
+            network: Network::Mainnet,
+            indexer_uri: String::new(),
+            import_type: ImportType::Ufvk,
+            view_mode: ViewMode::Full,
+            birthday_height: 0,
+            scan_target_height: target,
+            encrypted: false,
+            fingerprint: None,
+            notifications_enabled: true,
+            fiat_enabled: false,
+        });
+        service
+    }
+
+    #[tokio::test]
+    async fn a_live_transaction_raises_a_movement_toast() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-live", spy.clone(), 100).await;
+        // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
+        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, "pendrake://tx?txid=txlive");
+    }
+
+    #[tokio::test]
+    async fn a_historical_transaction_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-historical", spy.clone(), 100).await;
+        // Confirmed below N: Initial-scan history, recorded silently with no toast.
+        service.notify_tx("txold", true, 42_000_000, true, 50).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unconfirmed_transaction_is_live() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
+        // Mempool is live regardless of height, so a send notifies right away.
+        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds sent");
+    }
+
+    #[tokio::test]
+    async fn the_same_live_transaction_notifies_once() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-once", spy.clone(), 100).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        assert_eq!(spy.calls().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn notifications_off_silences_a_live_transaction() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-off", spy.clone(), 100).await;
+        service.notifications_enabled.store(false, Ordering::SeqCst);
+        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        assert!(spy.calls().is_empty());
+    }
+
+    // `summary()` pins height 1; override it so a summary can sit above or below the
+    // Initial-scan target and exercise the live-vs-historical extraction.
+    fn summary_at(
+        txid_byte: u8,
+        kind: TransactionKind,
+        value: u64,
+        height: u32,
+    ) -> TransactionSummary {
+        let mut s = summary(txid_byte, kind, value, vec![]);
+        s.status = ConfirmationStatus::Confirmed(BlockHeight::from_u32(height));
+        s.blockheight = BlockHeight::from_u32(height);
+        s
+    }
+
+    #[tokio::test]
+    async fn a_received_summary_feeds_toast_cache_and_event() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-received", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x11);
+
+        service
+            .on_tx_summary(id, &summary_at(0x11, TransactionKind::Received, 42_000_000, 120))
+            .await;
+
+        // The summary's kind, value and height flow to the movement toast.
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}"));
+        // ...and to the cache the GUI reads.
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        // ...and to the broadcast the GUI folds in.
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { txid, kind, value_zat, received } => {
+                assert_eq!(txid, id.to_string());
+                assert_eq!(kind, TxKind::Received);
+                assert_eq!(value_zat, "42000000");
+                assert!(received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_sent_summary_reads_as_sent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-sent", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+
+        service
+            .on_tx_summary(
+                txid(0x22),
+                &summary_at(0x22, TransactionKind::Sent(SendType::Send), 7_000_000, 120),
+            )
+            .await;
+
+        assert_eq!(spy.calls()[0].0, "Funds sent");
+        match events.try_recv().unwrap() {
+            SyncEvent::Transaction { kind, received, .. } => {
+                assert_eq!(kind, TxKind::Sent);
+                assert!(!received);
+            }
+            other => panic!("expected a Transaction event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_historical_summary_updates_cache_but_stays_silent() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("summary-historical", spy.clone(), 100).await;
+        let mut events = service.events.subscribe();
+        let id = txid(0x33);
+
+        // Confirmed below the target: the extracted height drives the policy's silent
+        // path, yet the cache and event still update so the GUI stays consistent.
+        service
+            .on_tx_summary(id, &summary_at(0x33, TransactionKind::Received, 42_000_000, 50))
+            .await;
+
+        assert!(spy.calls().is_empty());
+        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(matches!(
+            events.try_recv().unwrap(),
+            SyncEvent::Transaction { .. }
+        ));
     }
 
     use pepper_sync::error::{ServerError, SyncError};

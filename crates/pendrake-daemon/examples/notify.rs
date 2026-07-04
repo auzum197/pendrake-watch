@@ -2,7 +2,8 @@
 //! real `DesktopNotifier`. It exits non-zero if delivery to the OS fails, so it
 //! catches a broken notification path (no D-Bus session, unsigned bundle). Whether
 //! the toast actually renders and its click opens the deep link still needs a human
-//! watching the desktop. Run with `cargo run -p pendrake-daemon --example notify`.
+//! watching the desktop, so on Linux it stays up for ten seconds before exiting. Run
+//! with `cargo run -p pendrake-daemon --example notify`.
 
 // This binary crate has no library target, so reuse the daemon's notify module
 // by path rather than importing it.
@@ -22,10 +23,24 @@ fn main() -> anyhow::Result<()> {
         notify::register_identity(&paths.root);
     }
 
+    // A unique txid per run so the toast mirrors distinct transactions (the daemon
+    // never re-fires the same one), which also gives each toast its own tag.
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     DesktopNotifier.notify(
         "Funds received",
-        "0.42 ZEC received in your wallet.",
-        "pendrake://tx?txid=0000000000000000000000000000000000000000000000000000000000000001",
+        &format!("0.{:05} ZEC received in your wallet.", 42_000 + unique % 1_000),
+        &format!("pendrake://tx?txid={unique:064x}"),
     )?;
+
+    // Linux only: notify_rust serves the click action over a D-Bus connection the
+    // sender must hold open, and some servers (KDE) withdraw an action-carrying
+    // notification once the sender exits. Stay parked like the real daemon so the toast
+    // survives long enough to watch and click. Windows hands the toast to the OS and
+    // macOS to Notification Center, so neither needs the process kept alive.
+    #[cfg(target_os = "linux")]
+    std::thread::sleep(std::time::Duration::from_secs(10));
     Ok(())
 }

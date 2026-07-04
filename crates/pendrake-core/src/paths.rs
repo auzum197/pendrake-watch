@@ -21,6 +21,9 @@ pub struct Paths {
     pub socket: PathBuf,
     /// Txids already notified, so a restart doesn't re-announce past receipts.
     pub notified_file: PathBuf,
+    /// Reconciled spot + daily price series, so the GUI opens on a value instead of a
+    /// blank while the first fetch runs (AUZ-83). Plaintext; holds nothing secret.
+    pub price_cache_file: PathBuf,
 }
 
 impl Paths {
@@ -41,6 +44,7 @@ impl Paths {
             meta_file: root.join("meta.json"),
             socket: root.join("daemon.sock"),
             notified_file: root.join("notified.json"),
+            price_cache_file: root.join("price_cache.json"),
             root,
         }
     }
@@ -87,6 +91,10 @@ pub struct Meta {
     /// notifying, matching the prior always-on behavior.
     #[serde(default = "default_true")]
     pub notifications_enabled: bool,
+    /// Whether the user has consented to fiat price display (docs/adr/0008). Defaults false
+    /// so a wallet imported before this existed stays private until the user opts in.
+    #[serde(default)]
+    pub fiat_enabled: bool,
 }
 
 fn default_true() -> bool {

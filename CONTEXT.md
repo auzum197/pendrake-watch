@@ -88,5 +88,13 @@ The selectable time window of the balance chart: ALL, 1 year, 1 month, or 1 week
 _Avoid_: range, window, period, timeframe
 
 **Fiat value**:
-A Wallet's balance expressed in a fiat currency (USD in v0), its balance marked against the ZEC price. The spot Fiat value uses the current price. Over a Span it is marked daily against historical prices, so it moves with the market even while the balance holds still. Always additive to the ZEC figure, never a replacement: a Wallet's balance is denominated in ZEC first, and the ZEC view always renders even when no price is available.
+A Wallet's balance expressed in a fiat currency (USD in v0), its balance marked against the ZEC price. The spot Fiat value uses the current price. Over a Span it is marked daily against historical prices, so it moves with the market even while the balance holds still. Always additive to the ZEC figure, never a replacement: a Wallet's balance is denominated in ZEC first, and the ZEC view always renders even when no price is available. Off until the user consents to the price egress, since it reaches third parties beyond the Indexer (docs/adr/0008).
 _Avoid_: fiat-equivalent, worth, valuation, USD value (as the concept name)
+
+**Price source**:
+One of the third-party services the daemon fetches the ZEC price from (CoinGecko, Coinbase, Kraken), plus a bundled CSV for the deep historical tail. Several are queried and their values reconciled into the single figure shown, so no one feed is trusted alone. Some periods only one source covers, which is where a mark is single-source (docs/adr/0008).
+_Avoid_: price feed, provider (as the concept name), oracle
+
+**Confidence**:
+How much a Fiat value can be trusted. High when several Price sources agreed on the mark, low when it came from a single source, such as the bundled historical tail. Separate from divergence, which flags marks whose sources disagreed beyond a threshold.
+_Avoid_: accuracy, quality, trust score

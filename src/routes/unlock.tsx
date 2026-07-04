@@ -3,14 +3,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { HoldButton } from "@/components/ui/hold-button";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { takePendingTxid } from "@/lib/deep-link";
@@ -64,7 +63,12 @@ export function UnlockPage() {
   }
 
   async function startOver() {
+    // Wipe the wallet, then let the confirm modal animate closed before leaving.
+    // Navigating right away unmounts this whole screen and cuts the exit
+    // animation, so hold the route until the 150ms close has played.
     await removeWallet();
+    setConfirmStartOver(false);
+    await new Promise((resolve) => setTimeout(resolve, 200));
     navigate({ to: "/onboarding" });
   }
 
@@ -156,15 +160,17 @@ export function UnlockPage() {
             <AlertDialogDescription>
               The passphrase isn't stored anywhere and the wallet file is
               encrypted with it, so a forgotten passphrase can't be recovered.
-              Starting over wipes the wallet store and returns to onboarding. It's
-              watch-only, so re-importing the UFVK restores it, with no funds at
-              risk.
+              Starting over wipes every wallet and returns to onboarding. It's
+              watch-only, so no funds are at risk, but you'll need your viewing
+              keys again to re-import.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startOver}>Start over</AlertDialogAction>
-          </AlertDialogFooter>
+          <div className="flex justify-end gap-2">
+            <AlertDialogCancel className="px-4">Cancel</AlertDialogCancel>
+            <HoldButton onConfirm={startOver} className="h-9 w-auto px-4">
+              Hold to start over
+            </HoldButton>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>

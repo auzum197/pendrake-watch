@@ -27,9 +27,14 @@ import {
 	ChartTooltipContent,
 	type ChartConfig,
 } from "@/components/ui/chart";
-import type { BalancePoint } from "@/lib/format";
+import { type BalancePoint, formatUsd } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
 import "./balance-chart.css";
+
+// Which unit the series is drawn in. ZEC is the reconstructed balance (a step function);
+// USD is that balance marked daily against the price (docs/adr/0008), so it undulates
+// between transactions and is drawn as a smooth curve rather than a step.
+export type Denom = "zec" | "usd";
 
 const MAX_LABELS = 6;
 const TWEEN_MS = 400;
@@ -39,6 +44,10 @@ const TWEEN_MS = 400;
 // snapshot the chart for its crossfade. Cap the rendered series here; the axis bounds
 // and all-time-high still come off the full data, so only the line's resolution drops.
 const MAX_POINTS = 240;
+// On the USD curve, a balance change gets a dot only when its jump is at least this
+// fraction of the axis peak. Below it the change is a barely-visible step, so a dot there
+// just crowds the line, which is what happens when many small transactions cluster.
+const DOT_MIN_FRACTION = 0.04;
 
 const config = {
 	value: { label: "Balance", color: "var(--color-brand)" },
@@ -57,6 +66,12 @@ type Datum = {
 	value: number;
 	last: boolean;
 	height?: number;
+	// The ZEC balance at this point (USD series only), for the tooltip's ZEC line.
+	zec?: number;
+	// A balance-change point (USD series only), the only points that can get a static dot.
+	change?: boolean;
+	// The USD size of the change, for dotting only the big ones (USD series only).
+	jump?: number;
 };
 
 // Fit the y-axis to the data. Rounding the peak straight up to a 1/2/2.5/5 multiple
@@ -104,7 +119,7 @@ function fullDate(epoch: number): string {
 // slides out of the existing line rather than popping in. Skipped under reduced
 // motion. Geometry is tweened in data space and fed to recharts with its own
 // animation off, the same hand-rolled approach the chart used before recharts.
-function useTweenedData(target: Datum[]): Datum[] {
+function useTweenedData(target: Datum[], enabled: boolean): Datum[] {
 	const [shown, setShown] = useState(target);
 	const current = useRef(
 		new Map(target.map((d) => [d.key, { x: d.x, value: d.value }])),
@@ -139,7 +154,7 @@ function useTweenedData(target: Datum[]): Datum[] {
 			const f = from.get(d.key);
 			return !f || f.x !== d.x || f.value !== d.value;
 		});
-		if (!animationsEnabled() || prefersReducedMotion() || !moved) {
+		if (!enabled || !animationsEnabled() || prefersReducedMotion() || !moved) {
 			current.current = new Map(
 				dest.map((d) => [d.key, { x: d.x, value: d.value }]),
 			);
@@ -167,7 +182,7 @@ function useTweenedData(target: Datum[]): Datum[] {
 		raf.current = requestAnimationFrame(tick);
 		return () => cancelAnimationFrame(raf.current);
 		// Re-tween when the geometry changes, not on every frame's setShown.
-	}, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [sig, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	return shown;
 }
@@ -175,17 +190,22 @@ function useTweenedData(target: Datum[]): Datum[] {
 function BalanceChartImpl({
 	points,
 	freshKeys,
+	denom = "zec",
 }: {
 	points: BalancePoint[];
 	// Keys for transactions newly added to the full history, so only a genuine new
 	// arrival pings, not a point a period switch brought back into view. Tracked by the
 	// caller over the whole series (see useFreshTxKeys in dashboard).
 	freshKeys: Set<string>;
+	denom?: Denom;
 }) {
+	const usd = denom === "usd";
 	// Axis bounds come off the full history so the peak is never clipped, but the line
 	// itself renders a thinned series so recharts isn't handed thousands of points.
 	const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
-	const view = downsampleSeries(points, MAX_POINTS);
+	// The USD series is already bounded (a fixed sample count) and its dots mark balance
+	// changes, which downsampling would thin away, so only the ZEC series is downsampled.
+	const view = usd ? points : downsampleSeries(points, MAX_POINTS);
 
 	// Position by real time when the transactions span one. A single transaction (or
 	// a cluster sharing one timestamp) has no span, so fall back to even spacing. The
@@ -202,21 +222,33 @@ function BalanceChartImpl({
 		value: p.value,
 		last: i === view.length - 1,
 		height: p.height,
+		zec: p.zec,
+		change: p.change,
+		jump: p.jump,
 	}));
 
-	const tweened = useTweenedData(target);
+	// The USD series is recomputed wholesale on a period switch and its samples are keyed
+	// by position, not identity, so tweening remaps every sample's x at once and drags the
+	// whole curve in from the side. It carries no out-of-order scan insertions to smooth
+	// over, so it renders straight from the target. Only the identity-keyed ZEC series tweens.
+	const tweened = useTweenedData(target, !usd);
 	const fresh = freshKeys;
 	// One render can land before the tween realigns its array, so fall back to the
 	// target then to keep the series complete.
-	const data = tweened.length === target.length ? tweened : target;
+	const data = usd
+		? target
+		: tweened.length === target.length
+			? tweened
+			: target;
 
 	// Past this many points a full-size dot per transaction crowds the line, so the
-	// dots step down a little and lean on their card-coloured ring to stay separate.
-	const denseDots = view.length > 80;
+	// dots step down a little and lean on their card-coloured ring to stay separate. The
+	// USD series only dots balance changes (a handful), so it keeps full-size dots.
+	const denseDots = !usd && view.length > 80;
 	// Each point draws one SVG dot. Past a couple hundred they merge into a solid band
 	// along the line and stop reading as separate transactions, while still costing a
 	// node each. Drop them past this count and let the line carry the shape; the tip
-	// and any fresh-arrival ping still draw.
+	// and any fresh-arrival ping still draw. (USD gates dots on the change flag instead.)
 	const hideDots = view.length > 200;
 
 	if (points.length === 0) return null;
@@ -227,9 +259,15 @@ function BalanceChartImpl({
 	);
 	const decimals = max < 1 ? 4 : max < 100 ? 2 : 0;
 	const fmtAxis = (v: number) =>
-		v.toLocaleString(undefined, { maximumFractionDigits: decimals });
-	const fmtZec = (v: number) =>
-		v.toLocaleString(undefined, { maximumFractionDigits: 8 });
+		usd
+			? `$${v.toLocaleString(undefined, { maximumFractionDigits: decimals })}`
+			: v.toLocaleString(undefined, { maximumFractionDigits: decimals });
+	// Tooltip value: full-precision ZEC, or the currency-formatted USD mark.
+	const fmtValue = (v: number) =>
+		usd ? formatUsd(v) : `${v.toLocaleString(undefined, { maximumFractionDigits: 8 })} ZEC`;
+	// USD ticks carry a "$" and grouped thousands, so they need more room than the ZEC
+	// axis or they clip on the left. Widen further once the balance reaches five figures.
+	const yWidth = usd ? (max >= 10_000 ? 76 : 60) : 48;
 
 	// Ticks and domain come off the stable target, not the tweening data, so the
 	// axes hold still while points slide into place.
@@ -286,7 +324,7 @@ function BalanceChartImpl({
 					tickFormatter={fmtAxis}
 					tickLine={false}
 					axisLine={false}
-					width={48}
+					width={yWidth}
 					tickMargin={8}
 				/>
 				<ChartTooltip
@@ -296,23 +334,44 @@ function BalanceChartImpl({
 						<ChartTooltipContent
 							hideIndicator
 							labelFormatter={(_, payload) => {
-								const p = payload?.[0]?.payload;
-								const date = fullDate(p?.t ?? tMin);
-								return p?.height
-									? `${date} · Block #${p.height.toLocaleString()}`
-									: date;
+								const p = payload?.[0]?.payload as Datum | undefined;
+								// The date (always with the year) on one line; the block, when the
+								// point is a transaction, on its own line rather than run together.
+								return (
+									<span className="flex flex-col gap-0.5">
+										<span>{fullDate(p?.t ?? tMin)}</span>
+										{p?.height ? (
+											<span className="text-muted-foreground">
+												Block #{p.height.toLocaleString()}
+											</span>
+										) : null}
+									</span>
+								);
 							}}
-							formatter={(value) => (
-								<span className="font-mono font-medium tabular-nums">
-									{fmtZec(Number(value))} ZEC
-								</span>
-							)}
+							formatter={(value, _name, item) => {
+								const zec = (item?.payload as Datum | undefined)?.zec;
+								return (
+									<span className="flex flex-col gap-0.5">
+										<span className="font-mono font-medium tabular-nums">
+											{fmtValue(Number(value))}
+										</span>
+										{usd && typeof zec === "number" && (
+											<span className="font-mono text-xs text-muted-foreground tabular-nums">
+												{zec.toLocaleString(undefined, {
+													maximumFractionDigits: 8,
+												})}{" "}
+												ZEC
+											</span>
+										)}
+									</span>
+								);
+							}}
 						/>
 					}
 				/>
 				<Area
 					dataKey="value"
-					type="stepAfter"
+					type={usd ? "monotone" : "stepAfter"}
 					stroke="var(--color-brand)"
 					strokeWidth={1.5}
 					fill="url(#balance-fill)"
@@ -339,9 +398,18 @@ function BalanceChartImpl({
 							/>
 						) : null;
 						if (payload.key === "start") return <g key={payload.key}>{ping}</g>;
-						// On a large history the per-transaction dots are dropped (they'd be a
-						// solid band and thousands of nodes); only the tip and fresh pings draw.
-						if (hideDots && !payload.last)
+						// USD dots only the big balance changes (and the tip), so a cluster of
+						// small transactions doesn't crowd the line and the hover glides along
+						// the continuous curve between them. ZEC dots every transaction, dropping
+						// them only on a history too dense to tell them apart. Either way, a
+						// skipped point still draws its fresh-arrival ping.
+						const bigChange =
+							Boolean(payload.change) &&
+							(payload.jump ?? 0) >= DOT_MIN_FRACTION * max;
+						const drawDot = usd
+							? bigChange || payload.last
+							: !hideDots || payload.last;
+						if (!drawDot)
 							return ping ? <g key={payload.key}>{ping}</g> : null;
 						// Every transaction keeps a dot so each balance change stays visible
 						// at a glance. The card-coloured edge rings each dot in the background

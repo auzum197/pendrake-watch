@@ -1,5 +1,5 @@
 import { subDays, subMonths, subYears } from "date-fns";
-import type { Balance, SyncStatus, Tx } from "@/lib/ipc";
+import type { Balance, PricePoint, SyncStatus, Tx } from "@/lib/ipc";
 
 export function confirmed(pool: Balance["orchard"]): bigint {
   return BigInt(pool?.confirmed ?? "0");
@@ -24,6 +24,21 @@ export function formatZec(zatoshis: bigint): string {
 // zatoshis) rounds to a misleading 0 in ZEC.
 export function formatZat(zatoshis: bigint): string {
   return zatoshis.toLocaleString();
+}
+
+// Below this, ZEC notation is all leading zeros and reads as dust, so show the raw
+// zatoshi count instead.
+const ZEC_DISPLAY_FLOOR = 100_000n;
+
+// A note amount in whichever unit reads better: ZEC once it's at least 0.001 ZEC,
+// otherwise the raw zatoshi count.
+export function formatNoteAmount(zatoshis: bigint): {
+  value: string;
+  unit: string;
+} {
+  return zatoshis >= ZEC_DISPLAY_FLOOR
+    ? { value: formatZec(zatoshis), unit: "ZEC" }
+    : { value: formatZat(zatoshis), unit: "zat" };
 }
 
 // ZEC at a fixed number of decimals, padded, for columns that align on the point.
@@ -97,6 +112,16 @@ export type BalancePoint = {
   // The block the transaction confirmed in, for the tooltip. Absent on the
   // synthetic leading point, which belongs to no transaction.
   height?: number;
+  // The ZEC balance held at this point, carried on the USD series so the tooltip can
+  // show the ZEC amount alongside the fiat value. Absent on the plain ZEC series (where
+  // `value` is already ZEC).
+  zec?: number;
+  // Marks a balance-change point on the USD series, so the chart draws a dot only there
+  // while the dense interpolated samples between changes stay dotless.
+  change?: boolean;
+  // The USD size of the jump at a change point (|Δzec| × price), so the chart can dot only
+  // the changes big enough to matter and let clustered dust changes pass without a dot.
+  jump?: number;
 };
 
 function shortDate(epoch: number): string {
@@ -226,6 +251,176 @@ export function filterRange(
   return [baseline, ...within];
 }
 
+const USD = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "USD",
+});
+
+// A fiat figure. Sub-dollar values keep more precision so a small balance doesn't read
+// as $0.00; from a dollar up it's the plain two-decimal currency form.
+export function formatUsd(value: number): string {
+  if (value > 0 && value < 1) {
+    return `$${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+  }
+  return USD.format(value);
+}
+
+// Build a ZEC/USD price lookup from the daily series: given an instant (unix seconds or
+// millis), returns the price that day, carrying the last known price forward across gaps
+// and holding the earliest for instants before coverage. Null when the series is empty.
+// Used for the per-transaction USD value (price at the transaction's date).
+export function priceLookup(
+  prices: PricePoint[],
+): (epoch: number) => number | null {
+  const days = prices
+    .map((p) => ({ t: Date.parse(`${p.date}T00:00:00Z`), usd: p.usdPerZec }))
+    .filter((d) => Number.isFinite(d.t))
+    .sort((a, b) => a.t - b.t);
+  if (days.length === 0) return () => null;
+  return (epoch: number) => {
+    const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+    if (ms <= days[0].t) return days[0].usd;
+    let lo = 0;
+    let hi = days.length - 1;
+    let idx = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (days[mid].t <= ms) {
+        idx = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return days[idx].usd;
+  };
+}
+
+// Number of evenly-spaced samples the fiat curve is drawn with across the visible window.
+// At ~900px wide that's roughly a point every 3px, so hovering lands on a value at any x
+// (recharts snaps to the nearest datum) and the interpolated curve reads as continuous.
+const FIAT_SAMPLES = 300;
+
+// Days per Span, for windowing the fiat series (mirrors filterRange).
+const SPAN_DAYS: Record<Exclude<ChartRange, "all">, number> = {
+  year: 365,
+  month: 30,
+  week: 7,
+  day: 1,
+};
+
+// Linearly-interpolated ZEC/USD price at an instant, between the surrounding daily marks.
+// Interpolation (rather than a step lookup) is what lets the curve and the hover value move
+// smoothly between the once-a-day marks. Held flat before the first mark and after the last.
+function priceInterpolator(
+  prices: PricePoint[],
+  toUnit: (ms: number) => number,
+): ((t: number) => number) | null {
+  const days = prices
+    .map((p) => ({ t: toUnit(Date.parse(`${p.date}T00:00:00Z`)), usd: p.usdPerZec }))
+    .filter((d) => Number.isFinite(d.t))
+    .sort((a, b) => a.t - b.t);
+  if (days.length === 0) return null;
+  return (t: number) => {
+    if (t <= days[0].t) return days[0].usd;
+    if (t >= days[days.length - 1].t) return days[days.length - 1].usd;
+    let lo = 0;
+    let hi = days.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (days[mid].t <= t) lo = mid;
+      else hi = mid;
+    }
+    const a = days[lo];
+    const b = days[hi];
+    return a.usd + (b.usd - a.usd) * ((t - a.t) / (b.t - a.t));
+  };
+}
+
+// Mark the reconstructed ZEC balance against the daily price series to get the fiat curve:
+// `value = balance(t) × price(t)`. The balance is a step function, the price a daily wave,
+// so the curve holds the price's shape between transactions and jumps at each one.
+//
+// The window is sampled densely and evenly (`FIAT_SAMPLES` points) so the line is smooth
+// and the tooltip tracks the cursor at any x, not just at transactions. Balance changes are
+// injected as a vertical pair at their instant (old×price, new×price) and flagged so the
+// chart draws a dot only there. Each point carries the ZEC balance held at that moment, for
+// the tooltip. Empty when either input is empty, so the caller falls back to the ZEC view
+// (fiat is always additive).
+export function fiatSeries(
+  balance: BalancePoint[],
+  prices: PricePoint[],
+  spot: number | null,
+  range: ChartRange,
+  nowMs: number,
+): BalancePoint[] {
+  if (balance.length === 0 || prices.length === 0) return [];
+
+  const inMs = balance[balance.length - 1].t >= 1e12;
+  const toUnit = (ms: number) => (inMs ? ms : Math.floor(ms / 1000));
+  const priceAt = priceInterpolator(prices, toUnit);
+  if (!priceAt) return [];
+
+  const balanceAt = (t: number): number => {
+    let v = balance[0].value;
+    for (const p of balance) {
+      if (p.t <= t) v = p.value;
+      else break;
+    }
+    return v;
+  };
+
+  const firstT = balance[0].t;
+  const end = Math.max(toUnit(nowMs), balance[balance.length - 1].t);
+  const dayUnit = inMs ? 86_400_000 : 86_400;
+  let start = firstT;
+  if (range !== "all") {
+    start = Math.max(firstT, end - SPAN_DAYS[range] * dayUnit);
+  }
+  if (end <= start) return [];
+
+  const out: BalancePoint[] = [];
+  const dt = (end - start) / FIAT_SAMPLES;
+  for (let i = 0; i <= FIAT_SAMPLES; i++) {
+    const t = i === FIAT_SAMPLES ? end : Math.round(start + i * dt);
+    // The tip uses the live spot when available, since today's daily mark may not have
+    // landed yet; every other sample uses the interpolated historical price.
+    const p = i === FIAT_SAMPLES ? (spot ?? priceAt(t)) : priceAt(t);
+    const zec = balanceAt(t);
+    out.push({ key: `s${i}`, t, value: zec * p, zec, label: shortDate(t) });
+  }
+
+  // A vertical step + dot at each balance change inside the window.
+  for (let i = 1; i < balance.length; i++) {
+    const tc = balance[i].t;
+    if (tc <= start || tc > end) continue;
+    const p = priceAt(tc);
+    const oldZec = balance[i - 1].value;
+    const newZec = balance[i].value;
+    out.push({ key: `${balance[i].key}:pre`, t: tc, value: oldZec * p, zec: oldZec, label: "" });
+    out.push({
+      key: balance[i].key,
+      t: tc,
+      value: newZec * p,
+      zec: newZec,
+      jump: Math.abs(newZec - oldZec) * p,
+      label: shortDate(tc),
+      height: balance[i].height,
+      change: true,
+    });
+  }
+
+  // Order the merged samples and step pairs by time; at a shared instant the step's "pre"
+  // point sorts just before its "post" so the jump renders in the right direction, and the
+  // even sample lands after both.
+  return out.sort((a, b) => {
+    if (a.t !== b.t) return a.t - b.t;
+    const rank = (p: BalancePoint) =>
+      p.key.endsWith(":pre") ? 0 : p.change ? 1 : 2;
+    return rank(a) - rank(b);
+  });
+}
+
 // Where the current balance sits against the highest it has ever reached (the
 // all-time high). Returns the percent of that peak and whether we're at it.
 // Null when there's no positive history to compare against. The history is
@@ -280,9 +475,9 @@ export function formatBlock(height: number | undefined): string {
 }
 
 // Zatoshis to a plain ZEC decimal with no thousands grouping, so it's safe to drop
-// into a CSV cell. Exact integer math, no float rounding. formatZec is the grouped,
-// human-facing counterpart for the UI.
-function zatToZecPlain(zat: bigint): string {
+// into a CSV cell or the clipboard. Exact integer math, no float rounding. formatZec
+// is the grouped, human-facing counterpart for the UI.
+export function zatToZecPlain(zat: bigint): string {
   const neg = zat < 0n;
   const abs = neg ? -zat : zat;
   const frac = (abs % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");

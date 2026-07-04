@@ -25,6 +25,9 @@ export type WalletState = {
 	// Whether transaction and scan-complete notifications fire. The "Indexer
 	// unreachable" alert is independent of this.
 	notificationsEnabled: boolean;
+	// Whether fiat (USD) price display is on. Off until the user consents to the price
+	// egress via the toggle's modal (docs/adr/0008). Absent reads as false.
+	fiatEnabled?: boolean;
 };
 
 export type WalletAddress = {
@@ -236,6 +239,45 @@ export function getNotes(): Promise<WalletNote[]> {
 	return invoke("get_notes");
 }
 
+// How much a reconciled price can be trusted. "high" means two or more providers
+// agreed; "low" means a single source (e.g. the bundled pre-2020 tail).
+export type Confidence = "high" | "low";
+
+// The current reconciled ZEC/USD spot. `fetchedAt` (unix seconds) drives the staleness
+// marker; `stale` is set when the daemon is serving a last-known value after a failed
+// refresh. `diverged` flags when the contributing sources disagreed.
+export type PriceSpot = {
+	usdPerZec: number;
+	fetchedAt: number;
+	sources: string[];
+	stale?: boolean;
+	diverged?: boolean;
+};
+
+// One reconciled daily price mark, keyed by UTC date (YYYY-MM-DD). The chart marks the
+// balance held on each day against this to trace the fiat curve.
+export type PricePoint = {
+	date: string;
+	usdPerZec: number;
+	confidence: Confidence;
+	diverged?: boolean;
+};
+
+// Record consent to the price egress and start (or stop) the daemon's price refresh.
+export function setFiatEnabled(enabled: boolean): Promise<WalletState> {
+	return invoke("set_fiat_enabled", { enabled });
+}
+
+// The current reconciled spot, or null before the first fetch lands.
+export function getSpotPrice(): Promise<PriceSpot | null> {
+	return invoke("get_spot_price");
+}
+
+// The full reconciled daily series, oldest first.
+export function getPriceHistory(): Promise<PricePoint[]> {
+	return invoke("get_price_history");
+}
+
 // Wipe the current Wallet. Replace passes keepSession so the daemon retains the
 // session passphrase across the wipe (docs/adr/0004); Start over leaves it false.
 export function removeWallet(keepSession = false): Promise<void> {
@@ -299,7 +341,8 @@ export type SyncEvent =
 			valueZat: string;
 			received: boolean;
 	  }
-	| { event: "error"; message: string; unreachable?: boolean };
+	| { event: "error"; message: string; unreachable?: boolean }
+	| { event: "priceUpdate"; spot: PriceSpot };
 
 export function onSyncEvent(
 	handler: (event: SyncEvent) => void,
