@@ -1,0 +1,74 @@
+name: Storybook
+
+on:
+  push:
+    branches: [main]
+    paths: &ui-paths
+      - "src/**"
+      - ".storybook/**"
+      - "public/**"
+      - "index.html"
+      - "about.html"
+      - "components.json"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/storybook.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths: *ui-paths
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: storybook-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # push the built Storybook to the gh-pages branch
+  pull-requests: write # comment the preview URL on the PR
+
+jobs:
+  deploy:
+    name: Build and deploy Storybook
+    runs-on: ubuntu-latest
+    # Skip PRs from forks: they can't get a write token for gh-pages.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      # On PR close there's nothing to build, only the preview folder to remove.
+      - uses: pnpm/action-setup@v4
+        if: github.event.action != 'closed'
+
+      - uses: actions/setup-node@v4
+        if: github.event.action != 'closed'
+        with:
+          node-version: 22 # pnpm 11.5 requires Node >= 22.13
+          cache: pnpm
+
+      - name: Install dependencies
+        if: github.event.action != 'closed'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Storybook
+        if: github.event.action != 'closed'
+        run: pnpm build-storybook
+
+      # Production: publish to the root of gh-pages on main. clean-exclude keeps
+      # active PR previews from being wiped when production redeploys.
+      - name: Deploy production Storybook
+        if: github.event_name == 'push'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: storybook-static
+          branch: gh-pages
+          clean-exclude: pr-preview/
+
+      # Preview: deploy to pr-preview/pr-<N>/ on open/sync, remove it on close.
+      # The action comments the preview URL on the PR itself.
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: storybook-static
