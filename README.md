@@ -190,3 +190,9 @@ AppUserModelID shortcut.
 `pendrake-daemon`, `pendrake-ffi`). `src/` and `src-tauri/` hold the GUI.
 `platform/macos/` holds the Swift helper, and `scripts/` holds its build script.
 Contributor conventions live in [AGENTS.md](AGENTS.md).
+
+## Storybook
+
+You can access to main's storybook page [here](https://pendrake-watch.dariovp01.workers.dev/).
+
+Note that we intend to migrate away from cloudflare. We using it is a temporary measure.
