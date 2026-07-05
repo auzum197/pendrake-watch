@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "pendrake-watch",
+  "productName": "Pendrake Watch",
+  "mainBinaryName": "pendrake-watch",
   "version": "0.1.0",
   "identifier": "com.auzum197.pendrake-watch",
   "build": {
