@@ -1,0 +1,35 @@
+{
+  "fill" : {
+    "solid" : "srgb:0.05,0.10,0.12,1.0"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "background.png",
+          "name" : "Background",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [0, 0]
+          }
+        }
+      ]
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "dragon.png",
+          "name" : "Dragon",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [0, 0]
+          }
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : ["watchOS"],
+    "squares" : ["iOS", "macOS"]
+  }
+}

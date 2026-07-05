@@ -10,7 +10,8 @@
     "test": "vitest run",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icons": "node src-tauri/icon-composer/tools/gen-icons.mjs && tauri icon src-tauri/app-icon.png"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.8",
@@ -52,6 +53,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "@vitest/browser": "^3.2.6",
     "playwright": "^1.61.1",
+    "sharp": "^0.35.3",
     "storybook": "9.1.13",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
