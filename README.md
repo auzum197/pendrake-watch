@@ -196,3 +196,7 @@ Contributor conventions live in [AGENTS.md](AGENTS.md).
 You can access to main's storybook page [here](https://pendrake-watch.dariovp01.workers.dev/).
 
 Note that we intend to migrate away from cloudflare. We using it is a temporary measure.
+
+## Releaseing
+
+Use `just package`.

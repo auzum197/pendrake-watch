@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import {
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 import { removeWallet, verifyPassphrase, type Network } from "@/lib/ipc";
+import { cn } from "@/lib/utils";
 
 type Step = "explain" | "reauth";
 
@@ -39,6 +40,34 @@ export function ReplaceDialog({
   const [shown, setShown] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The two steps have different heights, so a raw swap makes the centered dialog
+  // jump. The active step drives the wrapper height (observed below); on a step
+  // change the height transitions to the new value while the outgoing step fades
+  // out over the incoming one. The wrapper stays clipped so content never spills
+  // mid-morph, with a touch of horizontal room so the input's focus ring shows.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+  const [leaving, setLeaving] = useState<Step | null>(null);
+
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setHeight(entry.borderBoxSize[0].blockSize);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  function go(next: Step) {
+    if (next === step) return;
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (!reduced) setLeaving(step);
+    setStep(next);
+  }
 
   // Closing resets the flow so reopening starts clean and a failed attempt never
   // lingers. No IPC has fired before the final confirm, so the Wallet is untouched.
@@ -71,103 +100,131 @@ export function ReplaceDialog({
     }
   }
 
+  const renderStep = (s: Step) =>
+    s === "explain" ? (
+      <>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Replace this Wallet?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Replacing imports a different UFVK in place of this one. The current
+            Wallet's identity and synced history are erased and can't be
+            recovered. It's watch-only, so re-importing the UFVK restores it,
+            with no funds at risk.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 p-3">
+          {fingerprint ? (
+            <LifeHashIcon
+              fingerprint={fingerprint}
+              className="size-11 shrink-0 rounded-full"
+            />
+          ) : (
+            <div className="size-11 shrink-0 rounded-full bg-muted" />
+          )}
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs font-medium capitalize text-muted-foreground">
+              {network}
+            </span>
+            <span className="truncate font-mono text-xs text-muted-foreground">
+              {fingerprint ?? "Unknown fingerprint"}
+            </span>
+          </div>
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <Button onClick={() => go("reauth")}>Continue</Button>
+        </AlertDialogFooter>
+      </>
+    ) : (
+      <>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm your passphrase</AlertDialogTitle>
+          <AlertDialogDescription>
+            Enter your passphrase to replace the Wallet. This wipes it
+            immediately and can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (passphrase.length > 0 && !busy) confirm();
+          }}
+        >
+          <div className="relative">
+            <input
+              autoFocus
+              type={shown ? "text" : "password"}
+              className="h-11 w-full rounded-lg border border-border bg-background px-3.5 pr-11 font-mono text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+              placeholder="Enter your passphrase"
+              value={passphrase}
+              onChange={(e) => {
+                setPassphrase(e.currentTarget.value);
+                setError(null);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShown((s) => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {shown ? (
+                <IconEyeOff className="size-4" />
+              ) : (
+                <IconEye className="size-4" />
+              )}
+            </button>
+          </div>
+          {error && <span className="text-xs text-destructive">{error}</span>}
+        </form>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            disabled={passphrase.length === 0 || busy}
+            onClick={confirm}
+          >
+            {busy ? "Replacing…" : "Replace Wallet"}
+          </Button>
+        </AlertDialogFooter>
+      </>
+    );
+
   return (
     <AlertDialog open={open} onOpenChange={change}>
       <AlertDialogContent>
-        {step === "explain" ? (
-          <>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Replace this Wallet?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Replacing imports a different UFVK in place of this one. The
-                current Wallet's identity and synced history are erased and can't
-                be recovered. It's watch-only, so re-importing the UFVK restores
-                it, with no funds at risk.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-
-            <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 p-3">
-              {fingerprint ? (
-                <LifeHashIcon
-                  fingerprint={fingerprint}
-                  className="size-11 shrink-0 rounded-full"
-                />
-              ) : (
-                <div className="size-11 shrink-0 rounded-full bg-muted" />
+        {/* -mx-1/px-1 keeps the wrapper clipped through the morph without cutting
+            the passphrase input's focus ring at the horizontal edges. */}
+        <div
+          style={{ height }}
+          className="relative -mx-1 overflow-hidden px-1 transition-[height] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+        >
+          <div ref={contentRef}>
+            <div
+              key={step}
+              className={cn(
+                "grid gap-6 duration-200 motion-reduce:animate-none",
+                leaving && "animate-in fade-in-0 fill-mode-both",
               )}
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs font-medium capitalize text-muted-foreground">
-                  {network}
-                </span>
-                <span className="truncate font-mono text-xs text-muted-foreground">
-                  {fingerprint ?? "Unknown fingerprint"}
-                </span>
-              </div>
-            </div>
-
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button onClick={() => setStep("reauth")}>Continue</Button>
-            </AlertDialogFooter>
-          </>
-        ) : (
-          <>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirm your passphrase</AlertDialogTitle>
-              <AlertDialogDescription>
-                Enter your passphrase to replace the Wallet. This wipes it
-                immediately and can't be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-
-            <form
-              className="flex flex-col gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (passphrase.length > 0 && !busy) confirm();
-              }}
             >
-              <div className="relative">
-                <input
-                  autoFocus
-                  type={shown ? "text" : "password"}
-                  className="h-11 w-full rounded-lg border border-border bg-background px-3.5 pr-11 font-mono text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                  placeholder="Enter your passphrase"
-                  value={passphrase}
-                  onChange={(e) => {
-                    setPassphrase(e.currentTarget.value);
-                    setError(null);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShown((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {shown ? (
-                    <IconEyeOff className="size-4" />
-                  ) : (
-                    <IconEye className="size-4" />
-                  )}
-                </button>
-              </div>
-              {error && (
-                <span className="text-xs text-destructive">{error}</span>
-              )}
-            </form>
-
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button
-                variant="destructive"
-                disabled={passphrase.length === 0 || busy}
-                onClick={confirm}
-              >
-                {busy ? "Replacing…" : "Replace Wallet"}
-              </Button>
-            </AlertDialogFooter>
-          </>
-        )}
+              {renderStep(step)}
+            </div>
+          </div>
+          {leaving && (
+            <div
+              key={`leaving-${leaving}`}
+              aria-hidden
+              onAnimationEnd={() => setLeaving(null)}
+              className="pointer-events-none absolute inset-x-1 top-0 grid gap-6 duration-200 animate-out fade-out-0 fill-mode-both motion-reduce:hidden"
+            >
+              {renderStep(leaving)}
+            </div>
+          )}
+        </div>
       </AlertDialogContent>
     </AlertDialog>
   );

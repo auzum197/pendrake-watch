@@ -19,3 +19,13 @@ tracing = "0.1"
 # mirror it here for our own build (auzum197/zingo-common#1).
 [patch.crates-io]
 zingo-netutils = { git = "https://github.com/auzum197/zingo-common", branch = "dev" }
+
+# Release tuning for the daemon, which carries the zingolib engine and runs the
+# sync loop, so it's tuned for runtime speed (opt-level 3) rather than size.
+# panic stays "unwind" on purpose: the daemon is long-lived and drives Tokio
+# tasks, and unwinding keeps a panic in one task from aborting the whole process.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

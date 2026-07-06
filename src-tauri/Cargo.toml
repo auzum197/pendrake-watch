@@ -32,3 +32,12 @@ tauri-plugin-deep-link = "2.4.9"
 # `deep-link` feature focuses the running window when a pendrake:// URL opens.
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
+# The GUI is a thin IPC client, so the web view does the heavy lifting and the
+# binary is tuned for size ("s"). Tauri's recommended stable-toolchain profile.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
