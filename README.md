@@ -1,8 +1,8 @@
 # Pendrake Watch
 
-A watch-only Zcash wallet that syncs continuously in the background, posts desktop notifications for transactions, and locks behind a passphrase. Supports both mainnet and regtest
+A watch-only Zcash wallet that syncs continuously in the background, posts desktop notifications for transactions, and locks behind a passphrase. Supports both mainnet and regtest.
 
-Pendrake does not need to be executing in the foreground. It comes with a background service that syncs and sends notification in the background.
+Pendrake does not need to be executing in the foreground. It comes with a background service that syncs and sends notifications.
 
 ## Showcase
 
