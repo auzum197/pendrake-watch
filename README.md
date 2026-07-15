@@ -1,202 +1,91 @@
-# Pendrake Watch-only
+# Pendrake Watch
 
-Pendrake Watch-only is a watch-only Zcash wallet. A Wallet is one imported UFVK, on
-mainnet or regtest, holding no spending keys. A background process built on zingolib
-owns the wallet file and syncs continuously, posting a desktop notification for each
-newly detected transaction while the window is closed. The wallet file is encrypted
-at rest with a passphrase that also locks the UI, so the app stays locked until the
-daemon holds the passphrase for the session. The GUI is a Tauri v2 client that talks
-to that process over a local socket.
+A watch-only Zcash wallet that syncs continuously in the background, posts desktop notifications for transactions, and locks behind a passphrase. Supports both mainnet and regtest
 
-## Architecture
+Pendrake does not need to be executing in the foreground. It comes with a background service that syncs and sends notification in the background.
 
-The engine is the `pendrake-core` crate. It builds a watch-only wallet from an
-imported UFVK, runs the sync loop, owns the wallet file, and serves the IPC
-protocol. It never runs on its own. One of two hosts compiles it in and gives it
-a process to live in:
+## For Users
 
-- `pendraked`, the `pendrake-daemon` crate, is the standalone daemon binary. It is
-  the production background process on Linux and Windows, and the dev or headless
-  host on macOS.
-- `PendrakeSync.app` is a small Swift app that embeds the same engine through
-  `pendrake-ffi`, a uniffi static library. It exists only on macOS, where
-  clickable notifications need `UNUserNotificationCenter` and a real app bundle.
+Install from the [releases](https://github.com/zcash/pendrake-watch/releases). On first run, paste your UFVK. The app locks behind a passphrase and syncs in the background.
 
-The GUI (`src-tauri` plus the React app under `src`) is a thin client. On launch
-it probes the daemon's Unix socket and spawns a host if nothing answers. Closing
-the window leaves the background process running.
+## For Developers
 
-| Host | Platforms | Notifications | Rebuild after an engine change |
-| --- | --- | --- | --- |
-| `pendraked` | Linux, Windows, macOS dev | a click opens the `pendrake://` deep link on Linux and Windows | `just daemon` |
-| `PendrakeSync.app` | macOS | clickable, opens the `pendrake://` deep link | `just macos helper` |
+### Prerequisites
 
-So `pendrake-daemon` is not obsolete now that macOS prefers the app. It remains the
-production daemon on Linux and Windows, and the fast host for engine work on macOS.
+- Rust, pinned by `rust-toolchain.toml`
+- Node and `pnpm` at the version in `package.json`
+- [`just`](https://github.com/casey/just), the task runner
+- `protoc` for zingolib's gRPC stubs
+- Tauri v2 platform prerequisites: webkit2gtk on Linux, WebView2 on Windows, Xcode on macOS
 
-## User flow
+The `crates/Cargo.lock` is committed and required (a yanked transitive dependency only resolves through it).
 
-One routing fork at launch feeds three top-level states: onboarding, unlock, and the
-dashboard. Onboarding branches on the network the UFVK declares and on whether a
-session passphrase already exists. The two destructive paths, Start over and Replace,
-both collapse back into onboarding and are told apart only by whether the passphrase
-survived the wipe.
+### Building
 
-```
-                          ┌─────────────────────────────────┐
-                          │ App launch                      │
-                          │ GUI probes the IPC socket,      │
-                          │ spawns the daemon if nothing    │
-                          │ answers                         │
-                          └────────────────┬────────────────┘
-                                           ▼
-                          ┌─────────────────────────────────┐
-                          │ Route on daemon state           │
-                          │ (exists checked before locked)  │
-                          └───┬────────────┬────────────┬────┘
-            exists = false    │            │            │   exists = true
-                              │            │            │   unlocked
-                              ▼            │            ▼
-                      ┌──────────────┐     │      ┌────────────┐
-                      │ ONBOARDING   │     │      │ DASHBOARD  │◄──────┐
-                      └──────┬───────┘     │      └─────┬──────┘       │
-                             │      exists = true,      │              │
-                             │      locked (no session  │              │
-                             │      passphrase)         │              │
-                             │             ▼            │              │
-                             │      ┌──────────────┐    │              │
-                             │      │ UNLOCK       │    │              │
-                             │      └──┬────────┬──┘    │              │
-                             │  enter  │        │ "Forgot passphrase?" │
-                             │  pass.  │        ▼                      │
-                             │         │   Start over (wipes ALL,      │
-                             │         │   drops session) ─────────────┤
-                             │         └──────────────► DASHBOARD       │
-                             ▼                                          │
-                  ┌────────────────────────┐                           │
-                  │ Paste UFVK             │                           │
-                  │ network parsed from    │                           │
-                  │ the key, not chosen    │                           │
-                  └───┬──────────┬─────┬───┘                           │
-       testnet key    │ mainnet  │     │ regtest                       │
-            │         │          │     │                               │
-            ▼         ▼          │     ▼                               │
-      rejected   Identity        │  Identity ─► Indexer                │
-   "testnet key"     │           │     │  (regtest must supply it;     │
-   no Wallet made    └─────┬─────┘     │   mainnet ships a default)    │
-                           ▼           │                               │
-                    (Set Password)◄────┘  shown only when NO session   │
-                           │              passphrase is held           │
-                           ▼                                           │
-                   import ─► pin N = chain tip ─────────────────────────┘
-                                                 lands in Initial scan
-```
+Install dependencies and start dev:
 
-Replace re-enters this fork from the Settings danger zone. It wipes the current Wallet
-but keeps the session passphrase, so onboarding skips Set Password before the new
-UFVK import. Start over loses the passphrase, so onboarding shows Set Password again.
-
-## Prerequisites
-
-- Rust, pinned by `rust-toolchain.toml`.
-- Node and `pnpm`, at the version pinned in `package.json`.
-- [`just`](https://github.com/casey/just), the task runner. The common workflows
-  are recipes in the `justfile`, so run `just` to list them.
-- `protoc`, which zingolib needs to build the lightwalletd gRPC stubs.
-- The Tauri v2 platform prerequisites (see the Tauri docs). On Linux that is the
-  webkit2gtk stack. On Windows it is WebView2 and the MSVC build tools.
-
-The committed `crates/Cargo.lock` is required. A yanked transitive dependency only
-resolves through it, so leave it in place.
-
-## Usage
-
-From the repo root, install the dependencies and start the app with hot reload:
-
-```
+```bash
 just install
 just dev
 ```
 
-`just dev` builds the release daemon and launches the GUI pinned to that
-freshly-built `pendraked`, so it runs the engine you are editing. The daemon does
-the heavy scanning, so it is built release.
+`just dev` builds the release daemon and runs the GUI with hot reload. The daemon is built release because it does the heavy scanning.
 
-Tasks live in the `justfile`. Cross-platform ones run by name. Platform-specific
-ones live in modules you call as `just <platform> <task>`:
+For production, build and bundle:
 
-| Task | What it does |
-| --- | --- |
-| `just dev` | GUI with hot reload against the release daemon |
-| `just daemon` | Build the `pendraked` daemon |
-| `just check` | Typecheck the frontend and build both Rust workspaces |
-| `just fmt` | Format the Rust code |
-| `just package` | Build release and bundle the installers |
-| `just macos run` | macOS production run: builds the Swift helper, opens the app |
-| `just linux run`, `just windows run` | Production run on Linux or Windows |
-| `just macos stop`, `just linux stop`, `just windows stop` | Stop that platform's background daemons |
+```bash
+just macos helper     # macOS only: build the Swift notification helper
+just package          # Build release and create installers
+```
 
-Every platform module loads on every host, so you can invoke another OS's task
-from yours, though it will not do anything useful there. Run `just` on its own to
-list everything, including the per-platform tasks.
+The full list of tasks:
 
-## macOS
+```bash
+just dev              # GUI with hot reload
+just check            # Typecheck frontend, build Rust
+just fmt              # Format Rust code
+just daemon           # Build pendraked only
+just package          # Build release and bundle installers
+just macos run        # macOS: build helper and run both apps
+just macos helper     # macOS: rebuild the Swift helper after engine changes
+just stop             # Stop background daemons (platform-specific)
+```
 
-There are two daemon options in dev, with a trade-off between them.
+Run `just` to list all tasks including platform-specific ones.
 
-For fast iteration on the engine, the `pendraked` binary is enough. Its
-notifications appear, but clicking them does nothing, because a loose binary cannot
-drive `UNUserNotificationCenter`.
+### Repository Layout
 
-For clickable notifications that open the transaction screen, build the Swift
-helper with `just macos helper` (`just macos helper debug` for a faster Swift-only
-build). It compiles the embedded engine in release and bundles `PendrakeSync.app`.
-The GUI prefers a built `PendrakeSync.app` over the binary and logs which one it
-spawned. The app carries a frozen copy of the engine, so rerun `just macos helper`
-after any `pendrake-core` change. A missing feature or wrong notification data is
-usually a stale app.
+- `crates/` — Rust workspace (pendrake-core, pendrake-ipc, pendrake-daemon, pendrake-ffi)
+- `src/` and `src-tauri/` — Tauri GUI
+- `platform/macos/` — Swift helper app
+- `scripts/` — Build scripts
+- [AGENTS.md](AGENTS.md) — Contributor conventions
 
-Clicking a notification only opens the transaction screen on the registered app
-bundle, which is the installed app or `just macos run` (it builds the helper and the
-`.app`, then runs both). Under `just dev` a click focuses the window but does not
-navigate, because the hot-reload binary is not the registered URL handler.
+### Architecture
 
-## Linux
+`pendrake-core` owns the wallet file and runs the sync loop. Two hosts embed it:
 
-Install Tauri's Linux prerequisites and `protoc`, then run `just dev`. The GUI
-spawns `pendraked`, which posts notifications through the session's notification
-service. Clicking a notification opens the `pendrake://` deep link through the
-desktop's URL handler, which the running GUI is registered for.
+- `pendraked` (Linux, Windows, macOS dev) — the standalone daemon binary
+- `PendrakeSync.app` (macOS) — a Swift app embedding the daemon through uniffi, needed for clickable notifications
 
-## Windows
+### macOS Dev Notes
 
-Install WebView2, the MSVC build tools, and `protoc`, then run `just dev`. The GUI
-spawns `pendraked` the same way, and clicking a notification opens the deep link
-too. Reliable toast activation in production also needs the installer's
-AppUserModelID shortcut.
+`pendraked` notifies but clicking does nothing, because a loose binary cannot drive `UNUserNotificationCenter`. For clickable notifications during dev, build the Swift helper with `just macos helper` (or `just macos helper debug` for a faster Swift-only rebuild). The helper is a frozen copy of the engine, so rebuild it after any pendrake-core changes.
 
-## Environment variables
+Notifications only open the transaction screen when the registered app bundle is running (the installed app or `just macos run`). Under `just dev` a click focuses the window but does not navigate.
 
-- `PENDRAKE_DATA_DIR` overrides the directory that holds the wallet, socket, and
-  lock. The GUI and the daemon both read it, so they must agree.
-- `PENDRAKED_BIN` is an explicit path to the `pendraked` binary the GUI should
-  spawn.
-- `PENDRAKE_SYNC_APP` is an explicit path to `PendrakeSync.app` on macOS, checked
-  before the discovered build.
+### Environment
 
-## Repository
+- `PENDRAKE_DATA_DIR` — directory for wallet, socket, and lock (both GUI and daemon read it)
+- `PENDRAKED_BIN` — explicit path to the pendraked binary
+- `PENDRAKE_SYNC_APP` — explicit path to PendrakeSync.app on macOS
 
-`crates/` holds the Rust workspace (`pendrake-core`, `pendrake-ipc`,
-`pendrake-daemon`, `pendrake-ffi`). `src/` and `src-tauri/` hold the GUI.
-`platform/macos/` holds the Swift helper, and `scripts/` holds its build script.
-Contributor conventions live in [AGENTS.md](AGENTS.md).
+### Tests and Checks
 
-## Storybook
+```bash
+cd crates && cargo test
+pnpm test
+just check
+```
 
-You can access to main's storybook page [here](https://pendrake-watch.dariovp01.workers.dev/).
-
-Note that we intend to migrate away from cloudflare. We are using it temporarily.
-
-## Releasing
-
-Use `just package`.
+All tests pass. The repo uses the [Anchor](docs/adr/0010-chain-identity-anchor.md) to pin chain identity at import and refuse to sync if the chain is swapped.
