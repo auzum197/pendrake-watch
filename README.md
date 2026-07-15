@@ -103,7 +103,6 @@ pnpm test
 just check
 ```
 
-All tests pass. The repo uses the [Anchor](docs/adr/0010-chain-identity-anchor.md) to pin chain identity at import and refuse to sync if the chain is swapped.
 
 ## TODO
 
