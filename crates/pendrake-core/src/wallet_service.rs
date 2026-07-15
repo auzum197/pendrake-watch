@@ -16,7 +16,8 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    PricePoint, PriceSpot, RemoveArgs, SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs,
+    PricePoint, PriceSpot, RemoveArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
+    SetNotificationsArgs,
     SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
     VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState,
 };
@@ -78,6 +79,14 @@ const EVENT_CAPACITY: usize = 256;
 /// How long to wait on the GetLightdInfo probe when changing the Indexer, before
 /// treating a candidate server as unreachable.
 const INDEXER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a getNotes request waits on the wallet lock before serving the cached
+/// list. pepper-sync can hold the write lock for long stretches mid-round (on
+/// regtest the striped chain mines constantly, so a round is nearly always live),
+/// and the GUI invoke has no timeout of its own; this bound is what keeps the
+/// Notes view painting instead of showing skeletons forever. Two seconds spans a
+/// couple of POLL_INTERVAL ticks: the RwLock is fair, so a queued read normally
+/// lands between writer critical sections well inside it.
+const NOTES_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct WalletService {
     paths: Paths,
@@ -93,6 +102,10 @@ pub struct WalletService {
     txs: RwLock<Vec<Tx>>,
     balance: RwLock<Option<Balance>>,
     addresses: RwLock<Vec<WalletAddress>>,
+    /// The last successfully built notes list, served when the wallet lock can't
+    /// be taken within NOTES_READ_TIMEOUT (see `collect_notes`). Warmed by
+    /// `refresh_snapshot` and cleared on remove alongside the other read caches.
+    notes: RwLock<Vec<WalletNote>>,
     /// The notification policy (ADR-0006): the seen-set, the silent Initial scan,
     /// and the one-time "scan finished" crossing.
     notify: NotificationPolicy,
@@ -100,6 +113,10 @@ pub struct WalletService {
     /// outage, so a multi-round backoff notifies once. Cleared when a round
     /// succeeds, the Indexer changes, or a fresh sync loop starts.
     unreachable_notified: AtomicBool,
+    /// Same once-per-episode latch for the "Wrong chain detected" notification
+    /// (docs/adr/0010): the loop re-emits the error every backoff round, the user
+    /// hears about it once. Cleared where `unreachable_notified` clears.
+    wrong_chain_notified: AtomicBool,
     /// Whether transaction and scan-complete toasts fire, mirroring
     /// `Meta::notifications_enabled` for the hot notify path. Toggled from Settings.
     /// The "Indexer unreachable" alert ignores this.
@@ -108,6 +125,10 @@ pub struct WalletService {
     /// price refresh loop: while false nothing is fetched, so a wallet stays private to
     /// the price providers until the user consents (docs/adr/0008).
     fiat_enabled: AtomicBool,
+    /// Whether Discreet mode is on, mirroring `Meta::discreet` for the hot notify
+    /// path. While true, new-transaction notifications carry no amount or direction
+    /// (docs/adr/0009).
+    discreet: AtomicBool,
     /// Reconciled spot + daily series, served to the GUI and persisted to
     /// `price_cache.json`. Seeded from the bundled pre-2020 tail on load.
     price_cache: RwLock<PriceCache>,
@@ -256,6 +277,7 @@ impl RoundView {
             eta_seconds: self.eta_seconds(),
             error: None,
             unreachable: false,
+            wrong_chain: false,
             last_synced_at: None,
         }
     }
@@ -287,6 +309,10 @@ impl RoundView {
 struct RoundError {
     message: String,
     unreachable: bool,
+    /// The pre-round identity check found the Indexer on a different chain
+    /// (docs/adr/0010). Only that guard sets it; mid-round pepper-sync failures
+    /// never do.
+    wrong_chain: bool,
 }
 
 impl From<anyhow::Error> for RoundError {
@@ -296,6 +322,7 @@ impl From<anyhow::Error> for RoundError {
         Self {
             message: e.to_string(),
             unreachable: false,
+            wrong_chain: false,
         }
     }
 }
@@ -309,6 +336,82 @@ fn is_unreachable<E: std::fmt::Debug + std::fmt::Display>(
 ) -> bool {
     use pepper_sync::error::{ServerError, SyncError};
     matches!(err, SyncError::ServerError(ServerError::RequestFailed(_)))
+}
+
+/// What the Indexer reported when asked who it is: its tip, and the hash of the
+/// block at the Wallet's anchor height (`None` when unanchored, or when the tip
+/// doesn't cover that height).
+struct ChainObservation {
+    tip: u32,
+    anchor_block_hash: Option<String>,
+}
+
+/// For a Wallet without an Anchor, how far the server tip may sit below the
+/// Wallet's Initial-scan target before it reads as a swapped chain rather than
+/// server lag. A genuinely lagging indexer trails by a handful of blocks; tonight's
+/// incident trailed by 3.1M.
+const WRONG_CHAIN_TIP_MARGIN: u32 = 100;
+
+/// The chain-identity verdict for one observation (docs/adr/0010).
+#[derive(Debug, PartialEq)]
+enum ChainVerdict {
+    Match,
+    WrongChain { detail: String },
+    /// No Anchor recorded and no evidence of a swap: sync proceeds, and the loop
+    /// adopts an Anchor after its next good round.
+    Unanchored,
+}
+
+/// Pure verdict: does the observed chain carry the Wallet's Anchor? With no Anchor
+/// (a wallet imported before ADR-0010), fall back to the tip heuristic: a tip far
+/// below the Initial-scan target means the chain the Wallet synced is gone, not
+/// that the server is catching up.
+fn chain_verdict(
+    anchor_height: u32,
+    anchor_hash: Option<&str>,
+    scan_target_height: u32,
+    obs: &ChainObservation,
+) -> ChainVerdict {
+    let Some(expected) = anchor_hash else {
+        return if obs.tip + WRONG_CHAIN_TIP_MARGIN < scan_target_height {
+            ChainVerdict::WrongChain {
+                detail: format!(
+                    "the server's chain ends at block {}, far below the {} this Wallet synced",
+                    obs.tip, scan_target_height
+                ),
+            }
+        } else {
+            ChainVerdict::Unanchored
+        };
+    };
+    if obs.tip < anchor_height {
+        return ChainVerdict::WrongChain {
+            detail: format!(
+                "the server's chain ends at block {}, below this Wallet's anchor at {}",
+                obs.tip, anchor_height
+            ),
+        };
+    }
+    match obs.anchor_block_hash.as_deref() {
+        Some(found) if found == expected => ChainVerdict::Match,
+        Some(_) => ChainVerdict::WrongChain {
+            detail: format!("block {anchor_height} doesn't match the one this Wallet synced"),
+        },
+        None => ChainVerdict::WrongChain {
+            detail: format!("the server has no block at height {anchor_height}"),
+        },
+    }
+}
+
+/// Lower-hex of raw bytes, for block hashes. Recorded and verified through this
+/// same fold, so the byte order is self-consistent whatever the server's convention.
+fn hex_lower(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
 }
 
 /// The chain tip the Indexer reports, via a real `GetLightdInfo` request. It also
@@ -346,9 +449,49 @@ fn indexer_probe_error<E: std::fmt::Display>(err: &E) -> anyhow::Error {
     }
 }
 
-/// The reachability check alone: the [`indexer_tip`] probe with its height discarded.
-async fn probe_indexer(uri: &http::Uri) -> Result<()> {
-    indexer_tip(uri).await.map(|_| ())
+/// The hash of the block at `height` on the Indexer's chain, lower-hex. `Ok(None)`
+/// means the server answered but has no such block: implementations disagree on the
+/// status code for that (NotFound, OutOfRange, InvalidArgument, Unknown), so the
+/// plausible ones all map to `None` and callers judge "chain too short" from the tip
+/// first, never from these codes alone. Anything else is a real probe failure.
+async fn fetch_block_hash(uri: &http::Uri, height: u32) -> Result<Option<String>> {
+    use tonic::Code;
+    use zingo_netutils::{lightwallet_protocol::BlockId, Indexer};
+    let mut indexer = zingo_netutils::GrpcIndexer::new(uri.clone())
+        .await
+        .map_err(|e| anyhow!("could not connect to indexer: {e}"))?;
+    let block_id = BlockId {
+        height: u64::from(height),
+        hash: vec![],
+    };
+    match indexer.get_block(block_id, INDEXER_PROBE_TIMEOUT).await {
+        Ok(block) => Ok(Some(hex_lower(&block.hash))),
+        Err(status)
+            if matches!(
+                status.code(),
+                Code::NotFound | Code::OutOfRange | Code::InvalidArgument | Code::Unknown
+            ) =>
+        {
+            tracing::debug!("get_block({height}) has no block: {status}");
+            Ok(None)
+        }
+        Err(status) => Err(indexer_probe_error(&status)),
+    }
+}
+
+/// One look at who the Indexer is: its tip, plus the block hash at the Wallet's
+/// anchor height when there is one and the reported chain covers it. An `Err` is an
+/// outage (the server didn't answer), never a chain verdict.
+async fn observe_chain(uri: &http::Uri, anchor_height: Option<u32>) -> Result<ChainObservation> {
+    let tip = indexer_tip(uri).await?;
+    let anchor_block_hash = match anchor_height {
+        Some(height) if tip >= height => fetch_block_hash(uri, height).await?,
+        _ => None,
+    };
+    Ok(ChainObservation {
+        tip,
+        anchor_block_hash,
+    })
 }
 
 /// Methods the daemon answers while the GUI session is locked: lifecycle, auth, and
@@ -386,10 +529,13 @@ impl WalletService {
             txs: RwLock::new(Vec::new()),
             balance: RwLock::new(None),
             addresses: RwLock::new(Vec::new()),
+            notes: RwLock::new(Vec::new()),
             notify,
             unreachable_notified: AtomicBool::new(false),
+            wrong_chain_notified: AtomicBool::new(false),
             notifications_enabled: AtomicBool::new(true),
             fiat_enabled: AtomicBool::new(false),
+            discreet: AtomicBool::new(false),
             price_cache: RwLock::new(price_cache),
             price_restart: Notify::new(),
             generation: AtomicU64::new(0),
@@ -409,6 +555,7 @@ impl WalletService {
             service
                 .fiat_enabled
                 .store(meta.fiat_enabled, Ordering::SeqCst);
+            service.discreet.store(meta.discreet, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -507,6 +654,10 @@ impl WalletService {
                 let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_fiat_enabled(args.enabled).await?)?)
             }
+            "setDiscreet" => {
+                let args: SetDiscreetArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.set_discreet(args.enabled).await?)?)
+            }
             "getSpotPrice" => Ok(to_value(self.spot_price().await)?),
             "getPriceHistory" => Ok(to_value(self.price_history().await)?),
             "unlock" => {
@@ -572,6 +723,7 @@ impl WalletService {
                 indexer_uri: m.indexer_uri.clone(),
                 notifications_enabled: m.notifications_enabled,
                 fiat_enabled: m.fiat_enabled,
+                discreet: m.discreet,
             },
             None => WalletState {
                 exists: false,
@@ -585,38 +737,50 @@ impl WalletService {
                 indexer_uri: String::new(),
                 notifications_enabled: true,
                 fiat_enabled: false,
+                discreet: false,
             },
         }
     }
 
-    /// Rebuild the read cache (transactions, balance, addresses) from the wallet in
-    /// one client-lock acquisition. Best-effort: a transient read failure leaves
-    /// the previous snapshot in place. Called at low-contention points (load,
-    /// import, end of a sync round), never on a client request path.
     /// Enumerate every received output the Wallet controls, across pools, with its
-    /// spend state resolved. Built live (not from the cached snapshot) for the notes
-    /// debug view, which wants ground truth straight off the wallet. Returns empty
-    /// when no wallet is open. Note `idx` is assigned over the returned order, so it
-    /// is a stable row number for the default sort, not a wallet-internal id.
+    /// spend state resolved. Served live off the wallet when its lock frees within
+    /// NOTES_READ_TIMEOUT, and from the last-built list otherwise: mid-round
+    /// pepper-sync holds the write lock for long stretches, and the GUI request
+    /// landing here has no timeout of its own, so an unbounded wait paints as
+    /// skeletons forever. Returns empty when no wallet is open. Note `idx` is
+    /// assigned over the returned order, so it is a stable row number for the
+    /// default sort, not a wallet-internal id.
     async fn collect_notes(&self) -> Vec<WalletNote> {
-        let guard = self.client.lock().await;
-        let Some(client) = guard.as_ref() else {
-            return Vec::new();
+        // Clone the wallet handle out from under the client Mutex before any
+        // wallet await: the sync loop's poll arm takes the same Mutex every
+        // second, so holding it while queued behind the wallet lock would stall
+        // the round too.
+        let wallet = {
+            let guard = self.client.lock().await;
+            match guard.as_ref() {
+                Some(client) => Arc::clone(client.wallet()),
+                None => return Vec::new(),
+            }
+        };
+
+        let Ok(wallet) = tokio::time::timeout(NOTES_READ_TIMEOUT, wallet.read()).await else {
+            tracing::debug!("wallet lock busy past the notes deadline, serving the cached list");
+            return self.notes.read().await.clone();
         };
 
         // Authoritative txid -> confirmed height, so a note spent by transaction X can
         // report the block X landed in. An in-flight spend's transaction isn't
         // confirmed yet, so it's absent here and the note's spent height stays null.
-        let heights: HashMap<String, u32> = match client.transaction_summaries(false).await {
-            Ok(summaries) => summaries
-                .iter()
-                .filter(|s| s.status.is_confirmed())
-                .map(|s| (s.txid.to_string(), u32::from(s.blockheight)))
-                .collect(),
-            Err(_) => HashMap::new(),
-        };
+        let heights: HashMap<String, u32> = wallet
+            .wallet_transactions
+            .values()
+            .filter_map(|tx| {
+                tx.status()
+                    .get_confirmed_height()
+                    .map(|h| (tx.txid().to_string(), u32::from(h)))
+            })
+            .collect();
 
-        let wallet = client.wallet().read().await;
         let mut notes = Vec::new();
         let mut push = |pool, value, confirmed, height, spend_status, txid: &TxId, change| {
             notes.push(map_wallet_note(
@@ -664,9 +828,16 @@ impl WalletService {
                 matches!(c.scope, TransparentScope::Internal),
             );
         }
+        drop(wallet);
+
+        *self.notes.write().await = notes.clone();
         notes
     }
 
+    /// Rebuild the read caches (transactions, balance, addresses, notes) from the
+    /// wallet in one client-lock acquisition. Best-effort: a transient read failure
+    /// leaves the previous snapshot in place. Called at low-contention points (load,
+    /// import, unlock, end of a sync round), never on a client request path.
     async fn refresh_snapshot(&self) {
         let guard = self.client.lock().await;
         let Some(client) = guard.as_ref() else { return };
@@ -696,6 +867,13 @@ impl WalletService {
             })
             .collect();
         *self.addresses.write().await = addrs;
+        drop(guard);
+
+        // Warm the notes cache in the same low-contention window, so a later
+        // getNotes that times out behind a sync round serves this snapshot's list
+        // rather than an older wallet's. After the guard drops: collect_notes
+        // takes the client lock itself.
+        self.collect_notes().await;
     }
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
@@ -738,6 +916,14 @@ impl WalletService {
             .parse()
             .map_err(|_| anyhow!("invalid indexer uri"))?;
         let scan_target_height = indexer_tip(&indexer_uri).await?;
+        // Record the Anchor (docs/adr/0010): the hash of the block at the birthday
+        // (or the tip, for a birthday in the future), clamped to ≥1 since block 0
+        // isn't served. Every later sync round verifies it, so a swapped chain is
+        // refused instead of ground through. Still before any disk write.
+        let anchor_height = birthday.min(scan_target_height).max(1);
+        let anchor_hash = fetch_block_hash(&indexer_uri, anchor_height)
+            .await?
+            .ok_or_else(|| anyhow!("that server has no block at height {anchor_height}"))?;
         let meta = Meta {
             network: args.network,
             indexer_uri: args.indexer_uri.clone(),
@@ -749,6 +935,9 @@ impl WalletService {
             fingerprint: Some(identity.fingerprint.clone()),
             notifications_enabled: true,
             fiat_enabled: false,
+            discreet: false,
+            anchor_height,
+            anchor_hash: Some(anchor_hash),
         };
 
         // Re-import overwrites any wallet already on disk.
@@ -783,6 +972,7 @@ impl WalletService {
         // A fresh Wallet starts private: fiat stays off until the user consents anew, so a
         // prior wallet's choice doesn't carry over the import.
         self.fiat_enabled.store(false, Ordering::SeqCst);
+        self.discreet.store(false, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -846,11 +1036,12 @@ impl WalletService {
     }
 
     /// Point the running Wallet at a different Indexer (AUZ-47). The candidate is
-    /// validated with a real `GetLightdInfo` call first (see [`probe_indexer`]), so a
-    /// reachable-but-not-an-indexer endpoint is rejected before anything changes. Only
-    /// then is the gRPC client swapped in place, so the wallet file is never reopened
-    /// and in-flight scanned data and the autosave task survive. The saved value is
-    /// left untouched on any failure.
+    /// validated with real `GetLightdInfo`/`GetBlock` calls first (see
+    /// [`observe_chain`]): a reachable-but-not-an-indexer endpoint, and one serving a
+    /// chain without this Wallet's Anchor (docs/adr/0010), are both rejected before
+    /// anything changes. Only then is the gRPC client swapped in place, so the wallet
+    /// file is never reopened and in-flight scanned data and the autosave task
+    /// survive. The saved value is left untouched on any failure.
     ///
     /// The switch is handed to the running sync loop rather than spawning a second
     /// one: `stop_sync` ends the current round (bound to the old Indexer) and a restart
@@ -870,9 +1061,32 @@ impl WalletService {
             .parse()
             .map_err(|_| anyhow!("invalid indexer uri"))?;
 
-        // Probe outside the client lock: a fresh connection plus one GetLightdInfo,
-        // so a slow or dead candidate doesn't block reads on the live client.
-        probe_indexer(&uri).await?;
+        // Probe outside the client lock: a fresh connection plus one GetLightdInfo
+        // and one GetBlock, so a slow or dead candidate doesn't block reads on the
+        // live client. A candidate on a different chain is rejected inline; the
+        // current Indexer keeps running.
+        let (anchor_height, anchor_hash, scan_target_height) = {
+            let guard = self.meta.read().await;
+            let meta = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("no wallet to set the indexer for"))?;
+            (
+                meta.anchor_height,
+                meta.anchor_hash.clone(),
+                meta.scan_target_height,
+            )
+        };
+        let obs = observe_chain(&uri, anchor_hash.as_ref().map(|_| anchor_height)).await?;
+        if let ChainVerdict::WrongChain { detail } = chain_verdict(
+            anchor_height,
+            anchor_hash.as_deref(),
+            scan_target_height,
+            &obs,
+        ) {
+            return Err(anyhow!(
+                "that server is serving a different chain than this Wallet synced: {detail}."
+            ));
+        }
 
         {
             let mut guard = self.client.lock().await;
@@ -901,10 +1115,12 @@ impl WalletService {
             s.state = SyncState::Syncing;
             s.error = None;
             s.unreachable = false;
+            s.wrong_chain = false;
         })
         .await;
-        // A switch starts a fresh outage episode, so a dead new Indexer notifies too.
+        // A switch starts a fresh episode, so a dead or wrong new Indexer notifies too.
         self.unreachable_notified.store(false, Ordering::SeqCst);
+        self.wrong_chain_notified.store(false, Ordering::SeqCst);
         // Cut short any idle/backoff wait so the new round starts now.
         self.restart.notify_one();
 
@@ -944,6 +1160,20 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
+    /// Turn Discreet mode on or off (docs/adr/0009). The GUI does its own masking off
+    /// the returned state; the daemon's side of the deal is redacting notification text.
+    async fn set_discreet(&self, enabled: bool) -> Result<WalletState> {
+        let mut guard = self.meta.write().await;
+        let meta = guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("no wallet to set discreet mode for"))?;
+        meta.discreet = enabled;
+        meta.save(&self.paths.meta_file)?;
+        drop(guard);
+        self.discreet.store(enabled, Ordering::SeqCst);
+        Ok(self.wallet_state().await)
+    }
+
     /// The current reconciled spot, or `None` if nothing has been fetched yet. Stamps
     /// `stale` when the last fetch is older than [`SPOT_STALE_AFTER`] so the GUI can grey it.
     async fn spot_price(&self) -> Option<PriceSpot> {
@@ -975,6 +1205,7 @@ impl WalletService {
         // Park the price loop; the reconciled prices themselves are public ZEC/USD data,
         // not wallet-specific, so the cache file is kept to avoid re-fetching after Replace.
         self.fiat_enabled.store(false, Ordering::SeqCst);
+        self.discreet.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         if !keep_session {
@@ -984,6 +1215,7 @@ impl WalletService {
         self.txs.write().await.clear();
         *self.balance.write().await = None;
         self.addresses.write().await.clear();
+        self.notes.write().await.clear();
         self.notify.reset();
         let _ = std::fs::remove_file(&self.paths.meta_file);
         let _ = std::fs::remove_dir_all(&self.paths.wallet_dir);
@@ -1127,8 +1359,10 @@ impl WalletService {
             match self.sync_round(generation).await {
                 Ok(()) => {
                     backoff = BACKOFF_MIN;
-                    // A round got through, so the outage (if any) is over: a later one notifies again.
+                    // A round got through, so the episode (if any) is over: a later one notifies again.
                     self.unreachable_notified.store(false, Ordering::SeqCst);
+                    self.wrong_chain_notified.store(false, Ordering::SeqCst);
+                    self.adopt_anchor_if_missing().await;
                     // A restart signal (e.g. an Indexer change) cuts the idle wait short.
                     tokio::select! {
                         _ = tokio::time::sleep(IDLE_INTERVAL) => {}
@@ -1136,44 +1370,13 @@ impl WalletService {
                     }
                 }
                 Err(e) => {
-                    let RoundError {
-                        message,
-                        unreachable,
-                    } = e;
                     tracing::warn!(
-                        "sync round failed: {message}; unreachable={unreachable}; backing off {backoff:?}"
+                        "sync round failed: {}; unreachable={}; wrong_chain={}; backing off {backoff:?}",
+                        e.message,
+                        e.unreachable,
+                        e.wrong_chain,
                     );
-                    self.set_sync(|s| {
-                        s.state = SyncState::Error;
-                        s.error = Some(message.clone());
-                        s.unreachable = unreachable;
-                    })
-                    .await;
-                    let _ = self.events.send(SyncEvent::Error {
-                        message,
-                        unreachable,
-                    });
-                    // One desktop notification per outage: the loop re-emits the error every
-                    // backoff round, but the user only needs telling once that the Indexer is
-                    // down and where to fix it. Recovery or an Indexer change re-arms it.
-                    if unreachable && !self.unreachable_notified.swap(true, Ordering::SeqCst) {
-                        let host = self
-                            .meta
-                            .read()
-                            .await
-                            .as_ref()
-                            .and_then(|m| m.indexer_uri.parse::<http::Uri>().ok())
-                            .and_then(|u| u.host().map(str::to_owned));
-                        let body = format!(
-                            "Pendrake can't reach {}. Open to choose another server.",
-                            host.as_deref().unwrap_or("your Indexer"),
-                        );
-                        let _ = self.notifier.notify(
-                            "Can't reach your Indexer",
-                            &body,
-                            "pendrake://settings/indexer",
-                        );
-                    }
+                    self.note_round_failure(e).await;
                     // A restart signal cuts the backoff short and resets it, so switching
                     // to a working Indexer recovers at once instead of after the backoff.
                     tokio::select! {
@@ -1189,13 +1392,158 @@ impl WalletService {
         }
     }
 
+    /// Publish a failed round to the status snapshot, the event stream, and (for the
+    /// actionable causes) a desktop notification. Each cause notifies once per
+    /// episode; recovery, an Indexer change, or a fresh loop re-arms it. Both alerts
+    /// bypass `notifications_enabled`: that gate covers movement toasts, and a wallet
+    /// that has silently stopped syncing is worse than an unwanted notification.
+    async fn note_round_failure(&self, err: RoundError) {
+        let RoundError {
+            message,
+            unreachable,
+            wrong_chain,
+        } = err;
+        self.set_sync(|s| {
+            s.state = SyncState::Error;
+            s.error = Some(message.clone());
+            s.unreachable = unreachable;
+            s.wrong_chain = wrong_chain;
+        })
+        .await;
+        let _ = self.events.send(SyncEvent::Error {
+            message,
+            unreachable,
+            wrong_chain,
+        });
+        if unreachable && !self.unreachable_notified.swap(true, Ordering::SeqCst) {
+            let host = self
+                .meta
+                .read()
+                .await
+                .as_ref()
+                .and_then(|m| m.indexer_uri.parse::<http::Uri>().ok())
+                .and_then(|u| u.host().map(str::to_owned));
+            let body = format!(
+                "Pendrake can't reach {}. Open to choose another server.",
+                host.as_deref().unwrap_or("your Indexer"),
+            );
+            let _ = self.notifier.notify(
+                "Can't reach your Indexer",
+                &body,
+                "pendrake://settings/indexer",
+            );
+        }
+        if wrong_chain && !self.wrong_chain_notified.swap(true, Ordering::SeqCst) {
+            let _ = self.notifier.notify(
+                "Wrong chain detected",
+                "Your Indexer is serving a different chain than this Wallet synced. Open to review.",
+                "pendrake://settings/indexer",
+            );
+        }
+    }
+
+    /// The pre-round identity check (docs/adr/0010): ask the Indexer for its tip and
+    /// the block at the Wallet's anchor height, and refuse the round on a mismatch.
+    /// A server that doesn't answer is an outage, never a chain verdict.
+    async fn verify_chain_identity(&self) -> Result<(), RoundError> {
+        let (indexer_uri, anchor_height, anchor_hash, scan_target_height) = {
+            let guard = self.meta.read().await;
+            let meta = guard.as_ref().ok_or_else(|| anyhow!("no wallet"))?;
+            (
+                meta.indexer_uri.clone(),
+                meta.anchor_height,
+                meta.anchor_hash.clone(),
+                meta.scan_target_height,
+            )
+        };
+        let uri: http::Uri = indexer_uri
+            .parse()
+            .map_err(|_| anyhow!("invalid indexer uri"))?;
+        let obs = observe_chain(&uri, anchor_hash.as_ref().map(|_| anchor_height))
+            .await
+            .map_err(|e| RoundError {
+                message: e.to_string(),
+                unreachable: true,
+                wrong_chain: false,
+            })?;
+        match chain_verdict(
+            anchor_height,
+            anchor_hash.as_deref(),
+            scan_target_height,
+            &obs,
+        ) {
+            ChainVerdict::WrongChain { detail } => Err(RoundError {
+                message: format!(
+                    "your Indexer is serving a different chain than this Wallet synced: {detail}"
+                ),
+                unreachable: false,
+                wrong_chain: true,
+            }),
+            ChainVerdict::Match | ChainVerdict::Unanchored => Ok(()),
+        }
+    }
+
+    /// TOFU for a wallet imported before Anchors existed (docs/adr/0010): after a
+    /// good round, record the chain it just synced against as the one to hold to.
+    /// Every failure just retries on a later round; adoption never fails the loop.
+    async fn adopt_anchor_if_missing(&self) {
+        let (uri, birthday) = {
+            let guard = self.meta.read().await;
+            let Some(meta) = guard.as_ref() else { return };
+            if meta.anchor_hash.is_some() {
+                return;
+            }
+            (meta.indexer_uri.clone(), meta.birthday_height)
+        };
+        let Ok(uri) = uri.parse::<http::Uri>() else {
+            return;
+        };
+        let tip = match indexer_tip(&uri).await {
+            Ok(tip) => tip,
+            Err(e) => {
+                tracing::debug!("anchor adoption skipped: {e}");
+                return;
+            }
+        };
+        let height = birthday.min(tip).max(1);
+        let hash = match fetch_block_hash(&uri, height).await {
+            Ok(Some(hash)) => hash,
+            Ok(None) => {
+                tracing::debug!("anchor adoption skipped: no block at {height}");
+                return;
+            }
+            Err(e) => {
+                tracing::debug!("anchor adoption skipped: {e}");
+                return;
+            }
+        };
+        // Re-check under the write lock: an import may have raced in its own anchor.
+        let mut guard = self.meta.write().await;
+        if let Some(meta) = guard.as_mut() {
+            if meta.anchor_hash.is_none() {
+                meta.anchor_height = height;
+                meta.anchor_hash = Some(hash);
+                if let Err(e) = meta.save(&self.paths.meta_file) {
+                    tracing::warn!("could not persist the adopted anchor: {e}");
+                }
+                tracing::info!("adopted chain anchor at height {height}");
+            }
+        }
+    }
+
     async fn sync_round(&self, generation: u64) -> Result<(), RoundError> {
         self.set_sync(|s| {
             s.state = SyncState::Syncing;
             s.error = None;
             s.unreachable = false;
+            s.wrong_chain = false;
         })
         .await;
+
+        // Refuse the round before the wallet is touched if the Indexer is on a
+        // different chain (docs/adr/0010). Aborting here never takes the client
+        // lock, so the wallet file stays frozen and unlock stays responsive.
+        self.verify_chain_identity().await?;
 
         // Subscribe before kicking the sync task off so the SessionStarted event,
         // which carries the progress denominator, is never missed.
@@ -1261,9 +1609,12 @@ impl WalletService {
                         PollReport::Ready(res) => match res {
                             Ok(result) => break result,
                             Err(e) => {
+                                // Mid-round failures are transport or scan trouble;
+                                // chain identity was already verified this round.
                                 return Err(RoundError {
                                     message: format!("sync error: {e}"),
                                     unreachable: is_unreachable(&e),
+                                    wrong_chain: false,
                                 })
                             }
                         },
@@ -1489,11 +1840,21 @@ impl WalletService {
                 self.notify.mark_notified(txid);
                 return;
             }
-            let amount = format_amount(value);
-            let (title, body) = if received {
-                ("Funds received", format!("{amount} arrived in your wallet."))
+            // Discreet mode redacts the text (docs/adr/0009): a notification pops over
+            // whatever is on screen, so it carries neither amount nor direction. The
+            // deep link and delivery flow are unchanged.
+            let (title, body) = if self.discreet.load(Ordering::SeqCst) {
+                (
+                    "New transaction detected",
+                    "Open Pendrake to view details.".to_string(),
+                )
             } else {
-                ("Funds sent", format!("{amount} sent from your wallet."))
+                let amount = format_amount(value);
+                if received {
+                    ("Funds received", format!("{amount} arrived in your wallet."))
+                } else {
+                    ("Funds sent", format!("{amount} sent from your wallet."))
+                }
             };
             tracing::info!("new tx {txid} ({value} zat, received={received}), notifying");
             // Record the txid as notified only after delivery succeeds. A failure leaves
@@ -1963,6 +2324,9 @@ mod tests {
             fingerprint: None,
             notifications_enabled: true,
             fiat_enabled: false,
+            discreet: false,
+            anchor_height: 0,
+            anchor_hash: None,
         });
         service
     }
@@ -2015,6 +2379,49 @@ mod tests {
         service.notifications_enabled.store(false, Ordering::SeqCst);
         service.notify_tx("txoff", true, 42_000_000, true, 120).await;
         assert!(spy.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn discreet_redacts_the_live_transaction_notification() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("notify-discreet", spy.clone(), 100).await;
+        service.discreet.store(true, Ordering::SeqCst);
+        service.notify_tx("txhush", true, 42_000_000, true, 120).await;
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        // Neither amount nor direction leaks; the deep link still opens the tx.
+        assert_eq!(calls[0].0, "New transaction detected");
+        assert!(!calls[0].1.contains("ZEC"));
+        assert!(!calls[0].1.contains("arrived"));
+        assert!(!calls[0].1.contains("sent"));
+        assert_eq!(calls[0].2, "pendrake://tx?txid=txhush");
+    }
+
+    #[tokio::test]
+    async fn set_discreet_persists_to_meta() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("discreet-persist", spy, 100).await;
+        service.paths.ensure_dirs().unwrap();
+
+        let state = service.set_discreet(true).await.unwrap();
+        assert!(state.discreet);
+        // The choice survives a restart: it's on disk, not just in the atomics.
+        let meta = Meta::load(&service.paths.meta_file).unwrap().unwrap();
+        assert!(meta.discreet);
+    }
+
+    #[test]
+    fn meta_without_discreet_defaults_off() {
+        // A meta.json written before the field existed must load unchanged.
+        let json = serde_json::json!({
+            "network": "mainnet",
+            "indexer_uri": "",
+            "import_type": "ufvk",
+            "view_mode": "full",
+            "birthday_height": 0,
+        });
+        let meta: Meta = serde_json::from_value(json).unwrap();
+        assert!(!meta.discreet);
     }
 
     // `summary()` pins height 1; override it so a summary can sit above or below the
@@ -2138,6 +2545,152 @@ mod tests {
         assert!(!is_unreachable(&chain));
     }
 
+    #[tokio::test]
+    async fn a_wrong_chain_round_notifies_once_and_marks_the_status() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("wrong-chain-notify", spy.clone(), 100).await;
+        let failure = || RoundError {
+            message: "chain mismatch".to_string(),
+            unreachable: false,
+            wrong_chain: true,
+        };
+
+        service.note_round_failure(failure()).await;
+        // The backoff loop re-reports the same episode; the user hears it once.
+        service.note_round_failure(failure()).await;
+
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Wrong chain detected");
+        assert_eq!(calls[0].2, "pendrake://settings/indexer");
+
+        let sync = service.sync.read().await;
+        assert_eq!(sync.state, SyncState::Error);
+        assert!(sync.wrong_chain);
+        assert!(!sync.unreachable);
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_round_never_raises_the_wrong_chain_alert() {
+        let spy = Arc::new(SpyNotifier::new());
+        let service = service_with_spy("unreachable-not-wrong-chain", spy.clone(), 100).await;
+
+        service
+            .note_round_failure(RoundError {
+                message: "connection refused".to_string(),
+                unreachable: true,
+                wrong_chain: false,
+            })
+            .await;
+
+        let calls = spy.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Can't reach your Indexer");
+        let sync = service.sync.read().await;
+        assert!(sync.unreachable);
+        assert!(!sync.wrong_chain);
+    }
+
+    const ANCHOR: &str = "aa11";
+
+    fn observed(tip: u32, hash: Option<&str>) -> ChainObservation {
+        ChainObservation {
+            tip,
+            anchor_block_hash: hash.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn matching_anchor_is_a_match() {
+        assert_eq!(
+            chain_verdict(500, Some(ANCHOR), 1000, &observed(2000, Some(ANCHOR))),
+            ChainVerdict::Match
+        );
+    }
+
+    #[test]
+    fn a_different_hash_at_the_anchor_is_a_wrong_chain() {
+        assert!(matches!(
+            chain_verdict(500, Some(ANCHOR), 1000, &observed(2000, Some("bb22"))),
+            ChainVerdict::WrongChain { .. }
+        ));
+    }
+
+    #[test]
+    fn a_chain_shorter_than_the_anchor_is_wrong() {
+        // The tip decides before any hash: no need to ask for a block the server
+        // can't have.
+        assert!(matches!(
+            chain_verdict(500, Some(ANCHOR), 1000, &observed(400, None)),
+            ChainVerdict::WrongChain { .. }
+        ));
+    }
+
+    #[test]
+    fn a_missing_anchor_block_on_a_covering_chain_is_wrong() {
+        assert!(matches!(
+            chain_verdict(500, Some(ANCHOR), 1000, &observed(2000, None)),
+            ChainVerdict::WrongChain { .. }
+        ));
+    }
+
+    #[test]
+    fn an_anchorless_wallet_within_the_margin_is_unanchored() {
+        // The server trails the scan target by less than the margin: ordinary lag,
+        // sync proceeds and TOFU adopts an anchor after the round.
+        assert_eq!(
+            chain_verdict(0, None, 1000, &observed(950, None)),
+            ChainVerdict::Unanchored
+        );
+    }
+
+    #[test]
+    fn an_anchorless_wallet_far_behind_the_scan_target_is_wrong() {
+        // Tonight's incident: the wallet synced a 3.4M-block incarnation, the
+        // regenerated chain reports 251k.
+        assert!(matches!(
+            chain_verdict(0, None, 3_400_000, &observed(251_000, None)),
+            ChainVerdict::WrongChain { .. }
+        ));
+    }
+
+    #[test]
+    fn the_tip_margin_boundary_is_exact() {
+        // tip + MARGIN == target sits on the boundary and still passes; one block
+        // further behind flips it.
+        let target = 1000;
+        let at_margin = target - WRONG_CHAIN_TIP_MARGIN;
+        assert_eq!(
+            chain_verdict(0, None, target, &observed(at_margin, None)),
+            ChainVerdict::Unanchored
+        );
+        assert!(matches!(
+            chain_verdict(0, None, target, &observed(at_margin - 1, None)),
+            ChainVerdict::WrongChain { .. }
+        ));
+    }
+
+    #[test]
+    fn hex_lower_is_stable_lowercase() {
+        assert_eq!(hex_lower(&[0x00, 0xab, 0xff, 0x01]), "00abff01");
+        assert_eq!(hex_lower(&[]), "");
+    }
+
+    #[test]
+    fn meta_without_anchor_fields_defaults_unanchored() {
+        // A meta.json written before ADR-0010 must load unchanged.
+        let json = serde_json::json!({
+            "network": "mainnet",
+            "indexer_uri": "",
+            "import_type": "ufvk",
+            "view_mode": "full",
+            "birthday_height": 0,
+        });
+        let meta: Meta = serde_json::from_value(json).unwrap();
+        assert_eq!(meta.anchor_height, 0);
+        assert_eq!(meta.anchor_hash, None);
+    }
+
     #[test]
     fn ct_eq_matches_only_identical_bytes() {
         assert!(ct_eq(b"correct horse", b"correct horse"));
@@ -2158,6 +2711,48 @@ mod tests {
         *service.session_passphrase.lock().await = Some("correct horse".into());
         assert!(service.verify_passphrase("correct horse").await);
         assert!(!service.verify_passphrase("wrong").await);
+    }
+
+    fn cached_note() -> WalletNote {
+        WalletNote {
+            idx: 0,
+            pool: Pool::Orchard,
+            value_zat: "5000".into(),
+            status: NoteStatus::Unspent,
+            height: Some(10),
+            txid: "aa".into(),
+            change: false,
+            spent_height: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn notes_without_a_wallet_are_empty_not_stale() {
+        let service = WalletService::load(test_paths("notes-no-wallet"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        // A leftover cached row must not leak through the no-wallet path.
+        service.notes.write().await.push(cached_note());
+        assert!(service.collect_notes().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn remove_clears_the_notes_cache() {
+        let service = WalletService::load(test_paths("notes-remove"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        service.notes.write().await.push(cached_note());
+        service.remove(false).await.unwrap();
+        assert!(service.notes.read().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_notes_answers_an_empty_array_on_a_fresh_service() {
+        let service = WalletService::load(test_paths("notes-fresh"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        let result = service.handle("getNotes", Value::Null).await.unwrap();
+        assert_eq!(result, serde_json::json!([]));
     }
 
     #[tokio::test]

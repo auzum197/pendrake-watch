@@ -78,8 +78,17 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
     let service = runtime.block_on(WalletService::load(paths.clone(), notifier))?;
     let serve_paths = paths.clone();
     runtime.spawn(async move {
-        if let Err(e) = ipc::serve(service, serve_paths).await {
-            tracing::error!("ipc server stopped: {e}");
+        // A service nobody can reach is worse than a dead one: it holds the
+        // single-instance lock and keeps syncing while the GUI gets connection
+        // refused, unrecoverable short of a kill. serve() only returns on a bind
+        // failure (accept errors are absorbed inside), and each retry re-binds
+        // from scratch (the stale socket file is unlinked first), so this heals
+        // once the cause clears instead of leaving a deaf daemon behind.
+        loop {
+            if let Err(e) = ipc::serve(Arc::clone(&service), serve_paths.clone()).await {
+                tracing::error!("ipc server stopped, rebinding shortly: {e}");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
         }
     });
 
@@ -123,6 +132,48 @@ mod tests {
         drop(first);
         run(config_at(dir.path()), Arc::new(NullNotifier))
             .expect("a fresh instance starts once the lock is released");
+    }
+
+    // The bind is spawned onto the runtime, so the socket appears shortly after
+    // run() returns. Poll-connect instead of sleeping a fixed amount.
+    #[cfg(unix)]
+    fn connect_with_retry(socket: &Path) -> std::os::unix::net::UnixStream {
+        for _ in 0..50 {
+            if let Ok(stream) = std::os::unix::net::UnixStream::connect(socket) {
+                return stream;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("server never came up on {}", socket.display());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_dropped_connection_does_not_kill_the_server() {
+        use std::io::{BufRead, BufReader, Write};
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = run(config_at(dir.path()), Arc::new(NullNotifier))
+            .expect("the instance starts");
+        let socket = dir.path().join("daemon.sock");
+
+        // A client that sends half a request and vanishes mid-line.
+        let mut rude = connect_with_retry(&socket);
+        rude.write_all(b"{\"id\":1,\"met").unwrap();
+        drop(rude);
+
+        // The server must still answer a fresh connection afterwards.
+        let mut stream = connect_with_retry(&socket);
+        stream
+            .write_all(b"{\"id\":2,\"method\":\"getSyncStatus\"}\n")
+            .unwrap();
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .unwrap();
+        let mut reply = String::new();
+        BufReader::new(&stream).read_line(&mut reply).unwrap();
+        assert!(reply.contains("\"ok\":true"), "unexpected reply: {reply}");
+        drop(handle);
     }
 
     #[test]

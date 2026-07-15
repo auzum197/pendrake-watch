@@ -49,11 +49,12 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 fs2 = "0.4"
 thiserror = "1"
+# Status codes off GrpcIndexer's GetBlock errors (the "no such block" whitelist in
+# fetch_block_hash), and Status construction in the classifier tests. Same version
+# track as zingo-netutils so the types unify.
+tonic = "0.14"
 
 [dev-dependencies]
-# Constructs tonic::Status values so the sync-error classifier (is_unreachable) is
-# tested against the real RequestFailed transport-failure variant.
-tonic = "0.14"
 # Isolated data dir per single-instance test, cleaned up on drop.
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the

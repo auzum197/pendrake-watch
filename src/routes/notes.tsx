@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { IconSearch } from "@tabler/icons-react";
 import { PoolDot } from "@/components/notes/badges";
+import { DiscreetValue } from "@/components/ui/discreet-value";
 import {
 	NotesContentSkeleton,
 	SummaryBarSkeleton,
@@ -201,7 +202,9 @@ function StatCard({
 }) {
 	const { zat, count } = sumSpendable(notes, pool);
 	// Roll both figures to their new values instead of snapping, so a filter or search
-	// change reads as the set narrowing rather than the numbers blinking.
+	// change reads as the set narrowing rather than the numbers blinking. The tween
+	// still runs while masked (hooks are unconditional); DiscreetValue owns the flip
+	// animation, so the two never stack.
 	const zec = useTweenNumber(Number(zat) / 1e8);
 	const shownCount = Math.round(useTweenNumber(count));
 
@@ -212,10 +215,12 @@ function StatCard({
 				{label}
 			</div>
 			<div className="mt-1.5 font-mono text-lg font-semibold tabular-nums">
-				{zec.toLocaleString(undefined, {
-					minimumFractionDigits: 4,
-					maximumFractionDigits: 4,
-				})}
+				<DiscreetValue kind="zec">
+					{zec.toLocaleString(undefined, {
+						minimumFractionDigits: 4,
+						maximumFractionDigits: 4,
+					})}
+				</DiscreetValue>
 			</div>
 			<div className="mt-0.5 text-xs text-muted-foreground">
 				{shownCount} {shownCount === 1 ? "note" : "notes"}

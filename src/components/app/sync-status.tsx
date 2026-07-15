@@ -77,6 +77,15 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 			</span>
 		);
 	}
+	if (sync.state === "error" && sync.wrongChain) {
+		// Red, a step past the amber outage: waiting won't heal a swapped chain.
+		return (
+			<span className={`${base} text-red-400`}>
+				<IconAlertTriangle className="size-3" />
+				Wrong chain
+			</span>
+		);
+	}
 	if (sync.state === "error") {
 		return (
 			<span className={`${base} text-amber-400`}>

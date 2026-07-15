@@ -28,6 +28,9 @@ export type WalletState = {
 	// Whether fiat (USD) price display is on. Off until the user consents to the price
 	// egress via the toggle's modal (docs/adr/0008). Absent reads as false.
 	fiatEnabled?: boolean;
+	// Whether Discreet mode is on (docs/adr/0009). The UI masks sensitive values and
+	// the daemon redacts notification text. Absent reads as false.
+	discreet?: boolean;
 };
 
 export type WalletAddress = {
@@ -86,6 +89,9 @@ export type SyncStatus = {
 	// Set only when the sync error was the Indexer being unreachable, gating the
 	// "Change server" CTA. Absent reads as false.
 	unreachable?: boolean;
+	// Set only when the Indexer is serving a chain without this Wallet's Anchor
+	// (ADR-0010). The daemon keeps it mutually exclusive with `unreachable`.
+	wrongChain?: boolean;
 	lastSyncedAt?: number;
 };
 
@@ -268,6 +274,12 @@ export function setFiatEnabled(enabled: boolean): Promise<WalletState> {
 	return invoke("set_fiat_enabled", { enabled });
 }
 
+// Persist Discreet mode in the daemon, which redacts notification text while it is
+// on (docs/adr/0009). Masking in the UI keys off the store in lib/discreet.ts.
+export function setDiscreet(enabled: boolean): Promise<WalletState> {
+	return invoke("set_discreet", { enabled });
+}
+
 // The current reconciled spot, or null before the first fetch lands.
 export function getSpotPrice(): Promise<PriceSpot | null> {
 	return invoke("get_spot_price");
@@ -341,7 +353,7 @@ export type SyncEvent =
 			valueZat: string;
 			received: boolean;
 	  }
-	| { event: "error"; message: string; unreachable?: boolean }
+	| { event: "error"; message: string; unreachable?: boolean; wrongChain?: boolean }
 	| { event: "priceUpdate"; spot: PriceSpot };
 
 export function onSyncEvent(

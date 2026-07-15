@@ -7,6 +7,8 @@ import {
 import { IconArrowLeft } from "@tabler/icons-react";
 import { getTransaction, onSyncEvent, type Note, type Tx } from "@/lib/ipc";
 import { formatUsd, formatZec, priceLookup, splitAddress } from "@/lib/format";
+import { DiscreetValue } from "@/components/ui/discreet-value";
+import { useMasked } from "@/lib/discreet";
 import { getCachedTx, getCachedWallet } from "@/hooks/use-wallet-data";
 import { usePriceData } from "@/hooks/use-price-data";
 import { flagReturnRow } from "@/components/app/return-flash";
@@ -97,6 +99,7 @@ export function TxDetailPage() {
   }, [txid]);
 
   const received = tx?.kind === "received";
+  const masked = useMasked();
   const byIndex = (a: Note, b: Note) => a.outputIndex - b.outputIndex;
   const receivedNotes = tx?.notes.filter((n) => n.direction === "received").sort(byIndex) ?? [];
   const sentNotes = tx?.notes.filter((n) => n.direction === "sent").sort(byIndex) ?? [];
@@ -121,12 +124,16 @@ export function TxDetailPage() {
             className={`${revealClass()} font-heading text-3xl font-semibold tabular-nums ${received ? "text-green-600 dark:text-green-400" : ""}`}
           >
             {received ? "+" : "−"}
-            {formatZec(BigInt(tx.valueZat))} ZEC
+            <DiscreetValue kind="zec">
+              {formatZec(BigInt(tx.valueZat))}
+            </DiscreetValue>{" "}
+            ZEC
           </span>
         )}
         {usdAtTime !== null && (
           <span className={`${revealClass()} text-sm text-muted-foreground`}>
-            {formatUsd(usdAtTime)} at the time
+            <DiscreetValue kind="usd">{formatUsd(usdAtTime)}</DiscreetValue> at
+            the time
           </span>
         )}
       </header>
@@ -150,12 +157,24 @@ export function TxDetailPage() {
           <dd className="capitalize">{tx.status}</dd>
           <dt className="text-muted-foreground">Block</dt>
           <dd className="tabular-nums">
-            {tx.blockHeight?.toLocaleString() ?? "pending"}
+            {tx.blockHeight ? (
+              <DiscreetValue kind="block">
+                {tx.blockHeight.toLocaleString()}
+              </DiscreetValue>
+            ) : (
+              "pending"
+            )}
           </dd>
           <dt className="text-muted-foreground">Date</dt>
-          <dd>{new Date(tx.datetime * 1000).toLocaleString()}</dd>
+          <dd>
+            <DiscreetValue kind="date">
+              {new Date(tx.datetime * 1000).toLocaleString()}
+            </DiscreetValue>
+          </dd>
           <dt className="self-start text-muted-foreground">Txid</dt>
-          <dd className="break-all font-mono text-xs">{tx.txid}</dd>
+          <dd className="break-all font-mono text-xs">
+            <DiscreetValue kind="txid">{tx.txid}</DiscreetValue>
+          </dd>
         </dl>
       )}
 
@@ -179,14 +198,19 @@ export function TxDetailPage() {
         </>
       )}
 
-      <a
-        href={`https://cipherscan.app/tx/${txid}`}
-        target="_blank"
-        rel="noreferrer"
-        className="text-sm text-primary underline-offset-4 hover:underline"
-      >
-        View on block explorer
-      </a>
+      {/* Hidden under Discreet mode, not just masked: the href embeds the txid,
+          which resolves to the height, the date, and any transparent amounts on
+          the explorer, everything the masks above hide. */}
+      {!masked && (
+        <a
+          href={`https://cipherscan.app/tx/${txid}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-primary underline-offset-4 hover:underline"
+        >
+          View on block explorer
+        </a>
+      )}
     </div>
   );
 }
@@ -227,7 +251,10 @@ function NoteCard({ note }: { note: Note }) {
           {note.pool}
         </span>
         <span className="font-mono text-sm tabular-nums">
-          {formatZec(BigInt(note.valueZat))} ZEC
+          <DiscreetValue kind="zec">
+            {formatZec(BigInt(note.valueZat))}
+          </DiscreetValue>{" "}
+          ZEC
         </span>
       </div>
       {note.recipient && (
@@ -239,7 +266,7 @@ function NoteCard({ note }: { note: Note }) {
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Memo</span>
           <p className="whitespace-pre-wrap wrap-break-word rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground">
-            {note.memo}
+            <DiscreetValue kind="memo">{note.memo}</DiscreetValue>
           </p>
         </div>
       )}
@@ -251,7 +278,13 @@ function NoteCard({ note }: { note: Note }) {
 // part) set apart from the clipped data body so the eye lands on the part that
 // distinguishes one address from another.
 function Address({ value }: { value: string }) {
+  const masked = useMasked();
   const { prefix, head, tail } = splitAddress(value);
+  // Masked swaps the whole styled span (the hover title would leak the address),
+  // so the flip is an instant swap here rather than a scramble.
+  if (masked) {
+    return <DiscreetValue kind="address">{value}</DiscreetValue>;
+  }
   return (
     <span className="break-all font-mono" title={value}>
       <span className="text-brand">{prefix}</span>

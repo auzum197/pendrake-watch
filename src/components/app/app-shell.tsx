@@ -9,7 +9,6 @@ import {
 	IconListDetails,
 	IconLock,
 	IconSettings,
-	IconShieldCheckFilled,
 	IconWallet,
 } from "@tabler/icons-react";
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
@@ -17,6 +16,8 @@ import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import { DiscreetEye } from "./discreet-eye";
+import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { Toaster } from "@/components/ui/sonner";
 import { isSyncing, SyncBar, SyncChip } from "./sync-status";
 import "./nav-reveal.css";
@@ -57,8 +58,8 @@ async function openAbout() {
 	const win = new WebviewWindow("about", {
 		url: "about.html",
 		title: "About Pendrake Watch",
-		width: 380,
-		height: 320,
+		width: 400,
+		height: 360,
 		resizable: false,
 		center: true,
 	});
@@ -108,6 +109,12 @@ export function AppShell({
 				unreachable={sync?.unreachable ?? false}
 				onSettings={active === "settings"}
 			/>
+			{/* Kept separate from UnreachableToast: the copy, tone, and lifetime differ,
+          and the daemon guarantees the two flags are mutually exclusive. */}
+			<WrongChainToast
+				wrongChain={sync?.wrongChain ?? false}
+				onSettings={active === "settings"}
+			/>
 			<Toaster position="bottom-right" />
 		</div>
 	);
@@ -144,6 +151,37 @@ function UnreachableToast({
 	return null;
 }
 
+const WRONG_CHAIN_TOAST = "wrong-chain";
+
+// Held open while the Indexer serves a chain without this Wallet's Anchor
+// (ADR-0010). Unlike an outage, waiting won't heal it, so the toast stands until
+// the right chain returns or the user reviews the Indexer in Settings.
+function WrongChainToast({
+	wrongChain,
+	onSettings,
+}: {
+	wrongChain: boolean;
+	onSettings: boolean;
+}) {
+	const navigate = useNavigate();
+	useEffect(() => {
+		if (wrongChain && !onSettings) {
+			toast("Your Indexer is serving a different chain than this Wallet synced.", {
+				id: WRONG_CHAIN_TOAST,
+				duration: Infinity,
+				icon: <IconAlertTriangle className="size-4" />,
+				action: {
+					label: "Review Indexer",
+					onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+				},
+			});
+		} else {
+			toast.dismiss(WRONG_CHAIN_TOAST);
+		}
+	}, [wrongChain, onSettings, navigate]);
+	return null;
+}
+
 function AppSidebar({
 	active,
 	wallet,
@@ -160,11 +198,8 @@ function AppSidebar({
 	// sit over the sidebar's top-left.
 	return (
 		<aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
-			<div className="flex items-center gap-2.5 px-2">
-				<span className="flex size-8 items-center justify-center rounded-lg bg-brand">
-					<IconShieldCheckFilled className="size-5 text-white" />
-				</span>
-				<span className="font-heading text-lg font-bold">Pendrake</span>
+			<div className="flex items-center justify-center px-2 py-2">
+				<img src={pendrakeLogo} alt="Pendrake" className="h-8 select-none" />
 			</div>
 
 			<div className="mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
@@ -191,7 +226,10 @@ function AppSidebar({
 							<span className="font-mono text-xs text-white/45">
 								{wallet?.fingerprint ? wallet.fingerprint.slice(0, 7) : "—"}
 							</span>
-							<SyncChip sync={sync} />
+							<div className="flex items-center gap-1">
+								{wallet?.exists && <DiscreetEye />}
+								<SyncChip sync={sync} />
+							</div>
 						</div>
 					</div>
 				</div>

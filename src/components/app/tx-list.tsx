@@ -7,6 +7,7 @@ import {
   IconMessage2,
 } from "@tabler/icons-react";
 import type { Tx } from "@/lib/ipc";
+import { DiscreetValue } from "@/components/ui/discreet-value";
 import { formatBlock, formatZec, txHasMemo } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
 import { takeReturnRow } from "./return-flash";
@@ -98,7 +99,7 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
                   <StatusBadge status={tx.status} />
                 </td>
                 <td className="py-3 font-mono tabular-nums text-muted-foreground">
-                  {formatBlock(tx.blockHeight)}
+                  <TxBlock height={tx.blockHeight} />
                 </td>
               </tr>
             );
@@ -232,7 +233,7 @@ function VirtualTxList({
                 </span>
                 <StatusBadge status={tx.status} />
                 <span className="font-mono tabular-nums text-muted-foreground">
-                  {formatBlock(tx.blockHeight)}
+                  <TxBlock height={tx.blockHeight} />
                 </span>
               </div>
             </div>
@@ -254,13 +255,22 @@ function TxType({ tx, received }: { tx: Tx; received: boolean }) {
   );
 }
 
+// The sign stays outside the mask: direction is not sensitive, and the color
+// beside it already says it.
 function TxAmount({ tx, received }: { tx: Tx; received: boolean }) {
   return (
     <>
       {received ? "+" : "−"}
-      {formatZec(BigInt(tx.valueZat))} ZEC
+      <DiscreetValue kind="zec">{formatZec(BigInt(tx.valueZat))}</DiscreetValue>{" "}
+      ZEC
     </>
   );
+}
+
+function TxBlock({ height }: { height: number | undefined }) {
+  // A pending transaction's dash is a status, not a value, so it never masks.
+  if (!height) return <>{formatBlock(height)}</>;
+  return <DiscreetValue kind="block">{formatBlock(height)}</DiscreetValue>;
 }
 
 function StatusBadge({ status }: { status: Tx["status"] }) {

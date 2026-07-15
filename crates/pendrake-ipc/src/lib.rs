@@ -109,6 +109,10 @@ pub struct WalletState {
     /// refresh loop, so nothing is fetched while false.
     #[serde(default)]
     pub fiat_enabled: bool,
+    /// Whether Discreet mode is on. The GUI masks sensitive values; the daemon redacts
+    /// new-transaction notification text (docs/adr/0009).
+    #[serde(default)]
+    pub discreet: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -199,6 +203,11 @@ pub struct SetNotificationsArgs {
 
 #[derive(Debug, Deserialize)]
 pub struct SetFiatEnabledArgs {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetDiscreetArgs {
     pub enabled: bool,
 }
 
@@ -300,6 +309,11 @@ pub struct SyncStatus {
     /// GUI can offer "Change server". Off (and absent from the wire) otherwise.
     #[serde(default, skip_serializing_if = "is_false")]
     pub unreachable: bool,
+    /// Set only when the Indexer is serving a chain that doesn't carry this Wallet's
+    /// Anchor (docs/adr/0010). Mutually exclusive with `unreachable`: a verdict
+    /// exists only when the server answered.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub wrong_chain: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_synced_at: Option<u64>,
 }
@@ -317,6 +331,7 @@ impl Default for SyncStatus {
             eta_seconds: None,
             error: None,
             unreachable: false,
+            wrong_chain: false,
             last_synced_at: None,
         }
     }
@@ -394,8 +409,11 @@ pub struct BatchSummary {
 /// A line the daemon pushes to a subscribed client as the wallet scans. Tagged by
 /// `event`, so a reader distinguishes it from a request [`Response`] (which carries
 /// `ok`/`id`) on the shared connection.
+// `rename_all` covers the variant tags only; `rename_all_fields` makes the fields
+// inside struct variants camelCase too (`valueZat`, `wrongChain`), which is what
+// the GUI's SyncEvent type has always read.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "event")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event")]
 pub enum SyncEvent {
     /// A fresh snapshot: the overall bar/phase/counts/ETA plus the active batches.
     Progress {
@@ -420,6 +438,10 @@ pub enum SyncEvent {
         message: String,
         #[serde(default, skip_serializing_if = "is_false")]
         unreachable: bool,
+        /// Set when the Indexer is serving a chain without this Wallet's Anchor
+        /// (docs/adr/0010); mutually exclusive with `unreachable`.
+        #[serde(default, skip_serializing_if = "is_false")]
+        wrong_chain: bool,
     },
     /// A refreshed spot price, pushed so the live balance figures and the chart tip move
     /// without the GUI polling. Only sent while fiat is enabled.

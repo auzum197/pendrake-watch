@@ -456,6 +456,14 @@ async fn set_fiat_enabled(enabled: bool) -> Result<Value, String> {
     request("setFiatEnabled", serde_json::json!({ "enabled": enabled })).await
 }
 
+/// Toggle Discreet mode. The daemon persists the flag and redacts new-transaction
+/// notifications while it is on (docs/adr/0009); masking in the GUI keys off the
+/// returned wallet state.
+#[tauri::command]
+async fn set_discreet(enabled: bool) -> Result<Value, String> {
+    request("setDiscreet", serde_json::json!({ "enabled": enabled })).await
+}
+
 /// The current reconciled ZEC/USD spot, or null if nothing has been fetched yet.
 #[tauri::command]
 async fn get_spot_price() -> Result<Value, String> {
@@ -551,6 +559,7 @@ pub fn run() {
             get_transaction,
             get_notes,
             set_fiat_enabled,
+            set_discreet,
             get_spot_price,
             get_price_history,
             remove_wallet,

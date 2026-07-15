@@ -13,7 +13,7 @@ import { HoldButton } from "@/components/ui/hold-button";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { takePendingTxid } from "@/lib/deep-link";
-import { Splash } from "@/components/app/splash";
+import pendrakeLogo from "@/assets/pendrake-logo.svg";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
 // decrypts the wallet, so collecting it here is the lock. The real version hands
@@ -72,20 +72,14 @@ export function UnlockPage() {
     navigate({ to: "/onboarding" });
   }
 
-  // Hold the dark splash through the one-frame redirect, so an already-open session
-  // never shows the password form.
-  if (alreadyOpen) return <Splash />;
+  // Hold the dark surface through the one-frame redirect, so an already-open
+  // session never shows the password form.
+  if (alreadyOpen) return <div className="fixed inset-0 z-50 bg-ink" />;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-ink text-white">
-      <div className="relative hidden w-1/2 shrink-0 items-center justify-center overflow-hidden lg:flex">
-        <div className="absolute left-1/4 top-1/3 size-[28rem] -translate-x-1/2 rounded-full bg-brand/40 blur-[64px]" />
-        <span className="relative font-heading text-[16rem] leading-none font-bold text-brand select-none">
-          龙
-        </span>
-      </div>
-
-      <div className="flex flex-1 items-center px-10 py-12">
+    <div className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-ink px-10 py-12 text-white">
+      <img src={pendrakeLogo} alt="Pendrake" className="h-[27px] select-none" />
+      <div className="flex w-full flex-1 flex-col justify-center py-10">
         <form
           className="mx-auto flex w-full max-w-md flex-col gap-7"
           onSubmit={(e) => {
@@ -93,7 +87,7 @@ export function UnlockPage() {
             submit();
           }}
         >
-          <header className="flex flex-col gap-2">
+          <header className="flex flex-col items-center gap-2 text-center">
             <h1 className="font-heading text-4xl font-bold tracking-tight">
               Unlock wallet
             </h1>

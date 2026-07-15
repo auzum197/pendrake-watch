@@ -7,6 +7,11 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WalletNote } from "@/lib/ipc";
+import {
+  maskFor,
+  type DiscreetKind,
+} from "@/components/ui/discreet-value";
+import { useMasked } from "@/lib/discreet";
 import { formatZec, zatToZecPlain } from "@/lib/format";
 import type { Sort, SortKey } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -76,19 +81,33 @@ const COPIED_HOLD_MS = 1200;
 // idle or once it's already rolling back out.
 function CopyCell({
   copy,
+  kind,
   className,
   children,
 }: {
   copy: string;
+  // Every cell in this table carries a sensitive value; under Discreet mode it
+  // shows the kind's mask and stops copying (the clipboard would hold the real
+  // value while the screen says hidden).
+  kind: DiscreetKind;
   className?: string;
   children: ReactNode;
 }) {
+  const masked = useMasked();
   const [phase, setPhase] = useState<CopyPhase>("idle");
   // Bumped only when a fresh roll starts, to re-key the track so its keyframe replays.
   // A re-copy mid-hold leaves it untouched, so the parked label just stays put.
   const [gen, setGen] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(holdTimer.current), []);
+
+  if (masked) {
+    return (
+      <span className={cn("cursor-default", className)} aria-label="Hidden">
+        <span aria-hidden>{maskFor(kind)}</span>
+      </span>
+    );
+  }
 
   function holdThenRollOut() {
     clearTimeout(holdTimer.current);
@@ -279,7 +298,7 @@ function NoteRow({ note }: { note: WalletNote }) {
         <PoolBadge pool={note.pool} />
       </span>
       <span className="pr-6 text-right font-mono tabular-nums">
-        <CopyCell copy={zatToZecPlain(BigInt(note.valueZat))}>
+        <CopyCell kind="zec" copy={zatToZecPlain(BigInt(note.valueZat))}>
           {formatZec(BigInt(note.valueZat))}
         </CopyCell>
       </span>
@@ -288,7 +307,7 @@ function NoteRow({ note }: { note: WalletNote }) {
       </span>
       <span className="font-mono tabular-nums">
         {note.height != null ? (
-          <CopyCell copy={String(note.height)}>
+          <CopyCell kind="block" copy={String(note.height)}>
             {note.height.toLocaleString()}
           </CopyCell>
         ) : (
@@ -296,7 +315,9 @@ function NoteRow({ note }: { note: WalletNote }) {
         )}
       </span>
       <span className="font-mono text-muted-foreground">
-        <CopyCell copy={note.txid}>{shortTxid(note.txid)}</CopyCell>
+        <CopyCell kind="txid" copy={note.txid}>
+          {shortTxid(note.txid)}
+        </CopyCell>
       </span>
       <span>
         {note.change ? (
@@ -307,7 +328,7 @@ function NoteRow({ note }: { note: WalletNote }) {
       </span>
       <span className="font-mono tabular-nums">
         {note.spentHeight != null ? (
-          <CopyCell copy={String(note.spentHeight)}>
+          <CopyCell kind="block" copy={String(note.spentHeight)}>
             {note.spentHeight.toLocaleString()}
           </CopyCell>
         ) : (

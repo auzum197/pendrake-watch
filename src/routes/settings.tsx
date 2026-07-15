@@ -6,6 +6,7 @@ import {
   IconCheck,
   IconCircleCheck,
   IconCurrencyDollar,
+  IconEyeOff,
   IconFlask,
   IconServer2,
 } from "@tabler/icons-react";
@@ -21,6 +22,7 @@ import {
   setNotifications,
   type Network,
 } from "@/lib/ipc";
+import { toggleDiscreet, useDiscreet } from "@/lib/discreet";
 import { reduceMotion, setReduceMotion } from "@/lib/motion";
 import { FEATURES, setEnabled, useFeature } from "@/lib/features";
 
@@ -48,6 +50,8 @@ export function SettingsPage() {
           enabled={wallet.fiatEnabled ?? false}
         />
       )}
+
+      {wallet?.exists && <DiscreetSection />}
 
       {wallet?.exists && (
         <IndexerSection
@@ -185,6 +189,48 @@ function FiatSection({ enabled }: { enabled: boolean }) {
           disabled={busy}
           onCheckedChange={toggle}
           aria-label="Fiat price display"
+        />
+      </div>
+    </section>
+  );
+}
+
+// The Discreet mode mirror (docs/adr/0009). Unlike the sections above, the switch
+// reads the shared store instead of local state: the sidebar eye writes the same
+// flag, and both surfaces must move together the instant either one flips. The
+// store already does the optimistic flip and revert.
+function DiscreetSection() {
+  const on = useDiscreet();
+  const [busy, setBusy] = useState(false);
+
+  async function toggle() {
+    setBusy(true);
+    await toggleDiscreet();
+    setBusy(false);
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <IconEyeOff className="size-4 text-muted-foreground" />
+        <h2 className="font-heading text-base font-semibold">Discreet mode</h2>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-foreground">
+            Hide sensitive values
+          </span>
+          <span className="text-sm text-muted-foreground">
+            Masks balances, amounts, dates and transaction identifiers across the
+            app, and drops the amount from new-transaction notifications. The eye
+            in the sidebar does the same; hold it to peek.
+          </span>
+        </div>
+        <Switch
+          checked={on}
+          disabled={busy}
+          onCheckedChange={toggle}
+          aria-label="Discreet mode"
         />
       </div>
     </section>

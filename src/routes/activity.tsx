@@ -31,6 +31,8 @@ export function ActivityPage() {
 
 // Copies the whole history to the clipboard as CSV. WKWebView resolves
 // navigator.clipboard on this click (a user gesture), so no Tauri plugin is needed.
+// Deliberately not gated on Discreet mode: the clipboard isn't visible to an
+// onlooker, and the export is an explicit action, unlike the always-on-screen rows.
 function ExportButton({ txs }: { txs: Tx[] }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);

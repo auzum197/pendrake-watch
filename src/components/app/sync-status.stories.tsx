@@ -27,6 +27,15 @@ const errored: SyncStatus = {
   unreachable: true,
 };
 
+const wrongChain: SyncStatus = {
+  state: "error",
+  syncedHeight: 2_390_000,
+  chainTip: 251_000,
+  percent: 62,
+  error: "your Indexer is serving a different chain than this Wallet synced",
+  wrongChain: true,
+};
+
 const meta = {
   component: SyncChip,
   args: { sync: syncing },
@@ -36,7 +45,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 // The chip on its own reads the state name. Null is the pre-connect state; the rest
-// walk syncing → synced → error.
+// walk syncing → synced → error → wrong chain.
 export const Chip: Story = {
   render: () => (
     <div className="flex flex-col gap-3 rounded-2xl bg-ink p-6">
@@ -44,6 +53,7 @@ export const Chip: Story = {
       <SyncChip sync={syncing} />
       <SyncChip sync={synced} />
       <SyncChip sync={errored} />
+      <SyncChip sync={wrongChain} />
     </div>
   ),
 };

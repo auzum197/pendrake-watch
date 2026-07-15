@@ -77,7 +77,7 @@ export function isSynced(sync: SyncStatus | null): boolean {
 
 export function syncLabel(sync: SyncStatus | null): string {
   if (!sync) return "Connecting…";
-  if (sync.state === "error") return "Sync error";
+  if (sync.state === "error") return sync.wrongChain ? "Wrong chain" : "Sync error";
   if (isSynced(sync)) return "Synced";
   return `Syncing… ${Math.round(sync.percent)}%`;
 }

@@ -95,6 +95,21 @@ pub struct Meta {
     /// so a wallet imported before this existed stays private until the user opts in.
     #[serde(default)]
     pub fiat_enabled: bool,
+    /// Whether Discreet mode is on: the GUI masks amounts, dates, and identifiers, and
+    /// the daemon redacts new-transaction notifications (docs/adr/0009). Defaults false
+    /// so a meta.json written before this existed loads unchanged.
+    #[serde(default)]
+    pub discreet: bool,
+    /// The Anchor's height: `min(birthday, tip-at-import)` clamped to ≥1, recorded at
+    /// import (docs/adr/0010). 0 means no anchor was recorded (a wallet imported
+    /// before this existed); the sync loop adopts one after its next good round.
+    #[serde(default)]
+    pub anchor_height: u32,
+    /// The Anchor: hex of the block hash at `anchor_height`, the Wallet's proof of
+    /// which chain incarnation it synced. Verified against the Indexer before every
+    /// sync round; a mismatch refuses to sync (docs/adr/0010).
+    #[serde(default)]
+    pub anchor_hash: Option<String>,
 }
 
 fn default_true() -> bool {

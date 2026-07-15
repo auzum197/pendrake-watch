@@ -7,6 +7,7 @@ import {
 	IconLoader2,
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented";
+import { DiscreetValue } from "@/components/ui/discreet-value";
 import { TxList } from "@/components/app/tx-list";
 import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
@@ -206,14 +207,22 @@ function ChartCard({
 					</div>
 					{activeDenom === "usd" ? (
 						<span className="font-heading text-5xl font-bold leading-none tabular-nums">
-							{usdTotal === null ? "…" : formatUsd(usdTotal)}{" "}
+							{usdTotal === null ? (
+								"…"
+							) : (
+								<DiscreetValue kind="usd">{formatUsd(usdTotal)}</DiscreetValue>
+							)}{" "}
 							<span className="text-2xl font-normal text-muted-foreground">
 								USD
 							</span>
 						</span>
 					) : (
 						<span className="font-heading text-5xl font-bold leading-none tabular-nums">
-							{total === null ? "…" : formatZec(total)}{" "}
+							{total === null ? (
+								"…"
+							) : (
+								<DiscreetValue kind="zec">{formatZec(total)}</DiscreetValue>
+							)}{" "}
 							<span className="text-2xl font-normal text-muted-foreground">
 								ZEC
 							</span>

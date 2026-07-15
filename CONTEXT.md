@@ -59,6 +59,10 @@ _Avoid_: message, comment
 The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one. Mainnet uses a default the user can change later; regtest requires the user to supply it during onboarding.
 _Avoid_: server, endpoint, node
 
+**Anchor**:
+The block hash recorded at import, at the lower of the Birthday and the chain tip. It is the Wallet's proof of which chain incarnation it synced, verified against the Indexer before every sync round and before any Indexer change. A mismatch refuses to sync and surfaces as a Wrong chain state rather than grinding against a chain the Wallet never saw. A Wallet imported before Anchors existed adopts one after its next successful round.
+_Avoid_: checkpoint, pin, genesis hash
+
 **Passphrase**:
 The single secret set during onboarding. It encrypts every Wallet file at rest, and re-entering it is what clears the Session lock. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a full restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
 _Avoid_: password, PIN
@@ -98,3 +102,7 @@ _Avoid_: price feed, provider (as the concept name), oracle
 **Confidence**:
 How much a Fiat value can be trusted. High when several Price sources agreed on the mark, low when it came from a single source, such as the bundled historical tail. Separate from divergence, which flags marks whose sources disagreed beyond a threshold.
 _Avoid_: accuracy, quality, trust score
+
+**Discreet mode**:
+The toggle that obscures a Wallet's sensitive data from onlookers: amounts (ZEC and Fiat value), transaction dates, transaction block heights, txids and explorer links (a txid resolves to everything else on a block explorer), Memo text, and addresses. Direction, status, sync progress, the ATH standing, and the balance chart's curve remain visible. It applies everywhere the data appears, including desktop notifications, which drop amount and direction while it is on, and it persists across restarts. A shield against shoulder surfing and screen shares rather than a cryptographic protection, and unrelated to the Session lock.
+_Avoid_: privacy mode, hidden balances, incognito

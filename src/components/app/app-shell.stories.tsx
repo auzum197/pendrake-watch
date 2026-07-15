@@ -54,6 +54,9 @@ export const Synced: Story = { args: { sync: synced } };
 export const Unreachable: Story = {
   args: { sync: { ...synced, state: "error", unreachable: true } },
 };
+export const WrongChain: Story = {
+  args: { sync: { ...synced, state: "error", wrongChain: true } },
+};
 export const NoWallet: Story = {
   args: { wallet: null, sync: null },
 };

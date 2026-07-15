@@ -25,7 +25,17 @@ pub async fn serve(service: Arc<WalletService>, paths: Paths) -> Result<()> {
     tracing::info!("listening on {endpoint}");
 
     loop {
-        let conn = listener.accept().await.context("accept failed")?;
+        // An accept error is one failed connection (the OS aborts handshakes
+        // under load), not a reason to go deaf: a daemon that keeps syncing but
+        // refuses every connection strands the GUI with no way back short of a
+        // kill. Log and keep accepting.
+        let conn = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                tracing::warn!("accept failed: {e}");
+                continue;
+            }
+        };
         let service = Arc::clone(&service);
         tokio::spawn(async move {
             if let Err(e) = handle_conn(conn, service).await {

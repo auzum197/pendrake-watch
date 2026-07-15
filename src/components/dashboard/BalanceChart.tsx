@@ -27,6 +27,7 @@ import {
 	ChartTooltipContent,
 	type ChartConfig,
 } from "@/components/ui/chart";
+import { useMasked } from "@/lib/discreet";
 import { type BalancePoint, formatUsd } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
 import "./balance-chart.css";
@@ -200,6 +201,10 @@ function BalanceChartImpl({
 	denom?: Denom;
 }) {
 	const usd = denom === "usd";
+	// Discreet mode keeps the curve but dots out both axes and drops the tooltip
+	// (every line in it is on the sensitive list). Ticks swap instantly rather than
+	// scrambling: they're SVG text inside recharts, not our HTML spans.
+	const masked = useMasked();
 	// Axis bounds come off the full history so the peak is never clipped, but the line
 	// itself renders a thinned series so recharts isn't handed thousands of points.
 	const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
@@ -313,7 +318,9 @@ function BalanceChartImpl({
 					type="number"
 					domain={xDomain}
 					ticks={[...labelByX.keys()]}
-					tickFormatter={(v) => labelByX.get(v) ?? ""}
+					tickFormatter={(v) =>
+						labelByX.has(v) ? (masked ? "•• •••" : (labelByX.get(v) ?? "")) : ""
+					}
 					tickLine={false}
 					axisLine={false}
 					tickMargin={8}
@@ -321,13 +328,13 @@ function BalanceChartImpl({
 				<YAxis
 					domain={[0, max]}
 					ticks={ticks}
-					tickFormatter={fmtAxis}
+					tickFormatter={(v) => (masked ? "•••••" : fmtAxis(v))}
 					tickLine={false}
 					axisLine={false}
 					width={yWidth}
 					tickMargin={8}
 				/>
-				<ChartTooltip
+				{!masked && <ChartTooltip
 					isAnimationActive={false}
 					cursor={{ stroke: "var(--color-brand)", strokeOpacity: 0.25 }}
 					content={
@@ -368,7 +375,7 @@ function BalanceChartImpl({
 							}}
 						/>
 					}
-				/>
+				/>}
 				<Area
 					dataKey="value"
 					type={usd ? "monotone" : "stepAfter"}

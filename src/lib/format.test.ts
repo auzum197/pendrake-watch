@@ -9,6 +9,7 @@ import {
   isSynced,
   priceLookup,
   splitAddress,
+  syncLabel,
   txHasMemo,
   txsToCsv,
 } from "./format";
@@ -52,6 +53,25 @@ describe("isSynced", () => {
         sync({ syncedHeight: 2_000_000, chainTip: 2_000_000, percent: 6 }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("syncLabel", () => {
+  it("names a plain error a sync error", () => {
+    expect(syncLabel(sync({ state: "error" }))).toBe("Sync error");
+  });
+
+  it("names a chain-identity failure a wrong chain", () => {
+    expect(syncLabel(sync({ state: "error", wrongChain: true }))).toBe(
+      "Wrong chain",
+    );
+  });
+
+  it("keeps wrongChain out of non-error states", () => {
+    // The flag only refines an error; a syncing snapshot reads as syncing.
+    expect(syncLabel(sync({ percent: 40, wrongChain: true }))).toBe(
+      "Syncing… 40%",
+    );
   });
 });
 

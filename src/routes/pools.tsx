@@ -11,6 +11,10 @@ import { Sparkline } from "@/components/pools/sparkline";
 import { useNotesData } from "@/hooks/use-notes-data";
 import { useWalletData } from "@/hooks/use-wallet-data";
 import { formatNoteAmount, formatZec } from "@/lib/format";
+import {
+	DiscreetValue,
+	type DiscreetKind,
+} from "@/components/ui/discreet-value";
 import type { Pool } from "@/lib/ipc";
 import { type PoolStat, poolStats } from "@/lib/pools";
 import { animationsEnabled } from "@/lib/motion";
@@ -114,6 +118,7 @@ function PoolCard({ stat }: { stat: PoolStat }) {
 						<Stat
 							label="Last activity"
 							value={lastActivity(stat.lastActivity)}
+							discreet="date"
 						/>
 					</div>
 				</div>
@@ -160,12 +165,14 @@ function PoolCard({ stat }: { stat: PoolStat }) {
 					<div className="mt-5 grid grid-cols-2 gap-x-12 gap-y-5 border-t border-border pt-5 sm:grid-cols-4">
 						<Stat
 							label="Largest note"
+							discreet="zec"
 							{...(stat.largest != null
 								? formatNoteAmount(stat.largest)
 								: { value: "—" })}
 						/>
 						<Stat
 							label="Smallest note"
+							discreet="zec"
 							{...(stat.smallest != null
 								? formatNoteAmount(stat.smallest)
 								: { value: "—" })}
@@ -183,10 +190,14 @@ function Stat({
 	label,
 	value,
 	unit,
+	discreet,
 }: {
 	label: string;
 	value: string;
 	unit?: string;
+	// Set on stats carrying sensitive values (amounts, dates); Share and Notes
+	// count render plain. The "—" placeholder is a nothing-state, never masked.
+	discreet?: DiscreetKind;
 }) {
 	return (
 		<div>
@@ -194,7 +205,11 @@ function Stat({
 				{label}
 			</div>
 			<div className="mt-2 font-heading text-3xl font-bold tabular-nums">
-				{value}
+				{discreet && value !== "—" ? (
+					<DiscreetValue kind={discreet}>{value}</DiscreetValue>
+				) : (
+					value
+				)}
 				{unit && (
 					<span className="ml-1.5 text-base font-normal text-muted-foreground">
 						{unit}
@@ -220,7 +235,7 @@ function NetFlow({ flow }: { flow: bigint }) {
 				}`}
 			>
 				{positive ? "+" : "−"}
-				{formatZec(abs)}
+				<DiscreetValue kind="zec">{formatZec(abs)}</DiscreetValue>
 				<span className="ml-1.5 text-base font-normal text-muted-foreground">
 					ZEC
 				</span>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { hydrateDiscreet } from "@/lib/discreet";
 import {
   getAddresses,
   getBalance,
@@ -97,6 +98,8 @@ export function useWalletData(): WalletData {
         if (!active) return;
         cache.wallet = state;
         setWallet(state);
+        // Keep the Discreet-mode mirror in step with the daemon's persisted flag.
+        hydrateDiscreet(state.discreet ?? false);
         setError(null);
         if (state.exists) {
           const addrs = await getAddresses().catch(() => []);
@@ -143,6 +146,7 @@ export function useWalletData(): WalletData {
                   state: "error",
                   error: ev.message,
                   unreachable: ev.unreachable ?? false,
+                  wrongChain: ev.wrongChain ?? false,
                 }
               : prev,
           );
