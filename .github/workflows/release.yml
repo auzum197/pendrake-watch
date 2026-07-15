@@ -6,6 +6,9 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     name: Build macOS (x86_64 + ARM64)
@@ -30,6 +33,9 @@ jobs:
             crates
             src-tauri
 
+      - name: Install protoc
+        run: brew install protobuf
+
       - name: Build macOS helper
         run: scripts/build-macos-helper.sh
         env:
@@ -46,32 +52,24 @@ jobs:
           mkdir -p src-tauri/binaries
           cp "crates/target/release/pendraked" "src-tauri/binaries/pendraked-$(rustc -vV | sed -n 's/host: //p')"
 
-      - name: Build and sign
+      - name: Build
         run: pnpm tauri build
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ""
 
-      - name: Notarize and staple DMG
+      - name: Find and rename DMG
         run: |
-          DMG="src-tauri/target/release/bundle/macos/Pendrake Watch.dmg"
+          # Find the DMG (could be in dmg or macos directory)
+          DMG=$(find src-tauri/target/release/bundle -name "*.dmg" -type f | head -1)
+
+          if [ -z "$DMG" ]; then
+            echo "Error: No DMG found"
+            exit 1
+          fi
 
           # Extract version from git tag
           VERSION="${{ github.ref }}"
           VERSION="${VERSION##*/v}"
-
-          # Notarize the DMG
-          xcrun notarytool submit "$DMG" \
-            --apple-id "${{ secrets.APPLE_ID }}" \
-            --password "${{ secrets.APPLE_PASSWORD }}" \
-            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
-            --wait
-
-          # Staple the notarization ticket to the DMG
-          xcrun stapler staple "$DMG"
 
           # Rename for release
           mv "$DMG" "Pendrake-Watch-${VERSION}.dmg"
@@ -117,7 +115,8 @@ jobs:
             librsvg2-dev \
             libxdo-dev \
             libssl-dev \
-            build-essential
+            build-essential \
+            protobuf-compiler
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -165,6 +164,9 @@ jobs:
           workspaces: |
             crates
             src-tauri
+
+      - name: Install protoc
+        run: choco install protoc -y
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
