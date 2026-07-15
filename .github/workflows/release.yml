@@ -54,8 +54,6 @@ jobs:
 
       - name: Build
         run: pnpm tauri build
-        env:
-          APPLE_SIGNING_IDENTITY: ""
 
       - name: Find and rename DMG
         run: |
