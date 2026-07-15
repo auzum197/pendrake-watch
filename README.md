@@ -4,9 +4,24 @@ A watch-only Zcash wallet that syncs continuously in the background, posts deskt
 
 Pendrake does not need to be executing in the foreground. It comes with a background service that syncs and sends notification in the background.
 
+## Showcase
+
+[![Pendrake Watch demo](https://img.youtube.com/vi/Hk5awvFrZuI/hqdefault.jpg)](https://www.youtube.com/watch?v=Hk5awvFrZuI)
+
 ## For Users
 
 Install from the [releases](https://github.com/zcash/pendrake-watch/releases). On first run, paste your UFVK. The app locks behind a passphrase and syncs in the background.
+
+### macOS Security Warning
+
+The DMG is currently unsigned and unnotarized. When you first run it, macOS will show a security warning saying the app is from an unidentified developer. To allow it:
+
+1. Try to open the app normally (it will be blocked)
+2. Go to **System Settings → Privacy & Security → Security**
+3. Scroll down to the blocked app and click **Allow anyway**
+4. Try opening again and click **Open**
+
+Notarization is [in progress](#todo) and will be added to future releases.
 
 ## For Developers
 
@@ -89,3 +104,7 @@ just check
 ```
 
 All tests pass. The repo uses the [Anchor](docs/adr/0010-chain-identity-anchor.md) to pin chain identity at import and refuse to sync if the chain is swapped.
+
+## TODO
+
+- **macOS notarization** — CI workflow is configured but needs to be verified working end-to-end. Once successful, users won't see security warnings when opening the DMG.
