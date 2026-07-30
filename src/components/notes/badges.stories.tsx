@@ -8,7 +8,7 @@ import {
   StatusBadge,
 } from "./badges";
 
-const pools: Pool[] = ["orchard", "sapling", "transparent"];
+const pools: Pool[] = ["ironwood", "orchard", "sapling", "transparent"];
 
 const meta = {
   component: PoolBadge,

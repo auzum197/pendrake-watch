@@ -8,6 +8,7 @@ import {
 } from "@/components/notes/notes-skeleton";
 import { NotesTable } from "@/components/notes/notes-table";
 import { useNotesData } from "@/hooks/use-notes-data";
+import { useWalletData } from "@/hooks/use-wallet-data";
 import { useTweenNumber } from "@/hooks/use-tween-number";
 import {
 	type Filter,
@@ -18,26 +19,57 @@ import {
 	sortNotes,
 	sumSpendable,
 } from "@/lib/notes";
+import { POOLS } from "@/lib/pools";
 import { animationsEnabled } from "@/lib/motion";
 import type { Pool, WalletNote } from "@/lib/ipc";
 import "@/components/app/reveal.css";
 
-const FILTERS: { key: Filter; label: string }[] = [
+const STATUS_FILTERS: { key: Filter; label: string }[] = [
 	{ key: "all", label: "All notes" },
 	{ key: "unspent", label: "Unspent" },
 	{ key: "spent", label: "Spent" },
 	{ key: "pending", label: "Pending" },
 	{ key: "change", label: "Change" },
-	{ key: "orchard", label: "Orchard" },
-	{ key: "sapling", label: "Sapling" },
 ];
+
+// Shielded pools get a filter tab; transparent has a summary card but no tab. Order
+// matches the Pools view, and each tab shows only when its pool is active on the
+// network.
+const POOL_FILTERS: { key: Filter; label: string; pool: Pool }[] = [
+	{ key: "ironwood", label: "Ironwood", pool: "ironwood" },
+	{ key: "orchard", label: "Orchard", pool: "orchard" },
+	{ key: "sapling", label: "Sapling", pool: "sapling" },
+];
+
+const POOL_LABEL: Record<Pool, string> = {
+	ironwood: "Ironwood",
+	orchard: "Orchard",
+	sapling: "Sapling",
+	transparent: "Transparent",
+};
 
 export function NotesPage() {
 	const { notes, loaded, error } = useNotesData();
+	const { wallet } = useWalletData();
 	const [filter, setFilter] = useState<Filter>("all");
 	const [query, setQuery] = useState("");
 	const [sort, setSort] = useState<Sort>({ key: "idx", dir: "asc" });
 	const [reveal] = useState(animationsEnabled);
+
+	// A pool shows only when it's active on the wallet's network. A daemon that predates
+	// the field reports no set, so fall back to the pre-Ironwood pools.
+	const active = wallet?.activePools;
+	const shownPools = useMemo(
+		() => POOLS.filter((p) => (active ? active.includes(p) : p !== "ironwood")),
+		[active],
+	);
+	const filters = useMemo(
+		() => [
+			...STATUS_FILTERS,
+			...POOL_FILTERS.filter((f) => shownPools.includes(f.pool)),
+		],
+		[shownPools],
+	);
 
 	const visible = useMemo(
 		() =>
@@ -80,7 +112,11 @@ export function NotesPage() {
 			)}
 
 			{loaded ? (
-				<SummaryBar notes={visible} className={reveal ? "reveal-up" : ""} />
+				<SummaryBar
+					notes={visible}
+					pools={shownPools}
+					className={reveal ? "reveal-up" : ""}
+				/>
 			) : (
 				<SummaryBarSkeleton />
 			)}
@@ -94,7 +130,11 @@ export function NotesPage() {
 						style={reveal ? { animationDelay: "60ms" } : undefined}
 					>
 						<div className="flex items-center justify-between gap-3">
-							<FilterControls active={filter} onChange={setFilter} />
+							<FilterControls
+								filters={filters}
+								active={filter}
+								onChange={setFilter}
+							/>
 							<div className="relative shrink-0">
 								<IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 								<input
@@ -131,15 +171,17 @@ export function NotesPage() {
 }
 
 function FilterControls({
+	filters,
 	active,
 	onChange,
 }: {
+	filters: { key: Filter; label: string }[];
 	active: Filter;
 	onChange: (filter: Filter) => void;
 }) {
 	return (
 		<div className="flex flex-wrap gap-1.5">
-			{FILTERS.map((f) => {
+			{filters.map((f) => {
 				const on = f.key === active;
 				return (
 					<button
@@ -163,22 +205,28 @@ function FilterControls({
 
 function SummaryBar({
 	notes,
+	pools,
 	className,
 }: {
 	notes: WalletNote[];
+	pools: Pool[];
 	className?: string;
 }) {
-	// Each card sums the visible, unspent set (optionally one pool), so the bar always
-	// answers "what's spendable in what I'm looking at".
+	// Total spendable, then one card per pool active on the network. Each sums the
+	// visible, unspent set (optionally one pool), so the bar always answers "what's
+	// spendable in what I'm looking at".
 	const cards: { label: string; pool?: Pool }[] = [
 		{ label: "Total spendable" },
-		{ label: "Orchard", pool: "orchard" },
-		{ label: "Sapling", pool: "sapling" },
-		{ label: "Transparent", pool: "transparent" },
+		...pools.map((pool) => ({ label: POOL_LABEL[pool], pool })),
 	];
 
 	return (
-		<div className={`grid grid-cols-4 gap-3 ${className ?? ""}`}>
+		<div
+			className={`grid gap-3 ${className ?? ""}`}
+			style={{
+				gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))`,
+			}}
+		>
 			{cards.map((card) => (
 				<StatCard
 					key={card.label}

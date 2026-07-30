@@ -105,4 +105,14 @@ export const walletNotes: WalletNote[] = [
     change: false,
     spentHeight: null,
   },
+  {
+    idx: 4,
+    pool: "ironwood",
+    valueZat: "42000000",
+    status: "unspent",
+    height: 2_400_200,
+    txid: "iw00iw00iw00iw00iw00",
+    change: false,
+    spentHeight: null,
+  },
 ];

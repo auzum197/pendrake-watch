@@ -13,11 +13,18 @@ serde_json = "1"
 anyhow = "1"
 tracing = "0.1"
 
-# Lazy gRPC connect so opening a wallet works offline: GrpcIndexer::new defers the
-# connection to the first RPC instead of dialing at construction. zingolib's stable-auz
-# carries the same patch, but Cargo ignores [patch] from non-root manifests, so we
-# mirror it here for our own build (auzum197/zingo-common#1).
+# Cargo ignores [patch] from non-root manifests, so we mirror zingolib's Ironwood
+# workspace patches here for our own build.
 [patch.crates-io]
+# Ironwood (NU6.3) proto fields (CompactTx.ironwoodActions, TreeState.ironwoodTree,
+# ChainMetadata.ironwoodCommitmentTreeSize). The generated code on this rev predates
+# the proto change, so consumers enable the crate's `rebuild-proto` feature (requires
+# protoc), which the zingolib workspace already turns on transitively.
+lightwallet-protocol = { git = "https://github.com/zingolabs/lightwallet-protocol-rust", rev = "9bdfdc77eb283f2a3d26c27100cc2ac90148cd93" }
+# zingolib pins a time release ahead of crates.io for the Ironwood toolchain.
+time = { git = "https://github.com/time-rs/time", tag = "v0.3.47" }
+# Lazy gRPC connect so opening a wallet works offline: GrpcIndexer::new defers the
+# connection to the first RPC instead of dialing at construction (auzum197/zingo-common#1).
 zingo-netutils = { git = "https://github.com/auzum197/zingo-common", branch = "dev" }
 
 # Release tuning for the daemon, which carries the zingolib engine and runs the

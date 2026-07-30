@@ -4,6 +4,7 @@ import {
 	IconArrowLeft,
 	IconChevronRight,
 	IconPlant,
+	IconTree,
 	IconTrees,
 } from "@tabler/icons-react";
 import { RingsIcon } from "@/components/pools/rings-icon";
@@ -16,7 +17,7 @@ import {
 	type DiscreetKind,
 } from "@/components/ui/discreet-value";
 import type { Pool } from "@/lib/ipc";
-import { type PoolStat, poolStats } from "@/lib/pools";
+import { POOLS, type PoolStat, poolStats } from "@/lib/pools";
 import { animationsEnabled } from "@/lib/motion";
 import "@/components/app/reveal.css";
 
@@ -34,6 +35,14 @@ const POOL_META: Record<
 		iconClass: string;
 	}
 > = {
+	ironwood: {
+		title: "Ironwood",
+		Icon: IconTree,
+		// A bronze tile sets the newest shielded pool apart from the brand-green ones,
+		// reading as its own thing at the top of the list.
+		tile: "bg-amber-500/15 text-amber-400",
+		iconClass: "size-8",
+	},
 	orchard: {
 		title: "Orchard",
 		Icon: IconTrees,
@@ -56,14 +65,19 @@ const POOL_META: Record<
 
 export function PoolsPage() {
 	const navigate = useNavigate();
-	const { balance, txs } = useWalletData();
+	const { balance, txs, wallet } = useWalletData();
 	const { notes } = useNotesData();
 	const [reveal] = useState(animationsEnabled);
 
-	const stats = useMemo(
-		() => poolStats(balance, txs, notes),
-		[balance, txs, notes],
-	);
+	// Show a pool only when it's active on this wallet's network. A daemon that
+	// predates the field reports no set, so fall back to the pre-Ironwood pools.
+	const active = wallet?.activePools;
+	const stats = useMemo(() => {
+		const shown = POOLS.filter((p) =>
+			active ? active.includes(p) : p !== "ironwood",
+		);
+		return poolStats(balance, txs, notes, shown);
+	}, [balance, txs, notes, active]);
 
 	return (
 		<>

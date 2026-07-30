@@ -3,8 +3,8 @@ import { confirmed, totalConfirmed } from "@/lib/format";
 
 // A pool's standing, derived from the live feed: its confirmed balance and share of
 // the total, when it last moved, a balance trend for the sparkline, and the note-level
-// breakdown the card reveals on expand. Orchard and Sapling are shielded; Transparent
-// is in the open.
+// breakdown the card reveals on expand. Ironwood, Orchard and Sapling are shielded;
+// Transparent is in the open.
 export type PoolStat = {
 	pool: Pool;
 	confirmed: bigint;
@@ -17,19 +17,23 @@ export type PoolStat = {
 	netFlow: bigint;
 };
 
-const POOLS: Pool[] = ["orchard", "sapling", "transparent"];
+// The display order. Ironwood leads so it sits at the top of the Pools view on a
+// network that schedules it. Callers pass the network's active subset (in this order)
+// to gate which pools appear; the default keeps every pool for direct unit tests.
+export const POOLS: Pool[] = ["ironwood", "orchard", "sapling", "transparent"];
 
 export function poolStats(
 	balance: Balance | null,
 	txs: Tx[],
 	notes: WalletNote[],
+	pools: Pool[] = POOLS,
 ): PoolStat[] {
 	const total = totalConfirmed(balance) ?? 0n;
 	const confirmedTxs = txs
 		.filter((t) => t.status === "confirmed")
 		.sort((a, b) => a.datetime - b.datetime);
 
-	return POOLS.map((pool) => {
+	return pools.map((pool) => {
 		const bal = confirmed(balance?.[pool]);
 		const share = total > 0n ? (Number(bal) / Number(total)) * 100 : 0;
 		const poolNotes = notes.filter((n) => n.pool === pool);

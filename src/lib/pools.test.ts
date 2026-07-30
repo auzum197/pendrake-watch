@@ -9,6 +9,7 @@ function bal(parts: Partial<Record<Pool, number>>): Balance {
 	const cell = (z?: number): PoolBalance | undefined =>
 		z === undefined ? undefined : { confirmed: String(z), total: String(z) };
 	return {
+		ironwood: cell(parts.ironwood),
 		orchard: cell(parts.orchard),
 		sapling: cell(parts.sapling),
 		transparent: cell(parts.transparent),
@@ -59,18 +60,27 @@ const get = (stats: PoolStat[], pool: Pool) =>
 describe("poolStats share", () => {
 	it("splits each pool's confirmed balance against the total", () => {
 		const stats = poolStats(
-			bal({ orchard: 6900, sapling: 2400, transparent: 700 }),
+			bal({ ironwood: 1000, orchard: 6900, sapling: 2400, transparent: 700 }),
 			[],
 			[],
 		);
-		expect(get(stats, "orchard").share).toBeCloseTo(69);
-		expect(get(stats, "sapling").share).toBeCloseTo(24);
-		expect(get(stats, "transparent").share).toBeCloseTo(7);
+		expect(get(stats, "ironwood").share).toBeCloseTo(9.09);
+		expect(get(stats, "orchard").share).toBeCloseTo(62.73);
+		expect(get(stats, "sapling").share).toBeCloseTo(21.82);
+		expect(get(stats, "transparent").share).toBeCloseTo(6.36);
 	});
 
 	it("is zero for every pool when the wallet is empty", () => {
 		const stats = poolStats(null, [], []);
-		expect(stats.map((s) => s.share)).toEqual([0, 0, 0]);
+		expect(stats.map((s) => s.share)).toEqual([0, 0, 0, 0]);
+	});
+
+	it("computes over only the pools it's given, in that order", () => {
+		const stats = poolStats(bal({ orchard: 100 }), [], [], [
+			"orchard",
+			"sapling",
+		]);
+		expect(stats.map((s) => s.pool)).toEqual(["orchard", "sapling"]);
 	});
 });
 
