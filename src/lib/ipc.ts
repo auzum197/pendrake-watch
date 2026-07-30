@@ -31,6 +31,11 @@ export type WalletState = {
 	// Whether Discreet mode is on (docs/adr/0009). The UI masks sensitive values and
 	// the daemon redacts notification text. Absent reads as false.
 	discreet?: boolean;
+	// The value pools that exist on this wallet's network, derived from its consensus
+	// activation heights. The UI shows a pool only when it's in this list, so Ironwood
+	// (NU6.3) stays hidden on networks that don't schedule it. Absent (older daemon)
+	// reads as "all pools" via the caller's fallback.
+	activePools?: Pool[];
 };
 
 export type WalletAddress = {
@@ -58,7 +63,9 @@ export type ImportUfvkInput = {
 // A UFVK declares its own network. Testnet is rejected, so a decoded key is one
 // of these two (mirrors the daemon's pendrake-ipc UfvkNetwork).
 export type UfvkNetwork = "mainnet" | "regtest";
-export type Pool = "orchard" | "sapling" | "transparent";
+// Ironwood is the NU6.3 shielded pool, present only on networks whose consensus
+// schedules it (see WalletState.activePools).
+export type Pool = "ironwood" | "orchard" | "sapling" | "transparent";
 
 export type UfvkIdentity = {
 	network: UfvkNetwork;
@@ -101,6 +108,7 @@ export type PoolBalance = {
 };
 
 export type Balance = {
+	ironwood?: PoolBalance;
 	orchard?: PoolBalance;
 	sapling?: PoolBalance;
 	transparent?: PoolBalance;

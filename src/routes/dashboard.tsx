@@ -248,7 +248,7 @@ function ChartCard({
 							]}
 						/>
 					</div>
-					{/* Opens the per-pool breakdown (Orchard/Sapling/Transparent). */}
+					{/* Opens the per-pool breakdown of the pools active on this network. */}
 					<button
 						type="button"
 						onClick={() => navigate({ to: "/pools" })}

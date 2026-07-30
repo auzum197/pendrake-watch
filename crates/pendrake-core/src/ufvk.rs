@@ -123,8 +123,12 @@ mod tests {
 
     #[test]
     fn fingerprint_is_stable_and_network_bound() {
-        let main = parse_ufvk(&sample_ufvk(NetworkType::Main)).unwrap().fingerprint;
-        let again = parse_ufvk(&sample_ufvk(NetworkType::Main)).unwrap().fingerprint;
+        let main = parse_ufvk(&sample_ufvk(NetworkType::Main))
+            .unwrap()
+            .fingerprint;
+        let again = parse_ufvk(&sample_ufvk(NetworkType::Main))
+            .unwrap()
+            .fingerprint;
         let regtest = parse_ufvk(&sample_ufvk(NetworkType::Regtest))
             .unwrap()
             .fingerprint;

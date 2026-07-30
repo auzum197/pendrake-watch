@@ -8,6 +8,7 @@ export function confirmed(pool: Balance["orchard"]): bigint {
 export function totalConfirmed(balance: Balance | null): bigint | null {
   if (!balance) return null;
   return (
+    confirmed(balance.ironwood) +
     confirmed(balance.orchard) +
     confirmed(balance.sapling) +
     confirmed(balance.transparent)

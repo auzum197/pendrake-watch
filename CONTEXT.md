@@ -56,7 +56,7 @@ The optional text carried by a shielded Note. UTXOs carry none, and one transact
 _Avoid_: message, comment
 
 **Indexer**:
-The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one. Mainnet uses a default the user can change later; regtest requires the user to supply it during onboarding.
+The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one, chosen during onboarding and changeable later from Settings. Mainnet offers a curated region list, opening on an auto-routed default, with a custom URL alongside it; regtest has no public default, so the user must supply one.
 _Avoid_: server, endpoint, node
 
 **Anchor**:

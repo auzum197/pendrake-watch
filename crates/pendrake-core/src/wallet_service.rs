@@ -17,9 +17,9 @@ use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
     PricePoint, PriceSpot, RemoveArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
-    SetNotificationsArgs,
-    SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
-    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState,
+    SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus,
+    UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote,
+    WalletState,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -27,16 +27,16 @@ use tokio::sync::{Mutex, Notify, RwLock};
 use pepper_sync::config::{PerformanceLevel, SyncConfig, TransparentAddressDiscovery};
 use pepper_sync::events::{ScanTiming, SequencedSyncEvent, SyncEvent as LibSyncEvent};
 use zcash_primitives::transaction::TxId;
-use zcash_protocol::consensus::BlockHeight;
+use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_protocol::value::Zatoshis;
 
+use pepper_sync::keys::transparent::TransparentScope;
+use pepper_sync::wallet::{IronwoodNote, OrchardNote, SaplingNote};
 use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_URI};
 use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
-use pepper_sync::wallet::{OrchardNote, SaplingNote};
-use pepper_sync::keys::transparent::TransparentScope;
 use zingolib::wallet::output::SpendStatus;
 use zingolib::wallet::summary::data::{
     Scope, TransactionKind, TransactionSummaries, TransactionSummary,
@@ -356,7 +356,9 @@ const WRONG_CHAIN_TIP_MARGIN: u32 = 100;
 #[derive(Debug, PartialEq)]
 enum ChainVerdict {
     Match,
-    WrongChain { detail: String },
+    WrongChain {
+        detail: String,
+    },
     /// No Anchor recorded and no evidence of a swap: sync proceeds, and the loop
     /// adopts an Anchor after its next good round.
     Unanchored,
@@ -439,9 +441,17 @@ fn indexer_probe_error<E: std::fmt::Display>(err: &E) -> anyhow::Error {
     let raw = err.to_string();
     tracing::debug!("indexer probe failed: {raw}");
     let lower = raw.to_lowercase();
-    let unreachable = ["unavailable", "connect", "refused", "dns", "timed out", "timeout", "deadline"]
-        .iter()
-        .any(|sig| lower.contains(sig));
+    let unreachable = [
+        "unavailable",
+        "connect",
+        "refused",
+        "dns",
+        "timed out",
+        "timeout",
+        "deadline",
+    ]
+    .iter()
+    .any(|sig| lower.contains(sig));
     if unreachable {
         anyhow!("couldn't reach that server. Check the address and that the server is running.")
     } else {
@@ -710,6 +720,7 @@ impl WalletService {
     async fn wallet_state(&self) -> WalletState {
         let locked = self.session_locked.load(Ordering::SeqCst);
         let session_held = self.session_passphrase.lock().await.is_some();
+        let chain_tip = self.sync.read().await.chain_tip;
         match &*self.meta.read().await {
             Some(m) => WalletState {
                 exists: true,
@@ -724,6 +735,7 @@ impl WalletService {
                 notifications_enabled: m.notifications_enabled,
                 fiat_enabled: m.fiat_enabled,
                 discreet: m.discreet,
+                active_pools: active_pools(m.network, chain_tip),
             },
             None => WalletState {
                 exists: false,
@@ -738,6 +750,7 @@ impl WalletService {
                 notifications_enabled: true,
                 fiat_enabled: false,
                 discreet: false,
+                active_pools: active_pools(Network::Mainnet, chain_tip),
             },
         }
     }
@@ -806,6 +819,17 @@ impl WalletService {
                 matches!(n.scope, Scope::Internal),
             );
         }
+        for n in wallet.note_summaries::<IronwoodNote>(true).iter() {
+            push(
+                Pool::Ironwood,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
         for n in wallet.note_summaries::<SaplingNote>(true).iter() {
             push(
                 Pool::Sapling,
@@ -844,8 +868,7 @@ impl WalletService {
 
         if let Ok(summaries) = client.transaction_summaries(true).await {
             let spent_by = spent_value_by_tx(&summaries);
-            *self.txs.write().await =
-                summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
+            *self.txs.write().await = summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
         }
         if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
             *self.balance.write().await = Some(map_balance(&bal));
@@ -1642,13 +1665,20 @@ impl WalletService {
                 tip,
                 total_sapling_outputs,
                 total_orchard_outputs,
+                total_ironwood_outputs,
                 already_scanned_sapling_outputs,
                 already_scanned_orchard_outputs,
+                already_scanned_ironwood_outputs,
                 ..
             } => {
-                view.total_outputs = u64::from(total_sapling_outputs + total_orchard_outputs);
-                view.scanned_outputs =
-                    u64::from(already_scanned_sapling_outputs + already_scanned_orchard_outputs);
+                view.total_outputs = u64::from(
+                    total_sapling_outputs + total_orchard_outputs + total_ironwood_outputs,
+                );
+                view.scanned_outputs = u64::from(
+                    already_scanned_sapling_outputs
+                        + already_scanned_orchard_outputs
+                        + already_scanned_ironwood_outputs,
+                );
                 view.synced_height = u32::from(sync_start_height);
                 view.chain_tip = u32::from(tip);
                 // Arm the live edge from the round's true start, before any tip-first
@@ -1667,13 +1697,14 @@ impl WalletService {
                 priority,
                 sapling_outputs,
                 orchard_outputs,
+                ironwood_outputs,
             } => {
                 let range = height_range(&range);
                 view.in_flight.retain(|b| b.range != range);
                 view.in_flight.push(Batch {
                     range,
                     priority: format!("{priority:?}"),
-                    outputs: u64::from(sapling_outputs + orchard_outputs),
+                    outputs: u64::from(sapling_outputs + orchard_outputs + ironwood_outputs),
                     phase: BatchPhase::Scanning,
                     phase_since: Instant::now(),
                     phase_started_ms: now_ms(),
@@ -1700,10 +1731,11 @@ impl WalletService {
                 priority,
                 sapling_outputs,
                 orchard_outputs,
+                ironwood_outputs,
                 timing,
             } => {
                 let range = height_range(&range);
-                let outputs = u64::from(sapling_outputs + orchard_outputs);
+                let outputs = u64::from(sapling_outputs + orchard_outputs + ironwood_outputs);
                 view.scanned_outputs += outputs;
                 view.synced_height = view.synced_height.max(range.end);
                 view.timing_log.push_back((outputs, timing));
@@ -1830,7 +1862,14 @@ impl WalletService {
     /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
     /// `synced_height` past N before the older blocks are walked, so a stale
     /// transaction found after the jump would otherwise notify.
-    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
+    async fn notify_tx(
+        &self,
+        txid: &str,
+        received: bool,
+        value: u64,
+        confirmed: bool,
+        height: u32,
+    ) {
         let target = self.scan_target().await;
         let live = if confirmed { height >= target } else { true };
         if let Disposition::Notify = self.notify.classify(txid, live) {
@@ -1851,7 +1890,10 @@ impl WalletService {
             } else {
                 let amount = format_amount(value);
                 if received {
-                    ("Funds received", format!("{amount} arrived in your wallet."))
+                    (
+                        "Funds received",
+                        format!("{amount} arrived in your wallet."),
+                    )
                 } else {
                     ("Funds sent", format!("{amount} sent from your wallet."))
                 }
@@ -1880,7 +1922,9 @@ impl WalletService {
             let wallet = client.wallet().read().await;
             if let Ok(status) = pepper_sync::sync_status(&*wallet).await {
                 view.scanned_outputs = u64::from(
-                    status.total_sapling_outputs_scanned + status.total_orchard_outputs_scanned,
+                    status.total_sapling_outputs_scanned
+                        + status.total_orchard_outputs_scanned
+                        + status.total_ironwood_outputs_scanned,
                 );
                 view.timing_log.clear();
                 view.aggregate_log.clear();
@@ -2056,6 +2100,34 @@ fn chain_of(network: Network) -> ChainType {
     }
 }
 
+/// The value pools that are live on `network` at `chain_tip`. A shielded pool shows
+/// only once its network upgrade has activated (the chain has reached its activation
+/// height), so the GUI hides a pool that isn't active where the Wallet connects.
+/// Transparent predates the upgrade mechanism and is always present. Ironwood rides
+/// NU6.3, whose mainnet activation is a future height, so it stays hidden on mainnet
+/// until the chain reaches it, and shows on a regtest that activates NU6.3 at genesis.
+fn active_pools(network: Network, chain_tip: u32) -> Vec<Pool> {
+    let chain = chain_of(network);
+    let active = |nu| {
+        chain
+            .activation_height(nu)
+            .map(u32::from)
+            .is_some_and(|h| chain_tip >= h)
+    };
+    let mut pools = Vec::new();
+    if active(NetworkUpgrade::Nu6_3) {
+        pools.push(Pool::Ironwood);
+    }
+    if active(NetworkUpgrade::Nu5) {
+        pools.push(Pool::Orchard);
+    }
+    if active(NetworkUpgrade::Sapling) {
+        pools.push(Pool::Sapling);
+    }
+    pools.push(Pool::Transparent);
+    pools
+}
+
 fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2092,8 +2164,13 @@ fn spent_value_by_tx(summaries: &TransactionSummaries) -> HashMap<String, u64> {
             .orchard_notes
             .iter()
             .map(|n| (n.spend_status, n.value))
+            .chain(s.ironwood_notes.iter().map(|n| (n.spend_status, n.value)))
             .chain(s.sapling_notes.iter().map(|n| (n.spend_status, n.value)))
-            .chain(s.transparent_coins.iter().map(|c| (c.spend_summary, c.value)));
+            .chain(
+                s.transparent_coins
+                    .iter()
+                    .map(|c| (c.spend_summary, c.value)),
+            );
         for (status, value) in outputs {
             if let SpendStatus::Spent(txid) = status {
                 *spent_by.entry(txid.to_string()).or_insert(0) += value;
@@ -2116,6 +2193,7 @@ fn map_tx(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> Tx {
         .orchard_notes
         .iter()
         .map(|n| n.value)
+        .chain(s.ironwood_notes.iter().map(|n| n.value))
         .chain(s.sapling_notes.iter().map(|n| n.value))
         .chain(s.transparent_coins.iter().map(|c| c.value))
         .sum();
@@ -2159,6 +2237,7 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
 
     for (pool, vec) in [
         (Pool::Orchard, &s.orchard_notes),
+        (Pool::Ironwood, &s.ironwood_notes),
         (Pool::Sapling, &s.sapling_notes),
     ] {
         for n in vec {
@@ -2185,6 +2264,7 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
 
     for (pool, vec) in [
         (Pool::Orchard, &s.outgoing_orchard_notes),
+        (Pool::Ironwood, &s.outgoing_ironwood_notes),
         (Pool::Sapling, &s.outgoing_sapling_notes),
     ] {
         for n in vec {
@@ -2265,6 +2345,7 @@ fn map_wallet_note(
 
 fn map_balance(bal: &AccountBalance) -> Balance {
     Balance {
+        ironwood: pool_balance(bal.confirmed_ironwood_balance, bal.total_ironwood_balance),
         orchard: pool_balance(bal.confirmed_orchard_balance, bal.total_orchard_balance),
         sapling: pool_balance(bal.confirmed_sapling_balance, bal.total_sapling_balance),
         transparent: pool_balance(
@@ -2311,7 +2392,11 @@ mod tests {
 
     // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
     // at `target`, so `notify_tx` runs the real policy without a live client.
-    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+    async fn service_with_spy(
+        name: &str,
+        spy: Arc<SpyNotifier>,
+        target: u32,
+    ) -> Arc<WalletService> {
         let service = WalletService::load(test_paths(name), spy).await.unwrap();
         *service.meta.write().await = Some(Meta {
             network: Network::Mainnet,
@@ -2336,7 +2421,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-live", spy.clone(), 100).await;
         // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
-        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txlive", true, 42_000_000, true, 120)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "Funds received");
@@ -2357,7 +2444,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
         // Mempool is live regardless of height, so a send notifies right away.
-        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        service
+            .notify_tx("txmempool", false, 10_000_000, false, 0)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "Funds sent");
@@ -2367,8 +2456,12 @@ mod tests {
     async fn the_same_live_transaction_notifies_once() {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-once", spy.clone(), 100).await;
-        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
-        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txdup", true, 42_000_000, true, 120)
+            .await;
+        service
+            .notify_tx("txdup", true, 42_000_000, true, 120)
+            .await;
         assert_eq!(spy.calls().len(), 1);
     }
 
@@ -2377,7 +2470,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-off", spy.clone(), 100).await;
         service.notifications_enabled.store(false, Ordering::SeqCst);
-        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txoff", true, 42_000_000, true, 120)
+            .await;
         assert!(spy.calls().is_empty());
     }
 
@@ -2386,7 +2481,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-discreet", spy.clone(), 100).await;
         service.discreet.store(true, Ordering::SeqCst);
-        service.notify_tx("txhush", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txhush", true, 42_000_000, true, 120)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         // Neither amount nor direction leaks; the deep link still opens the tx.
@@ -2446,7 +2543,10 @@ mod tests {
         let id = txid(0x11);
 
         service
-            .on_tx_summary(id, &summary_at(0x11, TransactionKind::Received, 42_000_000, 120))
+            .on_tx_summary(
+                id,
+                &summary_at(0x11, TransactionKind::Received, 42_000_000, 120),
+            )
             .await;
 
         // The summary's kind, value and height flow to the movement toast.
@@ -2455,10 +2555,20 @@ mod tests {
         assert_eq!(calls[0].0, "Funds received");
         assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}"));
         // ...and to the cache the GUI reads.
-        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(service
+            .txs
+            .read()
+            .await
+            .iter()
+            .any(|t| t.txid == id.to_string()));
         // ...and to the broadcast the GUI folds in.
         match events.try_recv().unwrap() {
-            SyncEvent::Transaction { txid, kind, value_zat, received } => {
+            SyncEvent::Transaction {
+                txid,
+                kind,
+                value_zat,
+                received,
+            } => {
                 assert_eq!(txid, id.to_string());
                 assert_eq!(kind, TxKind::Received);
                 assert_eq!(value_zat, "42000000");
@@ -2501,11 +2611,19 @@ mod tests {
         // Confirmed below the target: the extracted height drives the policy's silent
         // path, yet the cache and event still update so the GUI stays consistent.
         service
-            .on_tx_summary(id, &summary_at(0x33, TransactionKind::Received, 42_000_000, 50))
+            .on_tx_summary(
+                id,
+                &summary_at(0x33, TransactionKind::Received, 42_000_000, 50),
+            )
             .await;
 
         assert!(spy.calls().is_empty());
-        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(service
+            .txs
+            .read()
+            .await
+            .iter()
+            .any(|t| t.txid == id.to_string()));
         assert!(matches!(
             events.try_recv().unwrap(),
             SyncEvent::Transaction { .. }
@@ -2903,9 +3021,11 @@ mod tests {
                     BasicNoteSummary::from_parts(value, status, i as u32, None)
                 })
                 .collect(),
+            ironwood_notes: vec![],
             sapling_notes: vec![],
             transparent_coins: vec![],
             outgoing_orchard_notes: vec![],
+            outgoing_ironwood_notes: vec![],
             outgoing_sapling_notes: vec![],
             outgoing_transparent_coins: vec![],
         }
@@ -2940,6 +3060,28 @@ mod tests {
         let spent_by = spent_value_by_tx(&history);
         let total: i64 = history.iter().map(|s| net_of(s, &spent_by)).sum();
         assert_eq!(total, 30);
+    }
+
+    // A pool shows only once its upgrade has activated on the connected chain. The
+    // activation heights come from zingolib's ChainType (Parameters), not from us; we
+    // only compare them against the reported tip.
+    #[test]
+    fn active_pools_gate_on_the_chain_tip() {
+        // NU6.3 (Ironwood) activates at a future mainnet height, so a tip below it lists
+        // every long-live pool but not Ironwood.
+        let below = active_pools(Network::Mainnet, 3_000_000);
+        assert_eq!(below, vec![Pool::Orchard, Pool::Sapling, Pool::Transparent],);
+
+        // Once the chain reaches NU6.3's height, Ironwood joins at the front.
+        let above = active_pools(Network::Mainnet, 3_500_000);
+        assert!(above.contains(&Pool::Ironwood));
+
+        // Regtest activates every upgrade at genesis, so a chain with any blocks is
+        // fully live, Ironwood included.
+        assert!(active_pools(Network::Regtest, 10).contains(&Pool::Ironwood));
+
+        // A chain with no blocks yet only has the always-present transparent pool.
+        assert_eq!(active_pools(Network::Mainnet, 0), vec![Pool::Transparent]);
     }
 
     // A plain external receive credits the full received value: nothing of the wallet's

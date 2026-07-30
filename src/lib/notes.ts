@@ -22,6 +22,7 @@ export type Filter =
   | "spent"
   | "pending"
   | "change"
+  | "ironwood"
   | "orchard"
   | "sapling";
 
@@ -73,6 +74,7 @@ export function matchesFilter(note: WalletNote, filter: Filter): boolean {
       return note.status === filter;
     case "change":
       return note.change;
+    case "ironwood":
     case "orchard":
     case "sapling":
       return note.pool === filter;

@@ -8,18 +8,18 @@ description = "Pendrake core: zingolib watch-only wallet construction and wallet
 [dependencies]
 pendrake-ipc = { path = "../pendrake-ipc" }
 
-zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
-pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
+zingolib = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
+pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
 # GrpcIndexer + the Indexer trait, to probe a candidate Indexer with a real
 # GetLightdInfo call before saving it. Same version track as zingolib's workspace so
 # the GrpcIndexer/tonic types unify.
-zingo-netutils = "5"
-# Versions track zingolib's workspace so shared types unify (one zcash_protocol).
-zcash_protocol = "0.9"
+zingo-netutils = "5.0.1"
+# Versions track zingolib's Ironwood workspace so shared types unify (one zcash_protocol).
+zcash_protocol = "0.10"
 # TxId, carried by the sync events and accepted by transaction_summary.
-zcash_primitives = "0.28"
+zcash_primitives = "0.29"
 # UFVK decoding for the identity slice: network, pools, and fingerprint off the key.
-zcash_address = "0.12"
+zcash_address = "0.13"
 zip32 = "0.2"
 # Hashes the canonical UFVK encoding into a stable fingerprint.
 sha2 = "0.10"
@@ -58,6 +58,8 @@ tonic = "0.14"
 # Isolated data dir per single-instance test, cleaned up on drop.
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
-# net-delta tests feed through map_tx. Pinned to the version zingolib links so the
-# type unifies (a git copy resolves to a distinct, incompatible ConfirmationStatus).
-zingo-status = "0.2"
+# net-delta tests feed through map_tx. The Ironwood workspace links zingo-status as a
+# path member rather than a crates.io release, so we pull it from the same git source
+# to get the identical type (a crates.io copy resolves to a distinct, incompatible
+# ConfirmationStatus and drags in a second zcash_protocol).
+zingo-status = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }

@@ -113,6 +113,12 @@ pub struct WalletState {
     /// new-transaction notification text (docs/adr/0009).
     #[serde(default)]
     pub discreet: bool,
+    /// The value pools that exist on this Wallet's network, derived from its consensus
+    /// activation heights. Transparent and the long-live shielded pools are always
+    /// present on mainnet; Ironwood (NU6.3) appears only where consensus schedules it,
+    /// so the GUI hides pools that aren't active on the connected network.
+    #[serde(default)]
+    pub active_pools: Vec<Pool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -133,10 +139,12 @@ pub enum UfvkNetwork {
 }
 
 /// A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
-/// experimental typecodes are dropped rather than surfaced.
+/// experimental typecodes are dropped rather than surfaced. Ironwood is the NU6.3
+/// shielded pool, present only on networks whose consensus schedules it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Pool {
+    Ironwood,
     Orchard,
     Sapling,
     Transparent,
@@ -458,6 +466,7 @@ pub struct PoolBalance {
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
+    pub ironwood: Option<PoolBalance>,
     pub orchard: Option<PoolBalance>,
     pub sapling: Option<PoolBalance>,
     pub transparent: Option<PoolBalance>,
