@@ -120,11 +120,8 @@ export function OnboardingPage() {
 				// The daemon's resolver settles this raw choice into a height
 				// (docs/adr/0002), so the GUI never pre-resolves a date.
 				birthday: birthdayChoice(draft, network),
-				// Regtest has no universal Indexer, so its onboarding requires a custom
-				// one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
-				// (AUZ-104). Mainnet skips the step and takes the public default.
-				indexerUri:
-					network === "regtest" ? draft.indexerUri.trim() : DEFAULT_INDEXER,
+				
+				indexerUri: draft.indexerUri.trim() || DEFAULT_INDEXER,
 				network,
 				// First onboarding sets the global passphrase (docs/adr/0003). A
 				// post-Replace import omits it so the daemon reuses the held one.

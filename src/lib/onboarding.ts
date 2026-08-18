@@ -13,20 +13,17 @@ export function networkFromUfvk(ufvk: string): Network {
 		: "mainnet";
 }
 
-// The Indexer step is regtest-only: mainnet uses DEFAULT_INDEXER and skips it,
-// regtest must supply one during onboarding (CONTEXT.md "Indexer", story 13). The
-// Passphrase step is dropped when the daemon already holds the session passphrase,
-// which is the post-Replace case: the new Wallet inherits it (docs/adr/0004).
 export function onboardingSteps(
-	network: Network,
-	sessionHeld = false,
+  network: Network,
+  sessionHeld = false,
 ): OnboardingStep[] {
-	const steps: OnboardingStep[] =
-		network === "mainnet" ? ["identity"] : ["identity", "indexer"];
-	if (!sessionHeld) {
-		steps.push("passphrase");
-	}
-	return steps;
+  // Indexer comes after identity (UFVK + birthday) on every network so the
+  // user can keep the public default or point at a custom lightwalletd.
+  const steps: OnboardingStep[] = ["identity", "indexer"];
+  if (!sessionHeld) {
+    steps.push("passphrase");
+  }
+  return steps;
 }
 
 // Parse a dd/mm/yyyy field into unix seconds for midnight UTC of that day, or null
