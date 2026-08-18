@@ -1,11 +1,23 @@
 //! Filesystem layout and persisted import metadata.
 //!
-//! zingolib owns the wallet file inside `wallet_dir`. Alongside it we persist a
-//! small `meta.json` describing how the wallet was imported, so the daemon can
-//! rebuild [`pendrake_ipc::WalletState`] and reconnect after a restart. The wallet
-//! file is encrypted at rest with the global passphrase (docs/adr/0003) when
-//! `Meta.encrypted` is set. `meta.json` itself is plaintext and holds nothing
-//! secret, the viewing key lives only inside the encrypted wallet file.
+//! Layout (multi-wallet ready):
+//!
+//! ```text
+//! $PENDRAKE_DATA_DIR/
+//!   active_wallet_id      # which wallet is selected
+//!   daemon.sock
+//!   price_cache.json      # shared; public ZEC/USD only
+//!   wallets/
+//!     <id>/
+//!       meta.json
+//!       wallet/           # zingolib wallet dir
+//!       notified.json     # per-wallet seen-set
+//! ```
+//!
+//! A legacy single-wallet tree (`meta.json` + `wallet/` at the data root) is
+//! migrated once into `wallets/<id>/` on startup. zingolib owns the wallet file
+//! inside `wallet_dir`. `meta.json` is plaintext and holds nothing secret; the
+//! viewing key lives only inside the encrypted wallet file (docs/adr/0003).
 
 use std::path::{Path, PathBuf};
 
@@ -16,14 +28,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone)]
 pub struct Paths {
     pub root: PathBuf,
+    pub socket: PathBuf,
+    /// Reconciled spot + daily price series (AUZ-83). Shared across wallets.
+    pub price_cache_file: PathBuf,
+    /// `$root/wallets`.
+    pub wallets_dir: PathBuf,
+    /// File holding the active wallet id (one line).
+    pub active_id_file: PathBuf,
+    /// Set when this `Paths` is scoped to a wallet via [`Self::for_wallet`].
+    pub wallet_id: Option<String>,
+    /// zingolib wallet directory for the active (or scoped) wallet.
     pub wallet_dir: PathBuf,
     pub meta_file: PathBuf,
-    pub socket: PathBuf,
-    /// Txids already notified, so a restart doesn't re-announce past receipts.
+    /// Txids already notified for this wallet.
     pub notified_file: PathBuf,
-    /// Reconciled spot + daily price series, so the GUI opens on a value instead of a
-    /// blank while the first fetch runs (AUZ-83). Plaintext; holds nothing secret.
-    pub price_cache_file: PathBuf,
 }
 
 impl Paths {
@@ -39,20 +57,121 @@ impl Paths {
     }
 
     pub fn with_root(root: PathBuf) -> Self {
+        let wallets_dir = root.join("wallets");
         Self {
+            socket: root.join("daemon.sock"),
+            price_cache_file: root.join("price_cache.json"),
+            active_id_file: root.join("active_wallet_id"),
+            wallets_dir,
+            wallet_id: None,
+            // Placeholders until `for_wallet` / migration; legacy names kept so
+            // migrate can still see the old root files.
             wallet_dir: root.join("wallet"),
             meta_file: root.join("meta.json"),
-            socket: root.join("daemon.sock"),
             notified_file: root.join("notified.json"),
-            price_cache_file: root.join("price_cache.json"),
             root,
         }
     }
 
+    /// Scope paths to one wallet under `wallets/<id>/`.
+    pub fn for_wallet(&self, id: &str) -> Self {
+        let dir = self.wallets_dir.join(id);
+        Self {
+            wallet_id: Some(id.to_string()),
+            wallet_dir: dir.join("wallet"),
+            meta_file: dir.join("meta.json"),
+            notified_file: dir.join("notified.json"),
+            ..self.clone()
+        }
+    }
+
     pub fn ensure_dirs(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.wallet_dir)
-            .with_context(|| format!("creating data dir {}", self.wallet_dir.display()))?;
+        std::fs::create_dir_all(&self.wallets_dir).with_context(|| {
+            format!("creating wallets dir {}", self.wallets_dir.display())
+        })?;
+        if self.wallet_id.is_some() {
+            std::fs::create_dir_all(&self.wallet_dir).with_context(|| {
+                format!("creating wallet dir {}", self.wallet_dir.display())
+            })?;
+        }
         Ok(())
+    }
+
+    pub fn read_active_id(&self) -> Result<Option<String>> {
+        match std::fs::read_to_string(&self.active_id_file) {
+            Ok(s) => {
+                let id = s.trim();
+                Ok((!id.is_empty()).then(|| id.to_string()))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).context("reading active_wallet_id"),
+        }
+    }
+
+    pub fn write_active_id(&self, id: &str) -> Result<()> {
+        std::fs::write(&self.active_id_file, id.as_bytes())
+            .context("writing active_wallet_id")?;
+        Ok(())
+    }
+
+    pub fn list_wallet_ids(&self) -> Result<Vec<String>> {
+        let mut ids = Vec::new();
+        let entries = match std::fs::read_dir(&self.wallets_dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ids),
+            Err(e) => return Err(e).context("reading wallets dir"),
+        };
+        for entry in entries {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                ids.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    }
+
+    /// Move a legacy root-level wallet into `wallets/<id>/` once.
+    ///
+    /// Returns the new wallet id when a migration ran.
+    pub fn migrate_legacy_if_needed(&self) -> Result<Option<String>> {
+        let legacy_meta = self.root.join("meta.json");
+        if !legacy_meta.exists() {
+            return Ok(None);
+        }
+        // Already on the multi-wallet layout.
+        if self.read_active_id()?.is_some() {
+            return Ok(None);
+        }
+
+        let meta = Meta::load(&legacy_meta)?.context("legacy meta.json missing after exists check")?;
+        let id = meta
+            .fingerprint
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "default".to_string());
+
+        let dest = self.for_wallet(&id);
+        std::fs::create_dir_all(self.wallets_dir.join(&id)).with_context(|| {
+            format!("creating {}", self.wallets_dir.join(&id).display())
+        })?;
+
+        let legacy_wallet = self.root.join("wallet");
+        if legacy_wallet.exists() {
+            std::fs::rename(&legacy_wallet, &dest.wallet_dir)
+                .with_context(|| "moving legacy wallet/")?;
+        }
+        std::fs::rename(&legacy_meta, &dest.meta_file)
+            .with_context(|| "moving legacy meta.json")?;
+
+        let legacy_notified = self.root.join("notified.json");
+        if legacy_notified.exists() {
+            let _ = std::fs::rename(&legacy_notified, &dest.notified_file);
+        }
+
+        self.write_active_id(&id)?;
+        tracing::info!(%id, "migrated legacy wallet into wallets/<id>");
+        Ok(Some(id))
     }
 
     /// The IPC endpoint the server binds and clients connect to: the `socket` path

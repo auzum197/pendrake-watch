@@ -16,10 +16,10 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    PricePoint, PriceSpot, RemoveArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
-    SetNotificationsArgs,
-    SyncEvent, SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
-    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState,
+    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs,
+    SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
+    SyncWalletArgs, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
+    ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -509,14 +509,39 @@ fn allowed_while_locked(method: &str) -> bool {
             | "verifyPassphrase"
             | "removeWallet"
             | "subscribeEvents"
+            | "listWallets"
     )
 }
 
 impl WalletService {
+    /// Root `Paths` scoped to the active wallet id, if any. Disk layout is
+    /// multi-wallet ready (`wallets/<id>/`); the service still drives a single
+    /// active wallet at a time.
+    fn scoped_paths(&self) -> Paths {
+        match self.paths.read_active_id().ok().flatten() {
+            Some(id) => self.paths.for_wallet(&id),
+            None => self.paths.clone(),
+        }
+    }
+
+    async fn clear_read_caches(&self) {
+        *self.txs.write().await = Vec::new();
+        *self.balance.write().await = None;
+        *self.addresses.write().await = Vec::new();
+        *self.notes.write().await = Vec::new();
+    }
+
     /// Build the service, loading and resuming sync for an existing wallet.
     pub async fn load(paths: Paths, notifier: Arc<dyn Notifier>) -> Result<Arc<Self>> {
         paths.ensure_dirs()?;
-        let notify = NotificationPolicy::load(paths.notified_file.clone());
+        if let Err(e) = paths.migrate_legacy_if_needed() {
+            tracing::warn!("legacy wallet migration failed: {e:#}");
+        }
+        let active_paths = match paths.read_active_id()? {
+            Some(id) => paths.for_wallet(&id),
+            None => paths.clone(),
+        };
+        let notify = NotificationPolicy::load(active_paths.notified_file.clone());
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
         let mut price_cache = PriceCache::load(&paths.price_cache_file);
         price_cache.seed_tail();
@@ -547,7 +572,7 @@ impl WalletService {
             paths,
         });
 
-        if let Some(meta) = Meta::load(&service.paths.meta_file)? {
+        if let Some(meta) = Meta::load(&active_paths.meta_file)? {
             service.encrypted.store(meta.encrypted, Ordering::SeqCst);
             service
                 .notifications_enabled
@@ -580,10 +605,9 @@ impl WalletService {
                         // Prime the read cache before the sync loop starts contending
                         // for the wallet, so the GUI's opening queries are instant.
                         service.refresh_snapshot().await;
-                        // Reflect "syncing" right away instead of the default idle,
-                        // so the GUI doesn't flash "Synced" before the first round.
-                        service.sync.write().await.state = SyncState::Syncing;
-                        service.spawn_sync_loop();
+                        // Multi-wallet Phase 1: load snapshot only; sync starts on
+                        // explicit syncWallet from the GUI.
+                        service.sync.write().await.state = SyncState::Idle;
                     }
                     Err(e) => tracing::warn!("meta present but wallet load failed: {e}"),
                 }
@@ -591,6 +615,93 @@ impl WalletService {
         }
         service.spawn_price_loop();
         Ok(service)
+    }
+
+    pub async fn list_wallets(&self) -> Result<Vec<WalletSummary>> {
+        let active = self.paths.read_active_id()?;
+        let mut out = Vec::new();
+        for id in self.paths.list_wallet_ids()? {
+            let p = self.paths.for_wallet(&id);
+            let Some(meta) = Meta::load(&p.meta_file)? else {
+                continue;
+            };
+            let label = meta
+                .fingerprint
+                .as_ref()
+                .map(|f| f.chars().take(8).collect::<String>())
+                .unwrap_or_else(|| id.chars().take(8).collect());
+            out.push(WalletSummary {
+                id: id.clone(),
+                label,
+                fingerprint: meta.fingerprint.clone(),
+                network: meta.network,
+                birthday_height: meta.birthday_height,
+                active: active.as_deref() == Some(id.as_str()),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Switch the active wallet. Loads client + disk snapshot; does not start
+    /// network sync until [`Self::sync_wallet`].
+    pub async fn select_wallet(self: &Arc<Self>, id: &str) -> Result<WalletState> {
+        let p = self.paths.for_wallet(id);
+        let meta = Meta::load(&p.meta_file)?
+            .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
+
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        *self.client.lock().await = None;
+        self.clear_read_caches().await;
+
+        self.paths.write_active_id(id)?;
+        self.encrypted.store(meta.encrypted, Ordering::SeqCst);
+        self.notifications_enabled
+            .store(meta.notifications_enabled, Ordering::SeqCst);
+        self.fiat_enabled
+            .store(meta.fiat_enabled, Ordering::SeqCst);
+        self.discreet.store(meta.discreet, Ordering::SeqCst);
+        self.unreachable_notified.store(false, Ordering::SeqCst);
+        self.wrong_chain_notified.store(false, Ordering::SeqCst);
+
+        *self.sync.write().await = SyncStatus {
+            state: SyncState::Idle,
+            ..SyncStatus::default()
+        };
+
+        if meta.encrypted {
+            self.session_locked.store(true, Ordering::SeqCst);
+            *self.meta.write().await = Some(meta);
+        } else {
+            self.session_locked.store(false, Ordering::SeqCst);
+            let config = self.client_config(
+                chain_of(meta.network),
+                &meta.indexer_uri,
+                WalletConfig::Read,
+            );
+            let mut client = LightClient::new(config, false, None)
+                .await
+                .map_err(|e| anyhow!("failed to open wallet {id}: {e}"))?;
+            client.save_task().await;
+            *self.client.lock().await = Some(client);
+            *self.meta.write().await = Some(meta);
+            self.refresh_snapshot().await;
+        }
+
+        Ok(self.wallet_state().await)
+    }
+
+    /// Start tip-follow sync for the active wallet (user-triggered).
+    pub async fn sync_wallet(self: &Arc<Self>) -> Result<SyncStatus> {
+        if self.client.lock().await.is_none() {
+            return Err(anyhow!("wallet is locked or not loaded"));
+        }
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        self.unreachable_notified.store(false, Ordering::SeqCst);
+        self.wrong_chain_notified.store(false, Ordering::SeqCst);
+        self.sync.write().await.state = SyncState::Syncing;
+        self.spawn_sync_loop();
+        self.restart.notify_waiters();
+        Ok(self.sync.read().await.clone())
     }
 
     pub async fn handle(
@@ -609,6 +720,21 @@ impl WalletService {
         match method {
             "getWalletState" => Ok(to_value(self.wallet_state().await)?),
             "getSyncStatus" => Ok(to_value(self.sync.read().await.clone())?),
+            "listWallets" => Ok(to_value(self.list_wallets().await?)?),
+		"selectWallet" => {
+		    let args: SelectWalletArgs = serde_json::from_value(params)?;
+		    Ok(to_value(self.select_wallet(&args.id).await?)?)
+		}
+		"syncWallet" => {
+		    let _args: SyncWalletArgs = serde_json::from_value(
+			if params.is_null() {
+			    serde_json::json!({})
+			} else {
+			    params
+			},
+		    )?;
+		    Ok(to_value(self.sync_wallet().await?)?)
+		}
             // Wallet reads are served from the snapshot cache, never the `client`
             // lock, so they don't queue behind the sync loop.
             "getBalance" => Ok(to_value(
@@ -702,7 +828,7 @@ impl WalletService {
         ClientConfig::builder()
             .set_chain_type(chain)
             .set_indexer_uri(uri)
-            .set_wallet_dir(self.paths.wallet_dir.clone())
+            .set_wallet_dir(self.scoped_paths().wallet_dir.clone())
             .set_wallet_config(wallet)
             .build()
     }
@@ -715,6 +841,7 @@ impl WalletService {
                 exists: true,
                 locked,
                 session_held,
+                wallet_id: self.paths.read_active_id().ok().flatten(),
                 fingerprint: m.fingerprint.clone(),
                 import_type: m.import_type,
                 view_mode: m.view_mode,
@@ -729,6 +856,7 @@ impl WalletService {
                 exists: false,
                 locked: false,
                 session_held,
+                wallet_id: None,
                 fingerprint: None,
                 import_type: ImportType::Ufvk,
                 view_mode: ViewMode::Full,
@@ -951,15 +1079,20 @@ impl WalletService {
             anchor_hash: Some(anchor_hash),
         };
 
-        // Re-import overwrites any wallet already on disk.
-        let _ = std::fs::remove_dir_all(&self.paths.wallet_dir);
-        self.paths.ensure_dirs()?;
+        // Each UFVK lands under wallets/<fingerprint>/ (multi-wallet layout).
+        let id = identity.fingerprint.clone();
+        let wallet_paths = self.paths.for_wallet(&id);
+        // Re-import of the same key overwrites that wallet dir.
+        let _ = std::fs::remove_dir_all(&wallet_paths.wallet_dir);
+        wallet_paths.ensure_dirs()?;
+        self.paths.write_active_id(&id)?;
 
         let wallet = WalletConfig::Ufvk {
             ufvk: args.ufvk,
             birthday,
             wallet_settings: wallet_settings(),
         };
+        // client_config reads scoped_paths() which follows active_wallet_id.
         let config = self.client_config(chain, &meta.indexer_uri, wallet);
         let mut client = LightClient::new(
             config,
@@ -974,7 +1107,7 @@ impl WalletService {
         client.save_task().await;
         client.wait_for_save().await;
 
-        meta.save(&self.paths.meta_file)?;
+        meta.save(&self.scoped_paths().meta_file)?;
         *self.meta.write().await = Some(meta);
         *self.client.lock().await = Some(client);
         *self.session_passphrase.lock().await = Some(passphrase);
@@ -992,7 +1125,10 @@ impl WalletService {
         self.refresh_snapshot().await;
 
         self.generation.fetch_add(1, Ordering::SeqCst);
-        self.spawn_sync_loop();
+        *self.sync.write().await = SyncStatus {
+            state: SyncState::Idle,
+            ..SyncStatus::default()
+        };
 
         Ok(self.wallet_state().await)
     }
@@ -1040,9 +1176,8 @@ impl WalletService {
         // Nudge the price loop: if fiat was enabled, it was parked while locked.
         self.price_restart.notify_one();
         self.refresh_snapshot().await;
-        self.sync.write().await.state = SyncState::Syncing;
+        self.sync.write().await.state = SyncState::Idle;
         self.generation.fetch_add(1, Ordering::SeqCst);
-        self.spawn_sync_loop();
         Ok(self.wallet_state().await)
     }
 
@@ -1118,7 +1253,7 @@ impl WalletService {
             let mut guard = self.meta.write().await;
             if let Some(meta) = guard.as_mut() {
                 meta.indexer_uri = indexer_uri;
-                meta.save(&self.paths.meta_file)?;
+                meta.save(&self.scoped_paths().meta_file)?;
             }
         }
 
@@ -1147,7 +1282,7 @@ impl WalletService {
             .as_mut()
             .ok_or_else(|| anyhow!("no wallet to set notifications for"))?;
         meta.notifications_enabled = enabled;
-        meta.save(&self.paths.meta_file)?;
+        meta.save(&self.scoped_paths().meta_file)?;
         drop(guard);
         self.notifications_enabled.store(enabled, Ordering::SeqCst);
         Ok(self.wallet_state().await)
@@ -1162,7 +1297,7 @@ impl WalletService {
             .as_mut()
             .ok_or_else(|| anyhow!("no wallet to set fiat display for"))?;
         meta.fiat_enabled = enabled;
-        meta.save(&self.paths.meta_file)?;
+        meta.save(&self.scoped_paths().meta_file)?;
         drop(guard);
         self.fiat_enabled.store(enabled, Ordering::SeqCst);
         if enabled {
@@ -1179,7 +1314,7 @@ impl WalletService {
             .as_mut()
             .ok_or_else(|| anyhow!("no wallet to set discreet mode for"))?;
         meta.discreet = enabled;
-        meta.save(&self.paths.meta_file)?;
+        meta.save(&self.scoped_paths().meta_file)?;
         drop(guard);
         self.discreet.store(enabled, Ordering::SeqCst);
         Ok(self.wallet_state().await)
@@ -1228,8 +1363,15 @@ impl WalletService {
         self.addresses.write().await.clear();
         self.notes.write().await.clear();
         self.notify.reset();
-        let _ = std::fs::remove_file(&self.paths.meta_file);
-        let _ = std::fs::remove_dir_all(&self.paths.wallet_dir);
+        let scoped = self.scoped_paths();
+        let _ = std::fs::remove_file(&scoped.meta_file);
+        let _ = std::fs::remove_dir_all(&scoped.wallet_dir);
+        // Drop the wallets/<id> directory when empty-ish, and clear active pointer.
+        if let Some(id) = self.paths.read_active_id().ok().flatten() {
+            let wallet_root = self.paths.wallets_dir.join(&id);
+            let _ = std::fs::remove_dir_all(&wallet_root);
+            let _ = std::fs::remove_file(&self.paths.active_id_file);
+        }
         self.paths.ensure_dirs()?;
         Ok(())
     }
@@ -2817,6 +2959,7 @@ mod tests {
             "verifyPassphrase",
             "removeWallet",
             "subscribeEvents",
+            "listWallets",
         ] {
             assert!(
                 allowed_while_locked(m),

@@ -20,15 +20,26 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const { wallet, sync, loaded } = useWalletData();
 
-  // No wallet means onboarding hasn't run, so none of these screens have anything
-  // to show. Guarded once here rather than in each page.
+  // Signed-in branch only. Onboarding (/onboarding?mode=add) and unlock live on the
+  // root route tree, outside this layout, so "Add wallet" is never blocked here.
   useEffect(() => {
-    if (loaded && wallet && !wallet.exists) navigate({ to: "/onboarding" });
-    // A locked session must re-authenticate before any signed-in screen renders. The
-    // daemon also refuses wallet reads while locked, so this is the UX, not the guard.
-    // Replace so the lock screen doesn't stack onto history as a back target.
-    else if (loaded && wallet?.locked) navigate({ to: "/unlock", replace: true });
+    if (!loaded || !wallet) return;
+    // No wallets on disk (first run, or last wallet removed).
+    if (!wallet.exists) {
+      navigate({ to: "/onboarding" });
+      return;
+    }
+    // Locked session must re-authenticate before wallet reads. Replace so unlock
+    // doesn't stack as a back target.
+    if (wallet.locked) {
+      navigate({ to: "/unlock", replace: true });
+    }
   }, [loaded, wallet, navigate]);
+
+  // Avoid flashing an empty shell while redirecting.
+  if (!loaded || !wallet?.exists || wallet.locked) {
+    return null;
+  }
 
   return (
     <AppShell active={sectionFor(pathname)} wallet={wallet} sync={sync}>

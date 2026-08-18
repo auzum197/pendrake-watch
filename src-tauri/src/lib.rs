@@ -485,6 +485,22 @@ async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
     .await
 }
 
+#[tauri::command]
+async fn list_wallets() -> Result<Value, String> {
+    request("listWallets", Value::Null).await
+}
+
+#[tauri::command]
+async fn select_wallet(id: String) -> Result<Value, String> {
+    request("selectWallet", serde_json::json!({ "id": id })).await
+}
+
+#[tauri::command]
+async fn sync_wallet(id: Option<String>) -> Result<Value, String> {
+    request("syncWallet", serde_json::json!({ "id": id })).await
+}
+
+
 /// Bring the GUI window to the front. The notification open's implicit activation
 /// is unreliable on macOS, so we focus from the app side instead. `unminimize` and
 /// `show` also recover a minimized or hidden window.
@@ -563,6 +579,9 @@ pub fn run() {
             get_spot_price,
             get_price_history,
             remove_wallet,
+            list_wallets,
+            select_wallet,
+            sync_wallet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

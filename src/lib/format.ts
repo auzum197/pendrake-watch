@@ -62,13 +62,11 @@ const TIP_SLACK = 2;
 export function isSynced(sync: SyncStatus | null): boolean {
   if (!sync) return false;
   if (sync.state === "error") return false;
-  // `idle` is the daemon's authoritative "round reached the real tip" signal.
-  if (sync.state === "idle") return true;
-  // Height proximity alone is not enough: the engine scans by priority (the tip
-  // region first), so syncedHeight reaches chainTip while most of the backlog
-  // (and most of `percent`) is still outstanding. Require near-complete output
-  // progress too, so only the tip maintenance rounds (which report 100%) read as
-  // synced, not an initial sync that has merely touched the tip.
+  // Idle with no chain data = loaded but never tip-followed (manual sync).
+  if (sync.state === "idle") {
+    if (sync.chainTip === 0 && sync.syncedHeight === 0) return false;
+    return true;
+  }
   return (
     sync.chainTip > 0 &&
     sync.chainTip - sync.syncedHeight <= TIP_SLACK &&
@@ -76,10 +74,19 @@ export function isSynced(sync: SyncStatus | null): boolean {
   );
 }
 
+/** True only while a sync round is in flight. */
+export function isActivelySyncing(sync: SyncStatus | null): boolean {
+  return !!sync && sync.state === "syncing" && !isSynced(sync);
+}
+
 export function syncLabel(sync: SyncStatus | null): string {
   if (!sync) return "Connecting…";
-  if (sync.state === "error") return sync.wrongChain ? "Wrong chain" : "Sync error";
+  if (sync.state === "error") {
+    return sync.wrongChain ? "Wrong chain" : "Sync error";
+  }
   if (isSynced(sync)) return "Synced";
+  // Idle / not started: do not claim "Syncing… 0%".
+  if (sync.state !== "syncing") return "Not synced";
   return `Syncing… ${Math.round(sync.percent)}%`;
 }
 

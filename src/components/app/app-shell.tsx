@@ -11,7 +11,20 @@ import {
 	IconSettings,
 	IconWallet,
 } from "@tabler/icons-react";
-import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
+import {
+	lock,
+	listWallets,
+	removeWallet,
+	selectWallet,
+	type SyncStatus,
+	type WalletState,
+	type WalletSummary,
+} from "@/lib/ipc";
+import {
+	clearWalletSnapshotCache,
+	reloadWalletData,
+	setCachedWallet,
+} from "@/hooks/use-wallet-data";
 import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -20,10 +33,18 @@ import { DiscreetEye } from "./discreet-eye";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { Toaster } from "@/components/ui/sonner";
 import { isSyncing, SyncBar, SyncChip } from "./sync-status";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import "./nav-reveal.css";
 
-// A tinted pill keyed by chain, in the same style as the Notes "unspent" badge: a soft
-// fill under matching-hue text. Mainnet is green (live), the rest read apart by hue.
 const NETWORK_TINT: Record<string, string> = {
 	mainnet: "bg-emerald-500/15 text-emerald-300",
 	testnet: "bg-amber-500/15 text-amber-300",
@@ -41,9 +62,6 @@ function NetworkBadge({ network }: { network?: string }) {
 	);
 }
 
-// The About window is a second native webview (about.html), opened on demand. Kept as
-// a module-level handle so a repeat click focuses the open one instead of spawning a
-// duplicate; the handle clears when the window is destroyed.
 let aboutWindow: WebviewWindow | null = null;
 
 async function openAbout() {
@@ -83,16 +101,8 @@ export function AppShell({
 	children: ReactNode;
 }) {
 	return (
-		// The frame shares the sidebar's ink, so the sidebar reads as part of it and
-		// the content sits on top as a floating panel. app-frame holds the chrome
-		// (frame + panel surface) still across navigations; only app-content swaps.
 		<div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
 			<AppSidebar active={active} wallet={wallet} sync={sync} />
-			{/* The panel is a held-still white surface with the routed content scrolling
-          on top of it. app-content is the scroller, not the inner content, so the
-          scroll offset stays clipped inside the rounded frame instead of spilling
-          over it. Screens animate themselves in on mount (see lib/motion); there's no
-          page crossfade, so the route swap is instant. */}
 			<div className="relative my-3 mr-3 flex-1 rounded-2xl border-2 border-border bg-background">
 				<main
 					data-scroll-restoration-id="app-main"
@@ -103,14 +113,10 @@ export function AppShell({
 					</div>
 				</main>
 			</div>
-			{/* The Indexer-unreachable CTA surfaces as a bottom-right toast instead of an
-          inline banner, so a dropped connection never shifts the page under the user. */}
 			<UnreachableToast
 				unreachable={sync?.unreachable ?? false}
 				onSettings={active === "settings"}
 			/>
-			{/* Kept separate from UnreachableToast: the copy, tone, and lifetime differ,
-          and the daemon guarantees the two flags are mutually exclusive. */}
 			<WrongChainToast
 				wrongChain={sync?.wrongChain ?? false}
 				onSettings={active === "settings"}
@@ -122,9 +128,6 @@ export function AppShell({
 
 const UNREACHABLE_TOAST = "indexer-unreachable";
 
-// Held open (no auto-dismiss) while the Indexer stays unreachable, cleared on recovery
-// or on Settings, where the Change Indexer control already sits. A stable id keeps a
-// flapping connection from stacking duplicate toasts.
 function UnreachableToast({
 	unreachable,
 	onSettings,
@@ -153,9 +156,6 @@ function UnreachableToast({
 
 const WRONG_CHAIN_TOAST = "wrong-chain";
 
-// Held open while the Indexer serves a chain without this Wallet's Anchor
-// (ADR-0010). Unlike an outage, waiting won't heal it, so the toast stands until
-// the right chain returns or the user reviews the Indexer in Settings.
 function WrongChainToast({
 	wrongChain,
 	onSettings,
@@ -166,20 +166,244 @@ function WrongChainToast({
 	const navigate = useNavigate();
 	useEffect(() => {
 		if (wrongChain && !onSettings) {
-			toast("Your Indexer is serving a different chain than this Wallet synced.", {
-				id: WRONG_CHAIN_TOAST,
-				duration: Infinity,
-				icon: <IconAlertTriangle className="size-4" />,
-				action: {
-					label: "Review Indexer",
-					onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+			toast(
+				"Your Indexer is serving a different chain than this Wallet synced.",
+				{
+					id: WRONG_CHAIN_TOAST,
+					duration: Infinity,
+					icon: <IconAlertTriangle className="size-4" />,
+					action: {
+						label: "Review Indexer",
+						onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+					},
 				},
-			});
+			);
 		} else {
 			toast.dismiss(WRONG_CHAIN_TOAST);
 		}
 	}, [wrongChain, onSettings, navigate]);
 	return null;
+}
+
+async function softSwitchTo(state: WalletState) {
+	setCachedWallet(state);
+	clearWalletSnapshotCache();
+	reloadWalletData();
+}
+
+function WalletCard({
+	wallet,
+	sync,
+}: {
+	wallet: WalletState | null;
+	sync: SyncStatus | null;
+}) {
+	const navigate = useNavigate();
+	const [open, setOpen] = useState(false);
+	const [wallets, setWallets] = useState<WalletSummary[]>([]);
+	const [busy, setBusy] = useState(false);
+	const [removeOpen, setRemoveOpen] = useState(false);
+
+	useEffect(() => {
+		if (!open) return;
+		listWallets()
+			.then(setWallets)
+			.catch(() => setWallets([]));
+	}, [open, wallet?.walletId, wallet?.fingerprint]);
+
+	async function onPick(id: string) {
+		if (busy || id === wallet?.walletId) {
+			setOpen(false);
+			return;
+		}
+		setBusy(true);
+		try {
+			const state = await selectWallet(id);
+			setOpen(false);
+			await softSwitchTo(state);
+		} catch (e) {
+			toast.error(String(e));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	function onAdd() {
+		setOpen(false);
+		navigate({ to: "/onboarding", search: { mode: "add" } });
+	}
+
+	async function onConfirmRemove() {
+		if (!wallet?.exists || busy) return;
+		setBusy(true);
+		try {
+			await removeWallet(false);
+			const left = await listWallets();
+			setRemoveOpen(false);
+			setOpen(false);
+			if (left.length === 0) {
+				clearWalletSnapshotCache();
+				setCachedWallet({
+					exists: false,
+					locked: false,
+					sessionHeld: false,
+					fingerprint: null,
+					importType: "ufvk",
+					viewMode: "full",
+					network: "mainnet",
+					birthdayHeight: 0,
+					indexerUri: "",
+					notificationsEnabled: true,
+				} as WalletState);
+				reloadWalletData();
+				navigate({ to: "/onboarding" });
+				return;
+			}
+			const state = await selectWallet(left[0].id);
+			await softSwitchTo(state);
+		} catch (e) {
+			toast.error(String(e));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	return (
+		<div className="relative mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
+			<div className="flex items-start gap-3">
+				<button
+					type="button"
+					onClick={() => setOpen((o) => !o)}
+					className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none hover:bg-white/5"
+					aria-expanded={open}
+					aria-haspopup="listbox"
+				>
+					{wallet?.fingerprint ? (
+						<LifeHashIcon
+							fingerprint={wallet.fingerprint}
+							className="size-9 shrink-0 rounded-full"
+						/>
+					) : (
+						<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+							<IconWallet className="size-4" />
+						</span>
+					)}
+					<div className="flex min-w-0 flex-1 flex-col gap-1">
+						<div>
+							<NetworkBadge network={wallet?.network} />
+						</div>
+						<span className="font-mono text-xs text-white/45">
+							{wallet?.fingerprint ? wallet.fingerprint.slice(0, 7) : "—"}
+						</span>
+					</div>
+				</button>
+				<div className="flex shrink-0 items-center gap-1 pt-1">
+					{wallet?.exists && <DiscreetEye />}
+					<SyncChip sync={sync} />
+				</div>
+			</div>
+
+			{open && (
+				<div
+					className="absolute inset-x-4 top-full z-20 mt-2 max-h-72 overflow-auto rounded-xl border border-white/10 bg-[#0c1222] p-1 shadow-lg"
+					role="listbox"
+				>
+					{wallets.length === 0 ? (
+						<p className="px-3 py-2 text-xs text-white/50">No wallets</p>
+					) : (
+						wallets.map((w) => (
+							<button
+								key={w.id}
+								type="button"
+								role="option"
+								aria-selected={w.active}
+								disabled={busy}
+								onClick={() => onPick(w.id)}
+								className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-white/10 ${
+									w.active ? "bg-white/10" : ""
+								}`}
+							>
+								{w.fingerprint ? (
+									<LifeHashIcon
+										fingerprint={w.fingerprint}
+										className="size-6 shrink-0 rounded-full"
+									/>
+								) : null}
+								<span className="min-w-0 flex-1 truncate font-mono">
+									{w.label}
+								</span>
+								{w.active && (
+									<span className="text-[10px] uppercase tracking-wide text-white/40">
+										active
+									</span>
+								)}
+							</button>
+						))
+					)}
+					<div className="mt-1 border-t border-white/10 pt-1">
+						<button
+							type="button"
+							disabled={busy}
+							onClick={onAdd}
+							className="flex w-full rounded-lg px-3 py-2 text-left text-xs text-white/80 hover:bg-white/10"
+						>
+							Add wallet…
+						</button>
+						<button
+							type="button"
+							disabled={busy || !wallet?.exists}
+							onClick={() => {
+								setOpen(false);
+								setRemoveOpen(true);
+							}}
+							className="flex w-full rounded-lg px-3 py-2 text-left text-xs text-red-300/90 hover:bg-white/10 disabled:opacity-40"
+						>
+							Remove current wallet…
+						</button>
+					</div>
+				</div>
+			)}
+
+			<div
+				className="grid duration-300 ease-out-soft motion-safe:transition-[grid-template-rows,opacity]"
+				style={{
+					gridTemplateRows: isSyncing(sync) ? "1fr" : "0fr",
+					opacity: isSyncing(sync) ? 1 : 0,
+				}}
+			>
+				<div className="overflow-hidden">
+					<div className="pt-3">
+						<SyncBar sync={sync} />
+					</div>
+				</div>
+			</div>
+
+			<AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
+				<AlertDialogContent size="sm">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Remove this wallet?</AlertDialogTitle>
+						<AlertDialogDescription>
+							Only the local copy on this device is deleted. You will need the
+							UFVK to import it again. Other wallets are left untouched.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							disabled={busy}
+							onClick={(e) => {
+								e.preventDefault();
+								void onConfirmRemove();
+							}}
+						>
+							{busy ? "Removing…" : "Remove wallet"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</div>
+	);
 }
 
 function AppSidebar({
@@ -193,62 +417,13 @@ function AppSidebar({
 }) {
 	const navigate = useNavigate();
 
-	// Extra top padding clears the macOS traffic-light buttons: the title bar is
-	// transparent (tauri.conf.json), so the webview draws under it and the buttons
-	// sit over the sidebar's top-left.
 	return (
 		<aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
 			<div className="flex items-center justify-center px-2 py-2">
 				<img src={pendrakeLogo} alt="Pendrake" className="h-8 select-none" />
 			</div>
 
-			<div className="mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
-				<div className="flex items-center gap-3">
-					{wallet?.fingerprint ? (
-						<LifeHashIcon
-							fingerprint={wallet.fingerprint}
-							className="size-9 shrink-0 rounded-full"
-						/>
-					) : (
-						<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-white">
-							<IconWallet className="size-4" />
-						</span>
-					)}
-					<div className="flex min-w-0 flex-1 flex-col gap-1">
-						{/* The network badge is the headline on its own line. */}
-						<div>
-							<NetworkBadge network={wallet?.network} />
-						</div>
-						{/* The metadata line: the short-hash fingerprint anchors left and the
-                sync state anchors right, so both rows carry weight instead of the
-                status floating alone beside the badge. */}
-						<div className="flex items-center justify-between gap-2">
-							<span className="font-mono text-xs text-white/45">
-								{wallet?.fingerprint ? wallet.fingerprint.slice(0, 7) : "—"}
-							</span>
-							<div className="flex items-center gap-1">
-								{wallet?.exists && <DiscreetEye />}
-								<SyncChip sync={sync} />
-							</div>
-						</div>
-					</div>
-				</div>
-				{/* The progress bar collapses away once synced. Animating grid-template-rows
-            (paired with opacity) lets the card resize smoothly as it goes. */}
-				<div
-					className="grid duration-300 ease-out-soft motion-safe:transition-[grid-template-rows,opacity]"
-					style={{
-						gridTemplateRows: isSyncing(sync) ? "1fr" : "0fr",
-						opacity: isSyncing(sync) ? 1 : 0,
-					}}
-				>
-					<div className="overflow-hidden">
-						<div className="pt-3">
-							<SyncBar sync={sync} />
-						</div>
-					</div>
-				</div>
-			</div>
+			<WalletCard wallet={wallet} sync={sync} />
 
 			<nav className="mt-5 flex flex-col gap-1">
 				<NavItem
@@ -285,8 +460,6 @@ function AppSidebar({
 					icon={<IconLock className="size-4" />}
 					label="Sign Out"
 					onClick={async () => {
-						// Lock the daemon session (the wallet stays open and syncing), then show
-						// the unlock screen. Re-entry needs the real passphrase.
 						await lock();
 						navigate({ to: "/unlock" });
 					}}
@@ -296,14 +469,6 @@ function AppSidebar({
 	);
 }
 
-// The Notes item is gated behind the experimental flag. It stays mounted rather than
-// unmounting: the flag flips rarely, and the row is last in the top nav, so its reserved
-// height just sits in the empty space above the pinned lower nav, invisible when off.
-// Switching it on materializes the whole item in place (no movement): the icon and label
-// sharpen from a blur together. The flex column keeps the button full width so the selected
-// brand fill spans the rail. When off it's inert: out of the tab order, no pointer. Motion
-// is gated on the device preference, read once at mount. With it off the reveal class drops
-// and the state snaps.
 function NotesNavItem({
 	active,
 	onClick,
@@ -313,7 +478,6 @@ function NotesNavItem({
 }) {
 	const enabled = useFeature("notes");
 	const [animate] = useState(animationsEnabled);
-
 	const state = enabled ? "opacity-100 blur-none" : "opacity-0 blur-[4px]";
 
 	return (
@@ -345,8 +509,6 @@ function NavItem({
 	return (
 		<button
 			type="button"
-			// Re-navigating to the screen you're already on remounts it (a visible
-			// reload). The active tab is a no-op instead.
 			onClick={active ? undefined : onClick}
 			aria-current={active ? "page" : undefined}
 			className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${

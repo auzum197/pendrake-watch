@@ -90,6 +90,12 @@ pub struct WalletState {
     /// tell a post-Replace empty-but-unlocked daemon from a cold one and skip Set
     /// Password (docs/adr/0004).
     pub session_held: bool,
+    
+
+    /// Active wallet id under `wallets/<id>/`. `None` when no wallet exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallet_id: Option<String>,
+
     /// The current Wallet's fingerprint, the value that seeds its LifeHash. `None`
     /// for a wallet imported before fingerprints were persisted, or when no wallet
     /// exists.
@@ -114,6 +120,35 @@ pub struct WalletState {
     #[serde(default)]
     pub discreet: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletSummary {
+    pub id: String,
+    /// User label, or short fingerprint when unset.
+    pub label: String,
+    pub fingerprint: Option<String>,
+    pub network: Network,
+    pub birthday_height: u32,
+    pub active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectWalletArgs {
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncWalletArgs {
+    /// Optional; defaults to the active wallet.
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+
+
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

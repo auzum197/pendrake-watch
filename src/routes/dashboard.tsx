@@ -107,24 +107,32 @@ function useFreshTxKeys(points: BalancePoint[]): Set<string> {
 // A compact echo of the wallet's sync state, sitting beside the balance label. The
 // detailed progress lives in the sidebar; this is the headline at a glance.
 function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
-	const synced = isSynced(sync);
-	const errored = sync?.state === "error";
-	const Icon = synced
-		? IconCircleCheckFilled
-		: errored
-			? IconAlertTriangle
-			: IconLoader2;
-	const iconColor = synced
-		? "text-brand"
-		: errored
-			? "text-amber-400"
-			: "text-brand motion-safe:animate-spin";
-	return (
-		<span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
-			<Icon className={`size-3.5 shrink-0 ${iconColor}`} />
-			{syncLabel(sync)}
-		</span>
-	);
+  const synced = isSynced(sync);
+  const errored = sync?.state === "error";
+  const active = sync?.state === "syncing" && !synced;
+
+  const Icon = synced
+    ? IconCircleCheckFilled
+    : errored
+      ? IconAlertTriangle
+      : active
+        ? IconLoader2
+        : IconLoader2; // or a pause/circle icon for "Not synced"
+
+  const iconColor = synced
+    ? "text-brand"
+    : errored
+      ? "text-amber-400"
+      : active
+        ? "text-brand motion-safe:animate-spin"
+        : "text-muted-foreground"; // no spin when Not synced
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+      <Icon className={`size-3.5 shrink-0 ${iconColor}`} />
+      {syncLabel(sync)}
+    </span>
+  );
 }
 
 function ChartCard({
@@ -194,7 +202,7 @@ function ChartCard({
 	// peak within the selected period. The history is provisional mid-sync, so a spinner
 	// marks the number as still settling rather than final.
 	const standing = athStanding(series);
-	const calculating = !isSynced(sync);
+	const calculating = sync?.state === "syncing" && !isSynced(sync);
 	return (
 		<section className="rounded-2xl border border-border bg-card p-6">
 			<div className="flex items-start justify-between gap-4">

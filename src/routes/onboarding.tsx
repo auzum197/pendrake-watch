@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
 	IconCalendar,
 	IconEye,
@@ -67,12 +67,18 @@ const INITIAL: Draft = {
 
 export function OnboardingPage() {
 	const navigate = useNavigate();
+	// mode=add: import another UFVK without wiping existing wallets (sidebar Add wallet).
+	const search = useSearch({ strict: false }) as { mode?: string };
+	const addMode =
+		search.mode === "add" ||
+		(typeof window !== "undefined" &&
+			new URLSearchParams(window.location.search).get("mode") === "add");
 	const [index, setIndex] = useState(0);
 	const [draft, setDraft] = useState<Draft>(INITIAL);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	// A Replace lands here with the daemon still holding the session passphrase, so
-	// the Set Password step is dropped and the new Wallet inherits it (docs/adr/0004).
+	// A Replace (or an unlocked session when adding) lands here with the daemon still
+	// holding the session passphrase, so Set Password is dropped (docs/adr/0004).
 	const [sessionHeld, setSessionHeld] = useState(false);
 
 	useEffect(() => {
@@ -114,14 +120,18 @@ export function OnboardingPage() {
 		setBusy(true);
 		setError(null);
 		try {
+			// Never call removeWallet here — Add wallet and first-run both only import.
 			const network = networkFromUfvk(draft.ufvk);
 			await importUfvk({
 				ufvk: draft.ufvk.trim(),
 				// The daemon's resolver settles this raw choice into a height
 				// (docs/adr/0002), so the GUI never pre-resolves a date.
 				birthday: birthdayChoice(draft, network),
-				
-				indexerUri: draft.indexerUri.trim() || DEFAULT_INDEXER,
+				// Regtest has no universal Indexer, so its onboarding requires a custom
+				// one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
+				// (AUZ-104). Mainnet skips the step and takes the public default.
+				indexerUri:
+					network === "regtest" ? draft.indexerUri.trim() : DEFAULT_INDEXER,
 				network,
 				// First onboarding sets the global passphrase (docs/adr/0003). A
 				// post-Replace import omits it so the daemon reuses the held one.
@@ -150,6 +160,10 @@ export function OnboardingPage() {
 							isFinal={isLast}
 							busy={busy}
 							error={error}
+							addMode={addMode}
+							onCancel={
+								addMode ? () => navigate({ to: "/dashboard" }) : undefined
+							}
 						/>
 					)}
 					{current === "indexer" && (
@@ -244,6 +258,8 @@ function ImportStep({
 	isFinal,
 	busy,
 	error,
+	addMode = false,
+	onCancel,
 }: {
 	draft: Draft;
 	set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
@@ -255,6 +271,8 @@ function ImportStep({
 	isFinal: boolean;
 	busy: boolean;
 	error: string | null;
+	addMode?: boolean;
+	onCancel?: () => void;
 }) {
 	const ufvk = draft.ufvk.trim();
 	// The decoder's verdict for exactly the current key. While typing or waiting on
@@ -291,8 +309,12 @@ function ImportStep({
 			<StepHeading
 				step={stepNumber}
 				total={stepTotal}
-				title="Import Wallet"
-				subtitle="Restore your Zcash wallet from a unified full viewing key."
+				title={addMode ? "Add Wallet" : "Import Wallet"}
+				subtitle={
+					addMode
+						? "Import another viewing key. Existing wallets stay on this device."
+						: "Restore your Zcash wallet from a unified full viewing key."
+				}
 			/>
 
 			<div>
@@ -350,11 +372,26 @@ function ImportStep({
 				</p>
 			)}
 
+			{onCancel && (
+				<button
+					type="button"
+					onClick={onCancel}
+					className="h-10 w-full text-sm text-white/50 transition-colors hover:text-white/80"
+				>
+					Cancel
+				</button>
+			)}
 			<PrimaryButton
 				disabled={identity?.kind !== "valid" || busy}
 				onClick={onNext}
 			>
-				{isFinal ? (busy ? "Importing wallet…" : "Import Wallet") : "Continue"}
+				{isFinal
+					? busy
+						? "Importing wallet…"
+						: addMode
+							? "Add Wallet"
+							: "Import Wallet"
+					: "Continue"}
 			</PrimaryButton>
 		</>
 	);

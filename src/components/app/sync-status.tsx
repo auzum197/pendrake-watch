@@ -4,7 +4,8 @@ import {
 	IconCircleCheckFilled,
 	IconLoader2,
 } from "@tabler/icons-react";
-import type { SyncStatus } from "@/lib/ipc";
+import { toast } from "sonner";
+import { syncWallet, type SyncStatus } from "@/lib/ipc";
 import { formatEta, isSynced } from "@/lib/format";
 
 const clampPct = (p: number) => Math.min(100, Math.max(0, p));
@@ -12,7 +13,7 @@ const clampPct = (p: number) => Math.min(100, Math.max(0, p));
 // True while the wallet is actively scanning (not idle/synced, not errored). Drives
 // whether the card shows the progress bar at all.
 export function isSyncing(sync: SyncStatus | null): boolean {
-	return !!sync && sync.state !== "error" && !isSynced(sync);
+	return !!sync && sync.state !== "error" && !isSynced(sync) && sync.state === "syncing";
 }
 
 // Between the engine's batch-completion updates the real percent freezes, so the
@@ -64,11 +65,25 @@ function useCreepingPercent(sync: SyncStatus | null, syncing: boolean): number {
 	return displayed;
 }
 
-// The wallet's sync state as a compact chip, sized for the card's top row beside the
-// network badge. The percent lives on the bar below; the chip just names the state.
+// The wallet's sync state as a compact chip. When idle (not at tip) or on error,
+// the chip is a control that starts tip-follow via syncWallet (manual multi-wallet).
 export function SyncChip({ sync }: { sync: SyncStatus | null }) {
+	const [busy, setBusy] = useState(false);
 	const base =
 		"inline-flex shrink-0 items-center gap-1 text-[0.625rem] font-medium leading-none";
+
+	async function startSync() {
+		if (busy) return;
+		setBusy(true);
+		try {
+			await syncWallet();
+		} catch (e) {
+			toast.error(String(e));
+		} finally {
+			setBusy(false);
+		}
+	}
+
 	if (!sync) {
 		return (
 			<span className={`${base} text-white/45`}>
@@ -78,7 +93,6 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 		);
 	}
 	if (sync.state === "error" && sync.wrongChain) {
-		// Red, a step past the amber outage: waiting won't heal a swapped chain.
 		return (
 			<span className={`${base} text-red-400`}>
 				<IconAlertTriangle className="size-3" />
@@ -88,10 +102,20 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 	}
 	if (sync.state === "error") {
 		return (
-			<span className={`${base} text-amber-400`}>
-				<IconAlertTriangle className="size-3" />
-				Sync error
-			</span>
+			<button
+				type="button"
+				onClick={startSync}
+				disabled={busy}
+				className={`${base} cursor-pointer text-amber-400 hover:underline disabled:opacity-60`}
+				title="Retry sync"
+			>
+				{busy ? (
+					<IconLoader2 className="size-3 motion-safe:animate-spin" />
+				) : (
+					<IconAlertTriangle className="size-3" />
+				)}
+				{busy ? "Starting…" : "Retry sync"}
+			</button>
 		);
 	}
 	if (isSynced(sync)) {
@@ -102,11 +126,29 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 			</span>
 		);
 	}
+	// Actively scanning.
+	if (sync.state === "syncing" || isSyncing(sync)) {
+		return (
+			<span className={`${base} text-white/70`}>
+				<IconLoader2 className="size-3 motion-safe:animate-spin" />
+				Syncing
+			</span>
+		);
+	}
+	// Idle but not synced (never scanned, or waiting for a user-started round).
 	return (
-		<span className={`${base} text-white/70`}>
-			<IconLoader2 className="size-3 motion-safe:animate-spin" />
-			Syncing
-		</span>
+		<button
+			type="button"
+			onClick={startSync}
+			disabled={busy}
+			className={`${base} cursor-pointer text-brand hover:underline disabled:opacity-60`}
+			title="Sync this wallet to the chain tip"
+		>
+			{busy ? (
+				<IconLoader2 className="size-3 motion-safe:animate-spin" />
+			) : null}
+			{busy ? "Starting…" : "Sync"}
+		</button>
 	);
 }
 
