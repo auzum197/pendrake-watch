@@ -18,6 +18,11 @@ tracing = "0.1"
 # carries the same patch, but Cargo ignores [patch] from non-root manifests, so we
 # mirror it here for our own build (auzum197/zingo-common#1).
 [patch.crates-io]
+# Ironwood (NU6.3) proto fields. Published 0.3.0 lacks them; this rev has the
+# .proto sources. Consumers must enable `rebuild-proto` (needs protoc).
+lightwallet-protocol = { git = "https://github.com/zingolabs/lightwallet-protocol-rust", rev = "9bdfdc77eb283f2a3d26c27100cc2ac90148cd93" }
+
+# Lazy gRPC connect (auzum197 patch)
 zingo-netutils = { git = "https://github.com/auzum197/zingo-common", branch = "dev" }
 
 # Release tuning for the daemon, which carries the zingolib engine and runs the

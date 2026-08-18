@@ -5,6 +5,7 @@ import { formatZecFixed } from "@/lib/format";
 // kept apart from the components so they can be exercised directly. Every column
 // except Txid sorts. Clicking the active column flips direction, another resets to
 // ascending. Default is № ascending.
+
 export type SortKey =
   | "idx"
   | "pool"
@@ -13,7 +14,9 @@ export type SortKey =
   | "height"
   | "flags"
   | "spentHeight";
+
 export type SortDir = "asc" | "desc";
+
 export type Sort = { key: SortKey; dir: SortDir };
 
 export type Filter =
@@ -23,7 +26,8 @@ export type Filter =
   | "pending"
   | "change"
   | "orchard"
-  | "sapling";
+  | "sapling"
+  | "ironwood";
 
 // A missing height sorts to the bottom ascending, the top descending, so pending
 // notes (and unspent ones in the Spent-at column) cluster at one end rather than
@@ -75,6 +79,7 @@ export function matchesFilter(note: WalletNote, filter: Filter): boolean {
       return note.change;
     case "orchard":
     case "sapling":
+    case "ironwood":
       return note.pool === filter;
   }
 }

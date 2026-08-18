@@ -8,6 +8,7 @@ export function confirmed(pool: Balance["orchard"]): bigint {
 export function totalConfirmed(balance: Balance | null): bigint | null {
   if (!balance) return null;
   return (
+    confirmed(balance.ironwood) +
     confirmed(balance.orchard) +
     confirmed(balance.sapling) +
     confirmed(balance.transparent)
@@ -218,7 +219,6 @@ export function filterRange(
   range: ChartRange,
 ): BalancePoint[] {
   if (range === "all" || points.length === 0) return points;
-
   const now = Date.now();
   const startOf = {
     year: subYears(now, 1),
@@ -226,15 +226,12 @@ export function filterRange(
     week: subDays(now, 7),
     day: subDays(now, 1),
   }[range].getTime();
-
   // Points carry their time in the daemon's unit (unix seconds); match it so the
   // cutoff lands in the same space, the way shortDate sniffs seconds vs millis.
   const inMs = points[points.length - 1].t >= 1e12;
   const cutoff = inMs ? startOf : Math.floor(startOf / 1000);
-
   const before = points.filter((p) => p.t < cutoff);
   if (before.length === 0) return points;
-
   const enter = before[before.length - 1].value;
   const baseline: BalancePoint = {
     key: "range-start",
@@ -242,7 +239,6 @@ export function filterRange(
     value: enter,
     label: "",
   };
-
   const within = points.filter((p) => p.t >= cutoff);
   if (within.length === 0) {
     const nowT = inMs ? now : Math.floor(now / 1000);

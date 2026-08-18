@@ -35,7 +35,7 @@ use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
-use pepper_sync::wallet::{OrchardNote, SaplingNote};
+use pepper_sync::wallet::{IronwoodNote, OrchardNote, SaplingNote};
 use pepper_sync::keys::transparent::TransparentScope;
 use zingolib::wallet::output::SpendStatus;
 use zingolib::wallet::summary::data::{
@@ -795,6 +795,17 @@ impl WalletService {
                 &heights,
             ));
         };
+        for n in wallet.note_summaries::<IronwoodNote>(true).iter() {
+            push(
+                Pool::Ironwood,
+                n.value,
+                n.status.is_confirmed(),
+                u32::from(n.block_height),
+                n.spend_status,
+                &n.txid,
+                matches!(n.scope, Scope::Internal),
+            );
+        }
         for n in wallet.note_summaries::<OrchardNote>(true).iter() {
             push(
                 Pool::Orchard,
@@ -1642,13 +1653,20 @@ impl WalletService {
                 tip,
                 total_sapling_outputs,
                 total_orchard_outputs,
+                total_ironwood_outputs,
                 already_scanned_sapling_outputs,
                 already_scanned_orchard_outputs,
+                already_scanned_ironwood_outputs,
                 ..
             } => {
-                view.total_outputs = u64::from(total_sapling_outputs + total_orchard_outputs);
-                view.scanned_outputs =
-                    u64::from(already_scanned_sapling_outputs + already_scanned_orchard_outputs);
+                view.total_outputs = u64::from(
+                    total_sapling_outputs + total_orchard_outputs + total_ironwood_outputs,
+                );
+                view.scanned_outputs = u64::from(
+                    already_scanned_sapling_outputs
+                        + already_scanned_orchard_outputs
+                        + already_scanned_ironwood_outputs,
+                );
                 view.synced_height = u32::from(sync_start_height);
                 view.chain_tip = u32::from(tip);
                 // Arm the live edge from the round's true start, before any tip-first
@@ -1667,13 +1685,14 @@ impl WalletService {
                 priority,
                 sapling_outputs,
                 orchard_outputs,
+                ironwood_outputs,
             } => {
                 let range = height_range(&range);
                 view.in_flight.retain(|b| b.range != range);
                 view.in_flight.push(Batch {
                     range,
                     priority: format!("{priority:?}"),
-                    outputs: u64::from(sapling_outputs + orchard_outputs),
+                    outputs: u64::from(sapling_outputs + orchard_outputs + ironwood_outputs),
                     phase: BatchPhase::Scanning,
                     phase_since: Instant::now(),
                     phase_started_ms: now_ms(),
@@ -1700,10 +1719,11 @@ impl WalletService {
                 priority,
                 sapling_outputs,
                 orchard_outputs,
+                ironwood_outputs,
                 timing,
             } => {
                 let range = height_range(&range);
-                let outputs = u64::from(sapling_outputs + orchard_outputs);
+                let outputs = u64::from(sapling_outputs + orchard_outputs + ironwood_outputs);
                 view.scanned_outputs += outputs;
                 view.synced_height = view.synced_height.max(range.end);
                 view.timing_log.push_back((outputs, timing));
@@ -1880,7 +1900,9 @@ impl WalletService {
             let wallet = client.wallet().read().await;
             if let Ok(status) = pepper_sync::sync_status(&*wallet).await {
                 view.scanned_outputs = u64::from(
-                    status.total_sapling_outputs_scanned + status.total_orchard_outputs_scanned,
+                    status.total_sapling_outputs_scanned
+                        + status.total_orchard_outputs_scanned
+                        + status.total_ironwood_outputs_scanned,
                 );
                 view.timing_log.clear();
                 view.aggregate_log.clear();
@@ -2089,9 +2111,10 @@ fn spent_value_by_tx(summaries: &TransactionSummaries) -> HashMap<String, u64> {
     let mut spent_by: HashMap<String, u64> = HashMap::new();
     for s in summaries.iter() {
         let outputs = s
-            .orchard_notes
+            .ironwood_notes
             .iter()
             .map(|n| (n.spend_status, n.value))
+            .chain(s.orchard_notes.iter().map(|n| (n.spend_status, n.value)))
             .chain(s.sapling_notes.iter().map(|n| (n.spend_status, n.value)))
             .chain(s.transparent_coins.iter().map(|c| (c.spend_summary, c.value)));
         for (status, value) in outputs {
@@ -2113,9 +2136,10 @@ fn map_tx(s: &TransactionSummary, spent_by: &HashMap<String, u64>) -> Tx {
     // to the balance. Spent inputs come from each received note's spend-status,
     // attributed by `spent_by` to the transaction that spent them.
     let gained: u64 = s
-        .orchard_notes
+        .ironwood_notes
         .iter()
         .map(|n| n.value)
+        .chain(s.orchard_notes.iter().map(|n| n.value))
         .chain(s.sapling_notes.iter().map(|n| n.value))
         .chain(s.transparent_coins.iter().map(|c| c.value))
         .sum();
@@ -2158,6 +2182,7 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
     let mut notes = Vec::new();
 
     for (pool, vec) in [
+        (Pool::Ironwood, &s.ironwood_notes),
         (Pool::Orchard, &s.orchard_notes),
         (Pool::Sapling, &s.sapling_notes),
     ] {
@@ -2184,6 +2209,7 @@ fn map_notes(s: &TransactionSummary) -> Vec<Note> {
     }
 
     for (pool, vec) in [
+        (Pool::Ironwood, &s.outgoing_ironwood_notes),
         (Pool::Orchard, &s.outgoing_orchard_notes),
         (Pool::Sapling, &s.outgoing_sapling_notes),
     ] {
@@ -2270,6 +2296,10 @@ fn map_balance(bal: &AccountBalance) -> Balance {
         transparent: pool_balance(
             bal.confirmed_transparent_balance,
             bal.total_transparent_balance,
+        ),
+        ironwood: pool_balance(
+            bal.confirmed_ironwood_balance,
+            bal.total_ironwood_balance,
         ),
     }
 }
@@ -2896,6 +2926,7 @@ mod tests {
             value: display,
             fee: None,
             zec_price: None,
+            ironwood_notes: vec![],
             orchard_notes: received
                 .into_iter()
                 .enumerate()
@@ -2905,6 +2936,7 @@ mod tests {
                 .collect(),
             sapling_notes: vec![],
             transparent_coins: vec![],
+            outgoing_ironwood_notes: vec![],
             outgoing_orchard_notes: vec![],
             outgoing_sapling_notes: vec![],
             outgoing_transparent_coins: vec![],

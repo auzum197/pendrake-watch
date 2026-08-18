@@ -133,13 +133,15 @@ pub enum UfvkNetwork {
 }
 
 /// A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
-/// experimental typecodes are dropped rather than surfaced.
+/// experimental typecodes are dropped rather than surfaced. Ironwood is the
+/// post-NU6.3 shielded pool; the same Orchard FVK views it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Pool {
     Orchard,
     Sapling,
     Transparent,
+    Ironwood,
 }
 
 /// What a successful UFVK decode tells the GUI: the network it is bound to, a
@@ -294,7 +296,7 @@ pub struct SyncStatus {
     pub percent: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<SyncPhase>,
-    /// Sapling+orchard notes scanned in the sync window (progress numerator).
+    /// Shielded notes scanned in the sync window (progress numerator).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scanned_outputs: Option<u64>,
     /// Total notes to scan in the window (progress denominator).
@@ -461,6 +463,7 @@ pub struct Balance {
     pub orchard: Option<PoolBalance>,
     pub sapling: Option<PoolBalance>,
     pub transparent: Option<PoolBalance>,
+    pub ironwood: Option<PoolBalance>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
