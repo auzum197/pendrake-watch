@@ -1040,6 +1040,12 @@ impl WalletService {
         Some(trimmed.chars().take(64).collect())
     };
     meta.save(&p.meta_file)?;
+
+    // Keep the in-memory meta used by wallet_state() in sync for the active wallet.
+    if self.paths.read_active_id()?.as_deref() == Some(id) {
+        *self.meta.write().await = Some(meta);
+    }
+
     Ok(self.wallet_state().await)
 }
 
