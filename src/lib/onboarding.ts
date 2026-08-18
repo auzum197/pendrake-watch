@@ -14,7 +14,7 @@ export function networkFromUfvk(ufvk: string): Network {
 }
 
 export function onboardingSteps(
-  network: Network,
+  _network: Network,
   sessionHeld = false,
 ): OnboardingStep[] {
   // Indexer comes after identity (UFVK + birthday) on every network so the
