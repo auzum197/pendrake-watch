@@ -16,7 +16,7 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs,
+    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetWalletLabelArgs, SetDiscreetArgs, SetFiatEnabledArgs,
     SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
     SyncWalletArgs, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
     ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
@@ -618,29 +618,36 @@ impl WalletService {
     }
 
     pub async fn list_wallets(&self) -> Result<Vec<WalletSummary>> {
-        let active = self.paths.read_active_id()?;
-        let mut out = Vec::new();
-        for id in self.paths.list_wallet_ids()? {
-            let p = self.paths.for_wallet(&id);
-            let Some(meta) = Meta::load(&p.meta_file)? else {
-                continue;
-            };
-            let label = meta
-                .fingerprint
-                .as_ref()
-                .map(|f| f.chars().take(8).collect::<String>())
-                .unwrap_or_else(|| id.chars().take(8).collect());
-            out.push(WalletSummary {
-                id: id.clone(),
-                label,
-                fingerprint: meta.fingerprint.clone(),
-                network: meta.network,
-                birthday_height: meta.birthday_height,
-                active: active.as_deref() == Some(id.as_str()),
-            });
-        }
-        Ok(out)
+    let active = self.paths.read_active_id()?;
+    let mut out = Vec::new();
+    for id in self.paths.list_wallet_ids()? {
+        let p = self.paths.for_wallet(&id);
+        let Some(meta) = Meta::load(&p.meta_file)? else {
+            continue;
+        };
+        let label = meta
+            .label
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                meta.fingerprint
+                    .as_ref()
+                    .map(|f| f.chars().take(8).collect::<String>())
+            })
+            .unwrap_or_else(|| id.chars().take(8).collect());
+        out.push(WalletSummary {
+            id: id.clone(),
+            label,
+            fingerprint: meta.fingerprint.clone(),
+            network: meta.network,
+            birthday_height: meta.birthday_height,
+            active: active.as_deref() == Some(id.as_str()),
+        });
     }
+    Ok(out)
+}
 
     /// Switch the active wallet. Loads client + disk snapshot; does not start
     /// network sync until [`Self::sync_wallet`].
@@ -720,6 +727,10 @@ impl WalletService {
         match method {
             "getWalletState" => Ok(to_value(self.wallet_state().await)?),
             "getSyncStatus" => Ok(to_value(self.sync.read().await.clone())?),
+            "setWalletLabel" => {
+		    let args: SetWalletLabelArgs = serde_json::from_value(params)?;
+		    Ok(to_value(self.set_wallet_label(&args.id, &args.label).await?)?)
+		}
             "listWallets" => Ok(to_value(self.list_wallets().await?)?),
 		"selectWallet" => {
 		    let args: SelectWalletArgs = serde_json::from_value(params)?;
@@ -842,6 +853,7 @@ impl WalletService {
                 locked,
                 session_held,
                 wallet_id: self.paths.read_active_id().ok().flatten(),
+                label: m.label.clone(),
                 fingerprint: m.fingerprint.clone(),
                 import_type: m.import_type,
                 view_mode: m.view_mode,
@@ -857,6 +869,7 @@ impl WalletService {
                 locked: false,
                 session_held,
                 wallet_id: None,
+                label: None,
                 fingerprint: None,
                 import_type: ImportType::Ufvk,
                 view_mode: ViewMode::Full,
@@ -1015,6 +1028,23 @@ impl WalletService {
         self.collect_notes().await;
     }
 
+
+    pub async fn set_wallet_label(&self, id: &str, label: &str) -> Result<WalletState> {
+    let p = self.paths.for_wallet(id);
+    let mut meta = Meta::load(&p.meta_file)?
+        .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
+    let trimmed = label.trim();
+    meta.label = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.chars().take(64).collect())
+    };
+    meta.save(&p.meta_file)?;
+    Ok(self.wallet_state().await)
+}
+
+
+
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
         // ADR-0002: the network is derived from the key, never trusted from the
         // client. Reject testnet and malformed keys, and any disagreement between
@@ -1072,6 +1102,7 @@ impl WalletService {
             scan_target_height,
             encrypted: true,
             fingerprint: Some(identity.fingerprint.clone()),
+            label: None,
             notifications_enabled: true,
             fiat_enabled: false,
             discreet: false,

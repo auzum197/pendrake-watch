@@ -500,6 +500,16 @@ async fn sync_wallet(id: Option<String>) -> Result<Value, String> {
     request("syncWallet", serde_json::json!({ "id": id })).await
 }
 
+/// Set or clear a user-facing wallet name. Empty label clears (short fingerprint).
+#[tauri::command]
+async fn set_wallet_label(id: String, label: String) -> Result<Value, String> {
+    request(
+        "setWalletLabel",
+        serde_json::json!({ "id": id, "label": label }),
+    )
+    .await
+}
+
 
 /// Bring the GUI window to the front. The notification open's implicit activation
 /// is unreliable on macOS, so we focus from the app side instead. `unminimize` and
@@ -582,6 +592,7 @@ pub fn run() {
             list_wallets,
             select_wallet,
             sync_wallet,
+            set_wallet_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

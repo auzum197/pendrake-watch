@@ -109,8 +109,7 @@ impl Paths {
     }
 
     pub fn write_active_id(&self, id: &str) -> Result<()> {
-        std::fs::write(&self.active_id_file, id.as_bytes())
-            .context("writing active_wallet_id")?;
+        std::fs::write(&self.active_id_file, id.as_bytes()).context("writing active_wallet_id")?;
         Ok(())
     }
 
@@ -143,19 +142,16 @@ impl Paths {
         if self.read_active_id()?.is_some() {
             return Ok(None);
         }
-
-        let meta = Meta::load(&legacy_meta)?.context("legacy meta.json missing after exists check")?;
+        let meta =
+            Meta::load(&legacy_meta)?.context("legacy meta.json missing after exists check")?;
         let id = meta
             .fingerprint
             .clone()
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "default".to_string());
-
         let dest = self.for_wallet(&id);
-        std::fs::create_dir_all(self.wallets_dir.join(&id)).with_context(|| {
-            format!("creating {}", self.wallets_dir.join(&id).display())
-        })?;
-
+        std::fs::create_dir_all(self.wallets_dir.join(&id))
+            .with_context(|| format!("creating {}", self.wallets_dir.join(&id).display()))?;
         let legacy_wallet = self.root.join("wallet");
         if legacy_wallet.exists() {
             std::fs::rename(&legacy_wallet, &dest.wallet_dir)
@@ -163,12 +159,10 @@ impl Paths {
         }
         std::fs::rename(&legacy_meta, &dest.meta_file)
             .with_context(|| "moving legacy meta.json")?;
-
         let legacy_notified = self.root.join("notified.json");
         if legacy_notified.exists() {
             let _ = std::fs::rename(&legacy_notified, &dest.notified_file);
         }
-
         self.write_active_id(&id)?;
         tracing::info!(%id, "migrated legacy wallet into wallets/<id>");
         Ok(Some(id))
@@ -205,6 +199,11 @@ pub struct Meta {
     /// before this was tracked.
     #[serde(default)]
     pub fingerprint: Option<String>,
+    /// Optional user-facing name for the wallet switcher. Plaintext in meta.json
+    /// (not secret); the GUI masks it when Discreet mode is on. Empty / unset falls
+    /// back to a short fingerprint in listWallets.
+    #[serde(default)]
+    pub label: Option<String>,
     /// Whether transaction and scan-complete notifications fire, toggled from
     /// Settings. Defaults true so a wallet imported before this existed keeps
     /// notifying, matching the prior always-on behavior.

@@ -16,6 +16,7 @@ import {
 	listWallets,
 	removeWallet,
 	selectWallet,
+	setWalletLabel,
 	type SyncStatus,
 	type WalletState,
 	type WalletSummary,
@@ -29,6 +30,7 @@ import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
+import { DiscreetValue } from "@/components/ui/discreet-value";
 import { DiscreetEye } from "./discreet-eye";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { Toaster } from "@/components/ui/sonner";
@@ -60,6 +62,14 @@ function NetworkBadge({ network }: { network?: string }) {
 			{network ?? "Watch-only"}
 		</span>
 	);
+}
+
+/** Display name for the active wallet: custom label, else short fingerprint. */
+function activeDisplayName(wallet: WalletState | null): string {
+	const custom = wallet?.label?.trim();
+	if (custom) return custom;
+	if (wallet?.fingerprint) return wallet.fingerprint.slice(0, 8);
+	return "—";
 }
 
 let aboutWindow: WebviewWindow | null = null;
@@ -203,13 +213,15 @@ function WalletCard({
 	const [wallets, setWallets] = useState<WalletSummary[]>([]);
 	const [busy, setBusy] = useState(false);
 	const [removeOpen, setRemoveOpen] = useState(false);
+	const [renameOpen, setRenameOpen] = useState(false);
+	const [renameDraft, setRenameDraft] = useState("");
 
 	useEffect(() => {
 		if (!open) return;
 		listWallets()
 			.then(setWallets)
 			.catch(() => setWallets([]));
-	}, [open, wallet?.walletId, wallet?.fingerprint]);
+	}, [open, wallet?.walletId, wallet?.fingerprint, wallet?.label]);
 
 	async function onPick(id: string) {
 		if (busy || id === wallet?.walletId) {
@@ -232,6 +244,33 @@ function WalletCard({
 		setOpen(false);
 		navigate({ to: "/onboarding", search: { mode: "add" } });
 	}
+
+	function openRename() {
+		setOpen(false);
+		setRenameDraft(wallet?.label?.trim() ?? "");
+		setRenameOpen(true);
+	}
+
+	async function onConfirmRename() {
+  const id = wallet?.walletId;
+  if (!id || busy) return;
+  setBusy(true);
+  try {
+    const trimmed = renameDraft.trim();
+    const state = await setWalletLabel(id, trimmed);
+    // Prefer the name we just saved; don't trust a stale label on WalletState.
+    setCachedWallet({
+      ...state,
+      label: trimmed.length > 0 ? trimmed : null,
+    });
+    setRenameOpen(false);
+    setWallets(await listWallets());
+  } catch (e) {
+    toast.error(String(e));
+  } finally {
+    setBusy(false);
+  }
+}
 
 	async function onConfirmRemove() {
 		if (!wallet?.exists || busy) return;
@@ -268,6 +307,8 @@ function WalletCard({
 		}
 	}
 
+	const headerName = activeDisplayName(wallet);
+
 	return (
 		<div className="relative mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
 			<div className="flex items-start gap-3">
@@ -292,8 +333,8 @@ function WalletCard({
 						<div>
 							<NetworkBadge network={wallet?.network} />
 						</div>
-						<span className="font-mono text-xs text-white/45">
-							{wallet?.fingerprint ? wallet.fingerprint.slice(0, 7) : "—"}
+						<span className="truncate text-xs text-white/45">
+							<DiscreetValue kind="label">{headerName}</DiscreetValue>
 						</span>
 					</div>
 				</button>
@@ -329,8 +370,8 @@ function WalletCard({
 										className="size-6 shrink-0 rounded-full"
 									/>
 								) : null}
-								<span className="min-w-0 flex-1 truncate font-mono">
-									{w.label}
+								<span className="min-w-0 flex-1 truncate">
+									<DiscreetValue kind="label">{w.label}</DiscreetValue>
 								</span>
 								{w.active && (
 									<span className="text-[10px] uppercase tracking-wide text-white/40">
@@ -341,6 +382,14 @@ function WalletCard({
 						))
 					)}
 					<div className="mt-1 border-t border-white/10 pt-1">
+						<button
+							type="button"
+							disabled={busy || !wallet?.exists}
+							onClick={openRename}
+							className="flex w-full rounded-lg px-3 py-2 text-left text-xs text-white/80 hover:bg-white/10 disabled:opacity-40"
+						>
+							Rename…
+						</button>
 						<button
 							type="button"
 							disabled={busy}
@@ -398,6 +447,44 @@ function WalletCard({
 							}}
 						>
 							{busy ? "Removing…" : "Remove wallet"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog open={renameOpen} onOpenChange={setRenameOpen}>
+				<AlertDialogContent size="sm">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Rename wallet</AlertDialogTitle>
+						<AlertDialogDescription>
+							A short name for this account. Leave blank to use the fingerprint
+							prefix. Hidden when Discreet mode is on.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<input
+						autoFocus
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-brand"
+						placeholder="e.g. Cold storage"
+						maxLength={64}
+						value={renameDraft}
+						onChange={(e) => setRenameDraft(e.currentTarget.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								void onConfirmRename();
+							}
+						}}
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={busy}
+							onClick={(e) => {
+								e.preventDefault();
+								void onConfirmRename();
+							}}
+						>
+							{busy ? "Saving…" : "Save"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
