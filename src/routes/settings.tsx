@@ -8,6 +8,7 @@ import {
   IconCurrencyDollar,
   IconEyeOff,
   IconFlask,
+  IconPlayerPlay,
   IconServer2,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,13 @@ import {
   setFiatEnabled,
   setIndexer,
   setNotifications,
+  setKeepRunningInBackground as setKeepRunningIpc,
   type Network,
 } from "@/lib/ipc";
+import {
+  keepRunningInBackground,
+  setKeepRunningInBackground as setKeepRunningLocal,
+} from "@/lib/background";
 import { toggleDiscreet, useDiscreet } from "@/lib/discreet";
 import { reduceMotion, setReduceMotion } from "@/lib/motion";
 import { FEATURES, setEnabled, useFeature } from "@/lib/features";
@@ -43,6 +49,8 @@ export function SettingsPage() {
           enabled={wallet.notificationsEnabled}
         />
       )}
+
+      <BackgroundSection />
 
       {wallet?.exists && (
         <FiatSection
@@ -96,6 +104,59 @@ export function SettingsPage() {
         network={wallet?.network ?? "mainnet"}
       />
     </>
+  );
+}
+
+// Keep the daemon alive after the GUI closes (default on). When off, ExitRequested
+// sends IPC shutdown then force-kills the process. Preference is localStorage + a
+// Tauri-side AtomicBool so the exit handler does not need the webview.
+function BackgroundSection() {
+  const [on, setOn] = useState(keepRunningInBackground);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void setKeepRunningIpc(keepRunningInBackground());
+  }, []);
+
+  async function toggle(next: boolean) {
+    setOn(next);
+    setKeepRunningLocal(next);
+    setBusy(true);
+    try {
+      await setKeepRunningIpc(next);
+    } catch {
+      setOn(!next);
+      setKeepRunningLocal(!next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <IconPlayerPlay className="size-4 text-muted-foreground" />
+        <h2 className="font-heading text-base font-semibold">Background</h2>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-foreground">
+            Keep syncing when app is closed
+          </span>
+          <span className="text-sm text-muted-foreground">
+            When off, the background process stops as soon as you quit. When on,
+            the active wallet can keep following the tip and send notifications
+            after the window closes.
+          </span>
+        </div>
+        <Switch
+          checked={on}
+          disabled={busy}
+          onCheckedChange={toggle}
+          aria-label="Keep syncing when app is closed"
+        />
+      </div>
+    </section>
   );
 }
 

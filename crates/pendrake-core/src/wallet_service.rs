@@ -159,6 +159,9 @@ pub struct WalletService {
     /// inherits it and onboarding skips Set Password; Start over drops it
     /// (docs/adr/0004). Never persisted.
     session_passphrase: Mutex<Option<String>>,
+    /// Armed by `run` so a `shutdown` IPC request can wake the host process.
+    /// Taken on first use; subsequent calls are no-ops.
+    shutdown_tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
 }
 
 /// One in-flight scan range, walked through its lifecycle by the batch events.
@@ -510,10 +513,19 @@ fn allowed_while_locked(method: &str) -> bool {
             | "removeWallet"
             | "subscribeEvents"
             | "listWallets"
+            | "shutdown"
     )
 }
 
 impl WalletService {
+    /// Arm the one-shot sender that wakes the host when `shutdown` is received.
+    pub fn arm_shutdown(&self, tx: std::sync::mpsc::Sender<()>) {
+        *self
+            .shutdown_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+    }
+
     /// Root `Paths` scoped to the active wallet id, if any. Disk layout is
     /// multi-wallet ready (`wallets/<id>/`); the service still drives a single
     /// active wallet at a time.
@@ -569,6 +581,7 @@ impl WalletService {
             encrypted: AtomicBool::new(false),
             subscribers: AtomicUsize::new(0),
             session_passphrase: Mutex::new(None),
+            shutdown_tx: std::sync::Mutex::new(None),
             paths,
         });
 
@@ -818,6 +831,14 @@ impl WalletService {
             }
             // The push stream is wired up by the IPC layer, so the service just acks.
             "subscribeEvents" => Ok(serde_json::Value::Null),
+            "shutdown" => {
+                if let Ok(mut guard) = self.shutdown_tx.lock() {
+                    if let Some(tx) = guard.take() {
+                        let _ = tx.send(());
+                    }
+                }
+                Ok(serde_json::Value::Null)
+            }
             other => Err(anyhow!("unknown method: {other}")),
         }
     }
@@ -2997,6 +3018,7 @@ mod tests {
             "removeWallet",
             "subscribeEvents",
             "listWallets",
+            "shutdown",
         ] {
             assert!(
                 allowed_while_locked(m),

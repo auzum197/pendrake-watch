@@ -6,6 +6,7 @@
 
 use std::fs::File;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -38,6 +39,16 @@ pub struct ServiceHandle {
     // Held for the service's lifetime so a second instance can't serve the same
     // wallet. Released when the handle drops.
     _lock: File,
+    /// Completes when the service receives a `shutdown` IPC request.
+    shutdown_rx: mpsc::Receiver<()>,
+}
+
+impl ServiceHandle {
+    /// Block until `shutdown` is requested over IPC. Dropping the handle then
+    /// tears down the runtime, socket, and lock.
+    pub fn wait_for_shutdown(self) {
+        let _ = self.shutdown_rx.recv();
+    }
 }
 
 impl Drop for ServiceHandle {
@@ -75,7 +86,11 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
         .build()
         .map_err(anyhow::Error::from)?;
 
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+
     let service = runtime.block_on(WalletService::load(paths.clone(), notifier))?;
+    service.arm_shutdown(shutdown_tx);
+
     let serve_paths = paths.clone();
     runtime.spawn(async move {
         // A service nobody can reach is worse than a dead one: it holds the
@@ -96,6 +111,7 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
         runtime: Some(runtime),
         socket: paths.socket,
         _lock: lock,
+        shutdown_rx,
     })
 }
 

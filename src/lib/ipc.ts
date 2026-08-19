@@ -403,3 +403,12 @@ export function onSyncEvent(
 ): Promise<UnlistenFn> {
   return listen<SyncEvent>("sync-event", (e) => handler(e.payload));
 }
+
+// GUI lifecycle preference: when false the Tauri process stops the daemon on exit.
+export function setKeepRunningInBackground(enabled: boolean): Promise<void> {
+  return invoke("set_keep_running_in_background", { enabled });
+}
+
+export function getKeepRunningInBackground(): Promise<boolean> {
+  return invoke("get_keep_running_in_background");
+}
