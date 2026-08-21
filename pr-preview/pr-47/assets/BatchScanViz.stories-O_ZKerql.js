@@ -1,0 +1,9 @@
+import{r as n,j as e}from"./iframe-QZIHBPGP.js";/* empty css                 */import"./preload-helper-PPVm8Dsz.js";const l=30;function p({active:o,sparkSeq:r,canSpark:c}){const[i,m]=n.useState(0),d=n.useRef(r);return n.useEffect(()=>{r!==d.current&&(d.current=r,c&&m(r))},[r,c]),e.jsxs("div",{className:"relative h-7 overflow-hidden rounded-md border border-border bg-muted/20 [container-type:inline-size]",children:[e.jsx("div",{className:`absolute inset-y-0 left-0 flex w-max items-center gap-1.5 px-1 ${o?"sync-belt":""}`,children:Array.from({length:l*2}).map((x,u)=>e.jsx("span",{className:"h-2 w-2 shrink-0 rounded-[2px] bg-muted-foreground/20"},u))}),e.jsx("div",{className:"pointer-events-none absolute inset-y-1 left-1/2 w-2.5 -translate-x-1/2 rounded-sm border-x border-primary/50 bg-primary/10"}),i>0&&e.jsx("span",{className:"sync-match pointer-events-none absolute left-1 top-1/2 -mt-1 h-2 w-2 rounded-[2px] shadow-[0_0_6px_1px_rgba(34,197,94,0.6)]"},i)]})}p.__docgenInfo={description:"",methods:[],displayName:"BatchScanViz",props:{active:{required:!0,tsType:{name:"boolean"},description:""},sparkSeq:{required:!0,tsType:{name:"number"},description:""},canSpark:{required:!0,tsType:{name:"boolean"},description:""}}};const g={component:p,args:{active:!0,sparkSeq:0,canSpark:!0},decorators:[o=>e.jsx("div",{className:"w-80",children:e.jsx(o,{})})]},s={},a={args:{active:!1}},t={args:{sparkSeq:1}};s.parameters={...s.parameters,docs:{...s.parameters?.docs,source:{originalSource:"{}",...s.parameters?.docs?.source}}};a.parameters={...a.parameters,docs:{...a.parameters?.docs,source:{originalSource:`{
+  args: {
+    active: false
+  }
+}`,...a.parameters?.docs?.source}}};t.parameters={...t.parameters,docs:{...t.parameters?.docs,source:{originalSource:`{
+  args: {
+    sparkSeq: 1
+  }
+}`,...t.parameters?.docs?.source}}};const v=["Active","Idle","Match"];export{s as Active,a as Idle,t as Match,v as __namedExportsOrder,g as default};
