@@ -3,7 +3,6 @@ import { useLocation } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconBell,
-  IconCheck,
   IconCircleCheck,
   IconCurrencyDollar,
   IconEyeOff,
@@ -11,11 +10,16 @@ import {
   IconPlayerPlay,
   IconServer2,
 } from "@tabler/icons-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button/button";
+import { Switch } from "@/components/ui/switch/switch";
+import { IndexerPicker } from "@/components/indexer/indexer-picker";
 import { ReplaceDialog } from "@/components/settings/replace-dialog";
 import { useWalletData } from "@/hooks/use-wallet-data";
+import {
+  CUSTOM_INDEXER,
+  indexerReady,
+  resolveIndexer,
+} from "@/lib/indexer";
 import {
   MAINNET_INDEXERS,
   setFiatEnabled,
@@ -380,29 +384,6 @@ function ReduceMotionToggle() {
 
 type SaveStatus = "idle" | "connecting" | "saved" | "error";
 
-// "custom" is a sentinel selection; any other value is a preset's URI.
-const CUSTOM = "custom";
-
-// A minimally well-formed http(s) URL with a host. Deliberately light (no scheme
-// enforcement), so a regtest `http://localhost:…` passes; the daemon's connect is
-// the real gate.
-function looksLikeUrl(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return (u.protocol === "https:" || u.protocol === "http:") && u.hostname !== "";
-  } catch {
-    return false;
-  }
-}
-
-function hostOf(uri: string): string {
-  try {
-    return new URL(uri).hostname;
-  } catch {
-    return uri;
-  }
-}
-
 // The Indexer the Wallet syncs against, changed here rather than on Home (AUZ-47).
 // Mainnet offers the curated zec.rocks region list plus a custom entry; regtest has
 // no public default, so it only takes a custom Indexer. Save is connect-then-persist:
@@ -424,10 +405,10 @@ function IndexerSection({
     ? MAINNET_INDEXERS.find((p) => p.uri === current)
     : undefined;
 
-  // Selection is a preset URI or CUSTOM. Regtest is always custom. A saved value
-  // that matches no preset opens as custom with the value filled in.
+  // Selection is a preset URI or the custom sentinel. Regtest is always custom. A
+  // saved value that matches no preset opens as custom with the value filled in.
   const [selection, setSelection] = useState(
-    isMainnet && preset ? preset.uri : CUSTOM,
+    isMainnet && preset ? preset.uri : CUSTOM_INDEXER,
   );
   const [customUrl, setCustomUrl] = useState(preset ? "" : current);
   const [saved, setSaved] = useState(current);
@@ -436,11 +417,10 @@ function IndexerSection({
   const sectionRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isCustom = selection === CUSTOM;
-  const resolved = isCustom ? customUrl.trim() : selection;
+  const resolved = resolveIndexer(selection, customUrl, network);
   const connecting = status === "connecting";
-  const valid = isCustom ? looksLikeUrl(resolved) : true;
-  const changed = valid && resolved.length > 0 && resolved !== saved;
+  const changed =
+    indexerReady(selection, customUrl, network) && resolved !== saved;
 
   // Land on the section when arriving from the dashboard's "Change Indexer" CTA,
   // focusing the custom field if it's open, otherwise the first preset.
@@ -484,47 +464,23 @@ function IndexerSection({
           : "This regtest Wallet has no public default, so point it at your own Indexer."}
       </p>
 
-      {isMainnet && (
-        <ul className="mt-4 flex flex-col gap-1.5">
-          {MAINNET_INDEXERS.map((p) => (
-            <IndexerRow
-              key={p.uri}
-              label={p.label}
-              sub={hostOf(p.uri)}
-              selected={selection === p.uri}
-              disabled={connecting}
-              onClick={() => choose(p.uri)}
-            />
-          ))}
-          <IndexerRow
-            label="Custom…"
-            sub="Point at your own Indexer"
-            selected={isCustom}
-            disabled={connecting}
-            onClick={() => choose(CUSTOM)}
-          />
-        </ul>
-      )}
-
-      {isCustom && (
-        <Input
-          ref={inputRef}
-          value={customUrl}
-          spellCheck={false}
-          autoComplete="off"
-          disabled={connecting}
-          placeholder="https://your-indexer:443"
-          className={`font-mono ${isMainnet ? "mt-2" : "mt-4"}`}
-          onChange={(e) => {
-            setCustomUrl(e.currentTarget.value);
-            if (status !== "idle") setStatus("idle");
-            setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && changed && !connecting) save();
-          }}
-        />
-      )}
+      <IndexerPicker
+        network={network}
+        selection={selection}
+        customUrl={customUrl}
+        disabled={connecting}
+        inputRef={inputRef}
+        className="mt-4"
+        onSelect={choose}
+        onCustomChange={(url) => {
+          setCustomUrl(url);
+          if (status !== "idle") setStatus("idle");
+          setError(null);
+        }}
+        onCustomSubmit={() => {
+          if (changed && !connecting) save();
+        }}
+      />
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="min-w-0 text-xs">
@@ -557,46 +513,5 @@ function IndexerSection({
         </Button>
       </div>
     </section>
-  );
-}
-
-function IndexerRow({
-  label,
-  sub,
-  selected,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  sub: string;
-  selected: boolean;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onClick}
-        className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-50 ${
-          selected
-            ? "border-brand bg-brand/5"
-            : "border-border hover:border-muted-foreground/40"
-        }`}
-      >
-        <span className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium text-foreground">{label}</span>
-          <span className="truncate font-mono text-xs text-muted-foreground">{sub}</span>
-        </span>
-        <span
-          className={`ml-auto flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-            selected ? "border-brand bg-brand text-white" : "border-muted-foreground/40"
-          }`}
-        >
-          {selected && <IconCheck className="size-3.5" />}
-        </span>
-      </button>
-    </li>
   );
 }

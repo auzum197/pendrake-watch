@@ -7,11 +7,11 @@ import {
   IconMessage2,
 } from "@tabler/icons-react";
 import type { Tx } from "@/lib/ipc";
-import { DiscreetValue } from "@/components/ui/discreet-value";
+import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { formatBlock, formatZec, txHasMemo } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
-import { takeReturnRow } from "./return-flash";
-import "./reveal.css";
+import { takeReturnRow } from "../return-flash";
+import "../reveal.css";
 
 // The entrance cascade eases toward a ceiling rather than stepping linearly then
 // clamping flat. A flat clamp makes every row past the cutoff fire on the same

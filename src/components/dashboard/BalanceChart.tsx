@@ -26,7 +26,7 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 	type ChartConfig,
-} from "@/components/ui/chart";
+} from "@/components/ui/chart/chart";
 import { useMasked } from "@/lib/discreet";
 import { type BalancePoint, formatUsd } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";

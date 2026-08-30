@@ -8,8 +8,8 @@ import {
   AlertDialogDescription,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { HoldButton } from "@/components/ui/hold-button";
+} from "@/components/ui/alert-dialog/alert-dialog";
+import { HoldButton } from "@/components/ui/hold-button/hold-button";
 import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { takePendingTxid } from "@/lib/deep-link";

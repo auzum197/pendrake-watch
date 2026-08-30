@@ -3,6 +3,7 @@ import {
 	IconAlertTriangle,
 	IconCircleCheckFilled,
 	IconLoader2,
+	IconRefresh,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { syncWallet, type SyncStatus } from "@/lib/ipc";
@@ -148,6 +149,51 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 				<IconLoader2 className="size-3 motion-safe:animate-spin" />
 			) : null}
 			{busy ? "Starting…" : "Sync"}
+		</button>
+	);
+}
+
+export function SyncGlyph({ sync }: { sync: SyncStatus | null }) {
+	const [busy, setBusy] = useState(false);
+
+	async function startSync() {
+		if (busy) return;
+		setBusy(true);
+		try {
+			await syncWallet();
+		} catch (e) {
+			toast.error(String(e));
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	const scanning =
+		busy || !sync || sync.state === "syncing" || isSyncing(sync);
+	const title = !sync
+		? "Connecting"
+		: sync.state === "error"
+			? sync.wrongChain
+				? "Wrong chain"
+				: "Retry sync"
+			: isSynced(sync)
+				? "Synced"
+				: scanning
+					? "Syncing"
+					: "Sync this wallet to the chain tip";
+
+	return (
+		<button
+			type="button"
+			onClick={startSync}
+			disabled={busy}
+			aria-label={title}
+			title={title}
+			className="flex shrink-0 cursor-pointer items-center text-white/45 transition-colors hover:text-white/80 disabled:opacity-60"
+		>
+			<IconRefresh
+				className={`size-3.5 ${scanning ? "motion-safe:animate-spin" : ""}`}
+			/>
 		</button>
 	);
 }

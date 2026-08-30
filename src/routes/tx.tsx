@@ -7,7 +7,7 @@ import {
 import { IconArrowLeft } from "@tabler/icons-react";
 import { getTransaction, onSyncEvent, type Note, type Tx } from "@/lib/ipc";
 import { formatUsd, formatZec, priceLookup, splitAddress } from "@/lib/format";
-import { DiscreetValue } from "@/components/ui/discreet-value";
+import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { useMasked } from "@/lib/discreet";
 import { getCachedTx, getCachedWallet } from "@/hooks/use-wallet-data";
 import { usePriceData } from "@/hooks/use-price-data";

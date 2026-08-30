@@ -8,7 +8,6 @@ import { isEnabled } from "@/lib/features";
 import { RootLayout } from "@/routes/root";
 import { AppLayout } from "@/routes/app-layout";
 import { StartGate } from "@/routes/start";
-import { AboutPage } from "@/routes/about";
 import { TxDetailPage } from "@/routes/tx";
 import { OnboardingPage } from "@/routes/onboarding";
 import { DashboardPage } from "@/routes/dashboard";
@@ -26,12 +25,6 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   component: StartGate,
-});
-
-const aboutRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/about",
-  component: AboutPage,
 });
 
 const onboardingRoute = createRoute({
@@ -101,7 +94,6 @@ const unlockRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  aboutRoute,
   onboardingRoute,
   unlockRoute,
   appLayoutRoute.addChildren([

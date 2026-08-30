@@ -7,8 +7,8 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog/alert-dialog";
+import { Button } from "@/components/ui/button/button";
 
 // Fiat display is off by default because it reaches third-party price providers, an
 // outbound request beyond the Indexer (docs/adr/0008). Turning USD on is gated on this

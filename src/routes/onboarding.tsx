@@ -10,17 +10,18 @@ import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@/components/ui/popover/popover";
 import {
 	HoverCard,
 	HoverCardContent,
 	HoverCardTrigger,
-} from "@/components/ui/hover-card";
+} from "@/components/ui/hover-card/hover-card";
 import {
 	DEFAULT_INDEXER,
 	getWalletState,
 	importUfvk,
 	parseUfvk,
+	type Network,
 	type ParseUfvkResult,
 	type UfvkNetwork,
 } from "@/lib/ipc";
@@ -31,10 +32,12 @@ import {
 	networkFromUfvk,
 	onboardingSteps,
 } from "@/lib/onboarding";
+import { indexerReady, resolveIndexer } from "@/lib/indexer";
 import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
-import { Segmented } from "@/components/app/segmented";
+import { IndexerPicker } from "@/components/indexer/indexer-picker";
+import { Segmented } from "@/components/app/segmented/segmented";
 
 // Faithful rebuild of the designer's onboarding frames (Import Wallet -> Indexer
 // -> Set Password). Fully dark, brand-blue accent, a single centered column with
@@ -50,6 +53,8 @@ type Draft = {
 	syncMode: SyncMode;
 	date: string;
 	height: string;
+	// A preset's URI or the CUSTOM_INDEXER sentinel, alongside the custom field's text.
+	indexerSelection: string;
 	indexerUri: string;
 	password: string;
 	confirm: string;
@@ -60,6 +65,7 @@ const INITIAL: Draft = {
 	syncMode: "height",
 	date: "",
 	height: "",
+	indexerSelection: DEFAULT_INDEXER,
 	indexerUri: "",
 	password: "",
 	confirm: "",
@@ -95,11 +101,11 @@ export function OnboardingPage() {
 		setDraft((d) => ({ ...d, [key]: value }));
 	}
 
-	// The step sequence is the router: regtest keeps the Indexer step, mainnet
-	// drops it, and a held session passphrase drops Set Password (src/lib/onboarding).
-	// It is derived from the pasted key, so editing the UFVK on the first step
-	// reshapes the flow live.
-	const steps = onboardingSteps(networkFromUfvk(draft.ufvk), sessionHeld);
+	// The network is derived from the pasted key, so editing the UFVK on the first
+	// step reshapes the Indexer step live. A held session passphrase drops Set
+	// Password from the sequence (src/lib/onboarding).
+	const network = networkFromUfvk(draft.ufvk);
+	const steps = onboardingSteps(sessionHeld);
 	const position = Math.min(index, steps.length - 1);
 	const current = steps[position];
 	const isLast = position === steps.length - 1;
@@ -121,7 +127,6 @@ export function OnboardingPage() {
 		setError(null);
 		try {
 			// Never call removeWallet here — Add wallet and first-run both only import.
-			const network = networkFromUfvk(draft.ufvk);
 			await importUfvk({
 				ufvk: draft.ufvk.trim(),
 				// The daemon's resolver settles this raw choice into a height
@@ -129,9 +134,13 @@ export function OnboardingPage() {
 				birthday: birthdayChoice(draft, network),
 				// Regtest has no universal Indexer, so its onboarding requires a custom
 				// one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
-				// (AUZ-104). Mainnet skips the step and takes the public default.
-				indexerUri:
-					network === "regtest" ? draft.indexerUri.trim() : DEFAULT_INDEXER,
+				// (AUZ-104). Mainnet opens on that default with the region list and a
+				// custom entry alongside it.
+				indexerUri: resolveIndexer(
+					draft.indexerSelection,
+					draft.indexerUri,
+					network,
+				),
 				network,
 				// First onboarding sets the global passphrase (docs/adr/0003). A
 				// post-Replace import omits it so the daemon reuses the held one.
@@ -168,6 +177,7 @@ export function OnboardingPage() {
 					)}
 					{current === "indexer" && (
 						<IndexerStep
+							network={network}
 							draft={draft}
 							set={set}
 							stepNumber={position + 1}
@@ -596,11 +606,12 @@ function Verdict({ result }: { result: ParseUfvkResult }) {
 	);
 }
 
-// The selected option is marked by a brand capsule that slides between segments
-// rather than popping onto each. The capsule is one segment wide and rides on
-// translateX, so the move is a single GPU transform and a click mid-slide
-// retargets it. Segments are equal width to keep that translate exact.
+// The Indexer the new Wallet syncs against. Mainnet opens on the auto-routed default
+// with the region list and a custom entry beside it; regtest has no public default,
+// so it only takes a custom one and the primary action stays disabled until the URL
+// looks real (AUZ-104).
 function IndexerStep({
+	network,
 	draft,
 	set,
 	stepNumber,
@@ -611,41 +622,48 @@ function IndexerStep({
 	busy,
 	error,
 }: {
+	network: Network;
 	draft: Draft;
 	set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
 	stepNumber: number;
 	stepTotal: number;
 	onBack: () => void;
 	onNext: () => void;
-	// On a regtest Replace this is the last step, so its button imports.
+	// On a Replace this is the last step, so its button imports.
 	isFinal: boolean;
 	busy: boolean;
 	error: string | null;
 }) {
-	// Regtest has no universal Indexer, so onboarding requires one here and the
-	// primary action stays disabled until a URL is entered (AUZ-104).
-	const ready = draft.indexerUri.trim().length > 0;
+	const ready = indexerReady(draft.indexerSelection, draft.indexerUri, network);
 	return (
 		<>
 			<StepHeading
 				step={stepNumber}
 				total={stepTotal}
 				title="Indexer"
-				subtitle="A regtest key was detected. Point it at the Indexer to connect to."
+				subtitle={
+					network === "regtest"
+						? "A regtest key was detected. Point it at the Indexer to connect to."
+						: "Choose where this Wallet gets its chain data from."
+				}
 			/>
 
-			<label className="flex flex-col gap-2">
-				<FieldLabel>Indexer URL</FieldLabel>
-				<input
-					autoFocus
-					className={`${fieldBase} h-12 font-mono`}
-					placeholder="https://localhost:8232"
-					spellCheck={false}
-					autoComplete="off"
-					value={draft.indexerUri}
-					onChange={(e) => set("indexerUri", e.currentTarget.value)}
+			<div className="flex flex-col gap-2">
+				{network === "regtest" && <FieldLabel>Indexer URL</FieldLabel>}
+				<IndexerPicker
+					network={network}
+					selection={draft.indexerSelection}
+					customUrl={draft.indexerUri}
+					disabled={busy}
+					autoFocus={network === "regtest"}
+					inputClassName="h-12 rounded-xl border-ink-line bg-ink-soft px-4 text-sm"
+					onSelect={(selection) => set("indexerSelection", selection)}
+					onCustomChange={(url) => set("indexerUri", url)}
+					onCustomSubmit={() => {
+						if (ready && !busy) onNext();
+					}}
 				/>
-			</label>
+			</div>
 
 			{isFinal && error && (
 				<p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">

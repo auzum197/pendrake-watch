@@ -10,7 +10,7 @@ import type { WalletNote } from "@/lib/ipc";
 import {
   maskFor,
   type DiscreetKind,
-} from "@/components/ui/discreet-value";
+} from "@/components/ui/discreet-value/discreet-value";
 import { useMasked } from "@/lib/discreet";
 import { formatZec, zatToZecPlain } from "@/lib/format";
 import type { Sort, SortKey } from "@/lib/notes";

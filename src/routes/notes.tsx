@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { IconSearch } from "@tabler/icons-react";
 import { PoolDot } from "@/components/notes/badges";
-import { DiscreetValue } from "@/components/ui/discreet-value";
+import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import {
   NotesContentSkeleton,
   SummaryBarSkeleton,

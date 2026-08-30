@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton/skeleton";
 
 // Cold-start placeholders for the notes view. They trace the real layout (four
 // summary cards, a filter row, a table) so the page holds its shape and nothing

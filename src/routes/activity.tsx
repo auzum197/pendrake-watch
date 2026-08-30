@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
-import { TxList } from "@/components/app/tx-list";
+import { TxList } from "@/components/app/tx-list/tx-list";
 import { useWalletData } from "@/hooks/use-wallet-data";
 import { txsToCsv } from "@/lib/format";
 import type { Tx } from "@/lib/ipc";

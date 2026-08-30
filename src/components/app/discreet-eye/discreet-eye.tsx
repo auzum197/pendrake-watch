@@ -73,10 +73,10 @@ export function DiscreetEye() {
 					release();
 				}
 			}}
-			className="flex size-6 shrink-0 cursor-pointer select-none items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white/80 focus-visible:outline-2 focus-visible:outline-brand"
+			className="flex shrink-0 cursor-pointer select-none items-center text-white/45 transition-colors hover:text-white/80 focus-visible:outline-2 focus-visible:outline-brand"
 			style={{ touchAction: "none" }}
 		>
-			<Icon className="size-4" />
+			<Icon className="size-3.5" />
 		</button>
 	);
 }

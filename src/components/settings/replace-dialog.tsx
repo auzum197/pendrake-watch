@@ -9,8 +9,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@/components/ui/alert-dialog/alert-dialog";
+import { Button } from "@/components/ui/button/button";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 import { removeWallet, verifyPassphrase, type Network } from "@/lib/ipc";
 import { cn } from "@/lib/utils";

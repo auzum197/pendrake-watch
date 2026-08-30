@@ -6,9 +6,9 @@ import {
 	IconInfoCircle,
 	IconLoader2,
 } from "@tabler/icons-react";
-import { Segmented } from "@/components/app/segmented";
-import { DiscreetValue } from "@/components/ui/discreet-value";
-import { TxList } from "@/components/app/tx-list";
+import { Segmented } from "@/components/app/segmented/segmented";
+import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
+import { TxList } from "@/components/app/tx-list/tx-list";
 import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
 import { usePriceData } from "@/hooks/use-price-data";

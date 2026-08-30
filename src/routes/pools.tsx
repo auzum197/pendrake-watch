@@ -14,7 +14,7 @@ import { formatNoteAmount, formatZec } from "@/lib/format";
 import {
   DiscreetValue,
   type DiscreetKind,
-} from "@/components/ui/discreet-value";
+} from "@/components/ui/discreet-value/discreet-value";
 import type { Pool } from "@/lib/ipc";
 import { type PoolStat, poolStats } from "@/lib/pools";
 import { animationsEnabled } from "@/lib/motion";

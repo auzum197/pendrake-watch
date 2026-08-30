@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { hydrateDiscreet, useDiscreet } from "@/lib/discreet";
-import { DiscreetValue } from "@/components/ui/discreet-value";
+import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { DiscreetEye } from "./discreet-eye";
 
 // A click routes through the daemon IPC, which Storybook doesn't have, so the

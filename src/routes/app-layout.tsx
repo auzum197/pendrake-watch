@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { AppShell } from "@/components/app/app-shell";
+import { AppShell } from "@/components/app/app-shell/app-shell";
 import { useWalletData } from "@/hooks/use-wallet-data";
 
 // The chrome shared by every signed-in screen: the sidebar and the scrollable

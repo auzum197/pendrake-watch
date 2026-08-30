@@ -1,5 +1,5 @@
 import ReactDOM from "react-dom/client";
-import { AboutCard } from "./components/app/about-card";
+import { AboutCard } from "./components/app/about-card/about-card";
 import "./index.css";
 
 // Entry for the standalone About window. Kept minimal on purpose: it boots only the
