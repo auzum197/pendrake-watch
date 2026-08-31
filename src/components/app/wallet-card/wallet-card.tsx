@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { IconPlus, IconSelector, IconWallet } from "@tabler/icons-react";
@@ -23,6 +23,7 @@ import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { DotStream } from "@/components/ui/dot-stream/dot-stream";
 import { SyncGlyph } from "../sync-status/sync-status";
+import { DiscreetEye } from "../discreet-eye/discreet-eye";
 
 function activeDisplayName(wallet: WalletState | null): string {
 	const custom = wallet?.label?.trim();
@@ -113,6 +114,9 @@ export function WalletCard({
 	const [open, setOpen] = useState(false);
 	const [wallets, setWallets] = useState<WalletSummary[]>([]);
 	const [busy, setBusy] = useState(false);
+	const [render, setRender] = useState(false);
+	const [shown, setShown] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -120,6 +124,28 @@ export function WalletCard({
 			.then(setWallets)
 			.catch(() => setWallets([]));
 	}, [open, wallet?.walletId, wallet?.fingerprint, wallet?.label]);
+
+	useEffect(() => {
+		if (!open) return;
+		function onPointerDown(e: PointerEvent) {
+			if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+		}
+		document.addEventListener("pointerdown", onPointerDown);
+		return () => document.removeEventListener("pointerdown", onPointerDown);
+	}, [open]);
+
+	useEffect(() => {
+		if (open) {
+			setRender(true);
+			const raf = requestAnimationFrame(() =>
+				requestAnimationFrame(() => setShown(true)),
+			);
+			return () => cancelAnimationFrame(raf);
+		}
+		setShown(false);
+		const t = setTimeout(() => setRender(false), 160);
+		return () => clearTimeout(t);
+	}, [open]);
 
 	async function onPick(id: string) {
 		if (busy || id === wallet?.walletId) {
@@ -150,7 +176,10 @@ export function WalletCard({
 	const orderedWallets = orderWallets(wallets, wallet?.walletId ?? null);
 
 	return (
-		<div className="relative mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
+		<div
+			ref={rootRef}
+			className="relative mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4"
+		>
 			<div className="flex items-center gap-3">
 				{switching ? (
 					<>
@@ -164,9 +193,12 @@ export function WalletCard({
 					<>
 						<WalletAvatar fingerprint={wallet?.fingerprint ?? null} size={10} />
 						<div className="min-w-0 flex-1">
-							<p className="truncate text-xs font-semibold leading-tight text-white">
-								{headerName}
-							</p>
+							<div className="flex items-center gap-1.5">
+								<p className="truncate text-xs font-semibold leading-tight text-white">
+									{headerName}
+								</p>
+								<DiscreetEye />
+							</div>
 							<div className="mt-1 flex items-center gap-2">
 								<span className="truncate font-mono text-[10px] text-white/45">
 									{shortFingerprint(wallet?.fingerprint ?? null)}
@@ -190,13 +222,14 @@ export function WalletCard({
 				</button>
 			</div>
 
-			{open && (
+			{render && (
 				<div
-					className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-[1rem] border border-white/10 bg-ink-soft"
+					data-shown={shown}
+					className="absolute -inset-x-px top-full z-20 mt-2 origin-top overflow-hidden rounded-[1rem] border border-white/10 bg-ink-soft transition-[opacity,transform] ease-[var(--ease-out-soft)] will-change-transform data-[shown=false]:-translate-y-1 data-[shown=false]:scale-[0.97] data-[shown=false]:opacity-0 data-[shown=false]:duration-[130ms] data-[shown=true]:translate-y-0 data-[shown=true]:scale-100 data-[shown=true]:opacity-100 data-[shown=true]:duration-[190ms] motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:transition-[opacity]"
 					role="listbox"
 				>
 					{wallets.length === 0 ? (
-						<p className="px-3 py-3 text-xs text-white/50">No wallets</p>
+						<p className="px-4 py-3 text-xs text-white/50">No wallets</p>
 					) : (
 						<ul className="max-h-72 divide-y divide-white/[0.06] overflow-y-auto">
 							{orderedWallets.map((w) => {
@@ -214,7 +247,7 @@ export function WalletCard({
 											aria-selected={w.active}
 											disabled={busy}
 											onClick={() => onPick(w.id)}
-											className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+											className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5"
 										>
 											{w.fingerprint && (
 												<LifeHashAvatar
@@ -267,7 +300,7 @@ export function WalletCard({
 						type="button"
 						disabled={busy}
 						onClick={onAdd}
-						className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
+						className="flex w-full items-center gap-2 border-t border-white/10 px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/5 disabled:opacity-40"
 					>
 						<IconPlus className="size-4" />
 						Add wallet

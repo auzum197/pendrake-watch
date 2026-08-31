@@ -14,8 +14,15 @@ redact it, since the UI may not be running when it posts. With Discreet mode on,
 posts "New transaction detected" with no amount and no direction.
 
 **It survives restarts.** Someone who hides their figures before a screen share needs them
-hidden before the window opens. The setting persists the way fiat consent does and is toggled
-over IPC from the sidebar eye.
+hidden before the window opens. The setting persists to disk and is toggled over IPC from the
+sidebar eye.
+
+**It is app-wide, not per-wallet.** Discreet mode is a viewing choice for whoever is at the
+screen, so it holds no matter which wallet is active. The flag lives in a shared `settings.json`
+at the data root, not in per-wallet `meta.json`. This is where it parts ways with `fiat_enabled`,
+which is per-wallet consent to egress and so belongs to the wallet. Switching wallets, importing
+a new one, or wiping one all leave the flag untouched. A `meta.discreet` written before this
+change seeds the shared setting once on first load.
 
 **Masking is presentation.** The daemon keeps sending real values over IPC and consumes the
 flag only for notification text. The UI masks at render time with uniform dots that carry no
@@ -38,8 +45,9 @@ them.
 ## Consequences
 
 The wallet-state payload grows a `discreet` flag and a setter command in the style of
-`set_fiat_enabled`, and notification text becomes conditional on it. The frontend reads the
-flag from wallet state instead of owning it, so the eye works from any screen and the choice
-holds across restarts. Screenshots taken while masked are safe, but real values remain in
+`set_fiat_enabled`, and notification text becomes conditional on it. Persistence lives in a
+root-level `settings.json` rather than per-wallet meta, so the value is the same in every
+wallet-state payload. The frontend reads the flag from wallet state instead of owning it, so the
+eye works from any screen and the choice holds across restarts and wallet switches. Screenshots taken while masked are safe, but real values remain in
 memory and on the UDS socket. That matches the shoulder-surfing threat model this feature
 serves and no stronger one.

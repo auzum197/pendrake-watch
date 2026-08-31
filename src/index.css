@@ -121,4 +121,12 @@
     background-color: var(--primary);
     color: var(--primary-foreground);
     }
+
+  img,
+  svg,
+  canvas {
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+    }
 }

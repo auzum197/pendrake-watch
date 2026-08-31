@@ -7,6 +7,7 @@
 //!   active_wallet_id      # which wallet is selected
 //!   daemon.sock
 //!   price_cache.json      # shared; public ZEC/USD only
+//!   settings.json         # app-wide prefs (Discreet mode); shared
 //!   wallets/
 //!     <id>/
 //!       meta.json
@@ -31,6 +32,9 @@ pub struct Paths {
     pub socket: PathBuf,
     /// Reconciled spot + daily price series (AUZ-83). Shared across wallets.
     pub price_cache_file: PathBuf,
+    /// App-wide preferences shared across wallets (docs/adr/0009). Currently just
+    /// Discreet mode, which is a viewing preference for the whole app, not a wallet.
+    pub settings_file: PathBuf,
     /// `$root/wallets`.
     pub wallets_dir: PathBuf,
     /// File holding the active wallet id (one line).
@@ -61,6 +65,7 @@ impl Paths {
         Self {
             socket: root.join("daemon.sock"),
             price_cache_file: root.join("price_cache.json"),
+            settings_file: root.join("settings.json"),
             active_id_file: root.join("active_wallet_id"),
             wallets_dir,
             wallet_id: None,
@@ -256,6 +261,34 @@ impl Meta {
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, &bytes).context("writing meta.json.tmp")?;
         std::fs::rename(&tmp, path).context("renaming meta.json")?;
+        Ok(())
+    }
+}
+
+/// App-wide preferences held at the data root, shared by every wallet. Discreet
+/// mode is a viewing choice for the whole app (docs/adr/0009), so it lives here
+/// rather than in per-wallet meta and survives switching wallets.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default)]
+    pub discreet: bool,
+}
+
+impl Settings {
+    /// Read settings.json, or the defaults when it doesn't exist yet.
+    pub fn load(path: &Path) -> Result<Self> {
+        match std::fs::read(path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).context("parsing settings.json"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(e).context("reading settings.json"),
+        }
+    }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(self).context("serializing settings.json")?;
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, &bytes).context("writing settings.json.tmp")?;
+        std::fs::rename(&tmp, path).context("renaming settings.json")?;
         Ok(())
     }
 }

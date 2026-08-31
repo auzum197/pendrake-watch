@@ -16,10 +16,10 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
     ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetWalletLabelArgs, SetDiscreetArgs, SetFiatEnabledArgs,
-    SetIndexerArgs, SetNotificationsArgs, SyncEvent, SyncPhase, SyncState, SyncStatus,
-    SyncWalletArgs, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
-    ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
+    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs,
+    SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncPhase, SyncState,
+    SyncStatus, SyncWalletArgs, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
+    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -30,13 +30,13 @@ use zcash_primitives::transaction::TxId;
 use zcash_protocol::consensus::BlockHeight;
 use zcash_protocol::value::Zatoshis;
 
+use pepper_sync::keys::transparent::TransparentScope;
+use pepper_sync::wallet::{IronwoodNote, OrchardNote, SaplingNote};
 use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_URI};
 use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
 use zingolib::wallet::balance::AccountBalance;
 use zingolib::wallet::encryption::EncryptionConfig;
-use pepper_sync::wallet::{IronwoodNote, OrchardNote, SaplingNote};
-use pepper_sync::keys::transparent::TransparentScope;
 use zingolib::wallet::output::SpendStatus;
 use zingolib::wallet::summary::data::{
     Scope, TransactionKind, TransactionSummaries, TransactionSummary,
@@ -48,7 +48,7 @@ use zip32::AccountId;
 use crate::birthday::resolve_birthday;
 use crate::notify::Notifier;
 use crate::notify_policy::{Disposition, NotificationPolicy};
-use crate::paths::{Meta, Paths};
+use crate::paths::{Meta, Paths, Settings};
 use crate::price::{today, PriceCache, PriceFetcher};
 use crate::ufvk::{parse_ufvk, UfvkError};
 
@@ -125,8 +125,9 @@ pub struct WalletService {
     /// price refresh loop: while false nothing is fetched, so a wallet stays private to
     /// the price providers until the user consents (docs/adr/0008).
     fiat_enabled: AtomicBool,
-    /// Whether Discreet mode is on, mirroring `Meta::discreet` for the hot notify
-    /// path. While true, new-transaction notifications carry no amount or direction
+    /// Whether Discreet mode is on, mirroring the app-wide `Settings::discreet` for
+    /// the hot notify path. Global across wallets, so switching wallets never flips
+    /// it. While true, new-transaction notifications carry no amount or direction
     /// (docs/adr/0009).
     discreet: AtomicBool,
     /// Reconciled spot + daily series, served to the GUI and persisted to
@@ -359,7 +360,9 @@ const WRONG_CHAIN_TIP_MARGIN: u32 = 100;
 #[derive(Debug, PartialEq)]
 enum ChainVerdict {
     Match,
-    WrongChain { detail: String },
+    WrongChain {
+        detail: String,
+    },
     /// No Anchor recorded and no evidence of a swap: sync proceeds, and the loop
     /// adopts an Anchor after its next good round.
     Unanchored,
@@ -442,9 +445,17 @@ fn indexer_probe_error<E: std::fmt::Display>(err: &E) -> anyhow::Error {
     let raw = err.to_string();
     tracing::debug!("indexer probe failed: {raw}");
     let lower = raw.to_lowercase();
-    let unreachable = ["unavailable", "connect", "refused", "dns", "timed out", "timeout", "deadline"]
-        .iter()
-        .any(|sig| lower.contains(sig));
+    let unreachable = [
+        "unavailable",
+        "connect",
+        "refused",
+        "dns",
+        "timed out",
+        "timeout",
+        "deadline",
+    ]
+    .iter()
+    .any(|sig| lower.contains(sig));
     if unreachable {
         anyhow!("couldn't reach that server. Check the address and that the server is running.")
     } else {
@@ -520,10 +531,7 @@ fn allowed_while_locked(method: &str) -> bool {
 impl WalletService {
     /// Arm the one-shot sender that wakes the host when `shutdown` is received.
     pub fn arm_shutdown(&self, tx: std::sync::mpsc::Sender<()>) {
-        *self
-            .shutdown_tx
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        *self.shutdown_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
     }
 
     /// Root `Paths` scoped to the active wallet id, if any. Disk layout is
@@ -585,6 +593,23 @@ impl WalletService {
             paths,
         });
 
+        // Discreet mode is app-wide (docs/adr/0009). Seed it from the shared
+        // settings file, falling back once to the active wallet's legacy per-wallet
+        // flag so an existing user's choice carries over to the global setting.
+        let settings_file = &active_paths.settings_file;
+        let had_settings = settings_file.exists();
+        let discreet = if had_settings {
+            Settings::load(settings_file)?.discreet
+        } else {
+            Meta::load(&active_paths.meta_file)?
+                .map(|m| m.discreet)
+                .unwrap_or(false)
+        };
+        service.discreet.store(discreet, Ordering::SeqCst);
+        if !had_settings && discreet {
+            Settings { discreet }.save(settings_file)?;
+        }
+
         if let Some(meta) = Meta::load(&active_paths.meta_file)? {
             service.encrypted.store(meta.encrypted, Ordering::SeqCst);
             service
@@ -593,7 +618,6 @@ impl WalletService {
             service
                 .fiat_enabled
                 .store(meta.fiat_enabled, Ordering::SeqCst);
-            service.discreet.store(meta.discreet, Ordering::SeqCst);
             if meta.encrypted {
                 // An encrypted wallet starts the session locked: hold the meta but
                 // open no client until the GUI sends the passphrase via `unlock`,
@@ -631,44 +655,43 @@ impl WalletService {
     }
 
     pub async fn list_wallets(&self) -> Result<Vec<WalletSummary>> {
-    let active = self.paths.read_active_id()?;
-    let mut out = Vec::new();
-    for id in self.paths.list_wallet_ids()? {
-        let p = self.paths.for_wallet(&id);
-        let Some(meta) = Meta::load(&p.meta_file)? else {
-            continue;
-        };
-        let label = meta
-            .label
-            .as_ref()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                meta.fingerprint
-                    .as_ref()
-                    .map(|f| f.chars().take(8).collect::<String>())
-            })
-            .unwrap_or_else(|| id.chars().take(8).collect());
-        out.push(WalletSummary {
-            id: id.clone(),
-            label,
-            fingerprint: meta.fingerprint.clone(),
-            network: meta.network,
-            birthday_height: meta.birthday_height,
-            active: active.as_deref() == Some(id.as_str()),
-            last_balance: meta.last_balance.map(|b| b.to_string()),
-        });
+        let active = self.paths.read_active_id()?;
+        let mut out = Vec::new();
+        for id in self.paths.list_wallet_ids()? {
+            let p = self.paths.for_wallet(&id);
+            let Some(meta) = Meta::load(&p.meta_file)? else {
+                continue;
+            };
+            let label = meta
+                .label
+                .as_ref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    meta.fingerprint
+                        .as_ref()
+                        .map(|f| f.chars().take(8).collect::<String>())
+                })
+                .unwrap_or_else(|| id.chars().take(8).collect());
+            out.push(WalletSummary {
+                id: id.clone(),
+                label,
+                fingerprint: meta.fingerprint.clone(),
+                network: meta.network,
+                birthday_height: meta.birthday_height,
+                active: active.as_deref() == Some(id.as_str()),
+                last_balance: meta.last_balance.map(|b| b.to_string()),
+            });
+        }
+        Ok(out)
     }
-    Ok(out)
-}
 
     /// Switch the active wallet. Loads client + disk snapshot; does not start
     /// network sync until [`Self::sync_wallet`].
     pub async fn select_wallet(self: &Arc<Self>, id: &str) -> Result<WalletState> {
         let p = self.paths.for_wallet(id);
-        let meta = Meta::load(&p.meta_file)?
-            .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
+        let meta = Meta::load(&p.meta_file)?.ok_or_else(|| anyhow!("no wallet with id {id}"))?;
 
         let encryption = if meta.encrypted {
             let passphrase = self
@@ -684,8 +707,11 @@ impl WalletService {
 
         let prev_active = self.paths.read_active_id()?;
         self.paths.write_active_id(id)?;
-        let config =
-            self.client_config(chain_of(meta.network), &meta.indexer_uri, WalletConfig::Read);
+        let config = self.client_config(
+            chain_of(meta.network),
+            &meta.indexer_uri,
+            WalletConfig::Read,
+        );
         let mut client = match LightClient::new(config, false, encryption).await {
             Ok(c) => c,
             Err(e) => {
@@ -704,9 +730,7 @@ impl WalletService {
         self.encrypted.store(meta.encrypted, Ordering::SeqCst);
         self.notifications_enabled
             .store(meta.notifications_enabled, Ordering::SeqCst);
-        self.fiat_enabled
-            .store(meta.fiat_enabled, Ordering::SeqCst);
-        self.discreet.store(meta.discreet, Ordering::SeqCst);
+        self.fiat_enabled.store(meta.fiat_enabled, Ordering::SeqCst);
         self.unreachable_notified.store(false, Ordering::SeqCst);
         self.wrong_chain_notified.store(false, Ordering::SeqCst);
 
@@ -753,24 +777,24 @@ impl WalletService {
             "getWalletState" => Ok(to_value(self.wallet_state().await)?),
             "getSyncStatus" => Ok(to_value(self.sync.read().await.clone())?),
             "setWalletLabel" => {
-		    let args: SetWalletLabelArgs = serde_json::from_value(params)?;
-		    Ok(to_value(self.set_wallet_label(&args.id, &args.label).await?)?)
-		}
+                let args: SetWalletLabelArgs = serde_json::from_value(params)?;
+                Ok(to_value(
+                    self.set_wallet_label(&args.id, &args.label).await?,
+                )?)
+            }
             "listWallets" => Ok(to_value(self.list_wallets().await?)?),
-		"selectWallet" => {
-		    let args: SelectWalletArgs = serde_json::from_value(params)?;
-		    Ok(to_value(self.select_wallet(&args.id).await?)?)
-		}
-		"syncWallet" => {
-		    let _args: SyncWalletArgs = serde_json::from_value(
-			if params.is_null() {
-			    serde_json::json!({})
-			} else {
-			    params
-			},
-		    )?;
-		    Ok(to_value(self.sync_wallet().await?)?)
-		}
+            "selectWallet" => {
+                let args: SelectWalletArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.select_wallet(&args.id).await?)?)
+            }
+            "syncWallet" => {
+                let _args: SyncWalletArgs = serde_json::from_value(if params.is_null() {
+                    serde_json::json!({})
+                } else {
+                    params
+                })?;
+                Ok(to_value(self.sync_wallet().await?)?)
+            }
             // Wallet reads are served from the snapshot cache, never the `client`
             // lock, so they don't queue behind the sync loop.
             "getBalance" => Ok(to_value(
@@ -895,7 +919,7 @@ impl WalletService {
                 indexer_uri: m.indexer_uri.clone(),
                 notifications_enabled: m.notifications_enabled,
                 fiat_enabled: m.fiat_enabled,
-                discreet: m.discreet,
+                discreet: self.discreet.load(Ordering::SeqCst),
             },
             None => WalletState {
                 exists: false,
@@ -911,7 +935,7 @@ impl WalletService {
                 indexer_uri: String::new(),
                 notifications_enabled: true,
                 fiat_enabled: false,
-                discreet: false,
+                discreet: self.discreet.load(Ordering::SeqCst),
             },
         }
     }
@@ -1029,8 +1053,7 @@ impl WalletService {
 
         if let Ok(summaries) = client.transaction_summaries(true).await {
             let spent_by = spent_value_by_tx(&summaries);
-            *self.txs.write().await =
-                summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
+            *self.txs.write().await = summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
         }
         let mut confirmed_total = None;
         if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
@@ -1073,28 +1096,24 @@ impl WalletService {
         self.collect_notes().await;
     }
 
-
     pub async fn set_wallet_label(&self, id: &str, label: &str) -> Result<WalletState> {
-    let p = self.paths.for_wallet(id);
-    let mut meta = Meta::load(&p.meta_file)?
-        .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
-    let trimmed = label.trim();
-    meta.label = if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.chars().take(64).collect())
-    };
-    meta.save(&p.meta_file)?;
+        let p = self.paths.for_wallet(id);
+        let mut meta =
+            Meta::load(&p.meta_file)?.ok_or_else(|| anyhow!("no wallet with id {id}"))?;
+        let trimmed = label.trim();
+        meta.label = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.chars().take(64).collect())
+        };
+        meta.save(&p.meta_file)?;
 
-    // Keep the in-memory meta used by wallet_state() in sync for the active wallet.
-    if self.paths.read_active_id()?.as_deref() == Some(id) {
-        *self.meta.write().await = Some(meta);
+        if self.paths.read_active_id()?.as_deref() == Some(id) {
+            *self.meta.write().await = Some(meta);
+        }
+
+        Ok(self.wallet_state().await)
     }
-
-    Ok(self.wallet_state().await)
-}
-
-
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
         // ADR-0002: the network is derived from the key, never trusted from the
@@ -1193,9 +1212,9 @@ impl WalletService {
         self.encrypted.store(true, Ordering::SeqCst);
         self.notifications_enabled.store(true, Ordering::SeqCst);
         // A fresh Wallet starts private: fiat stays off until the user consents anew, so a
-        // prior wallet's choice doesn't carry over the import.
+        // prior wallet's choice doesn't carry over the import. Discreet mode is app-wide
+        // (docs/adr/0009).
         self.fiat_enabled.store(false, Ordering::SeqCst);
-        self.discreet.store(false, Ordering::SeqCst);
         self.session_locked.store(false, Ordering::SeqCst);
         *self.sync.write().await = SyncStatus::default();
         self.notify.reset();
@@ -1388,13 +1407,7 @@ impl WalletService {
     /// Turn Discreet mode on or off (docs/adr/0009). The GUI does its own masking off
     /// the returned state; the daemon's side of the deal is redacting notification text.
     async fn set_discreet(&self, enabled: bool) -> Result<WalletState> {
-        let mut guard = self.meta.write().await;
-        let meta = guard
-            .as_mut()
-            .ok_or_else(|| anyhow!("no wallet to set discreet mode for"))?;
-        meta.discreet = enabled;
-        meta.save(&self.scoped_paths().meta_file)?;
-        drop(guard);
+        Settings { discreet: enabled }.save(&self.paths.settings_file)?;
         self.discreet.store(enabled, Ordering::SeqCst);
         Ok(self.wallet_state().await)
     }
@@ -1430,7 +1443,6 @@ impl WalletService {
         // Park the price loop; the reconciled prices themselves are public ZEC/USD data,
         // not wallet-specific, so the cache file is kept to avoid re-fetching after Replace.
         self.fiat_enabled.store(false, Ordering::SeqCst);
-        self.discreet.store(false, Ordering::SeqCst);
         *self.client.lock().await = None;
         *self.meta.write().await = None;
         if !keep_session {
@@ -2071,7 +2083,14 @@ impl WalletService {
     /// `synced_height` is robust to pepper-sync's tip-first scan, which pushes
     /// `synced_height` past N before the older blocks are walked, so a stale
     /// transaction found after the jump would otherwise notify.
-    async fn notify_tx(&self, txid: &str, received: bool, value: u64, confirmed: bool, height: u32) {
+    async fn notify_tx(
+        &self,
+        txid: &str,
+        received: bool,
+        value: u64,
+        confirmed: bool,
+        height: u32,
+    ) {
         let target = self.scan_target().await;
         let live = if confirmed { height >= target } else { true };
         if let Disposition::Notify = self.notify.classify(txid, live) {
@@ -2092,7 +2111,10 @@ impl WalletService {
             } else {
                 let amount = format_amount(value);
                 if received {
-                    ("Funds received", format!("{amount} arrived in your wallet."))
+                    (
+                        "Funds received",
+                        format!("{amount} arrived in your wallet."),
+                    )
                 } else {
                     ("Funds sent", format!("{amount} sent from your wallet."))
                 }
@@ -2337,7 +2359,11 @@ fn spent_value_by_tx(summaries: &TransactionSummaries) -> HashMap<String, u64> {
             .map(|n| (n.spend_status, n.value))
             .chain(s.orchard_notes.iter().map(|n| (n.spend_status, n.value)))
             .chain(s.sapling_notes.iter().map(|n| (n.spend_status, n.value)))
-            .chain(s.transparent_coins.iter().map(|c| (c.spend_summary, c.value)));
+            .chain(
+                s.transparent_coins
+                    .iter()
+                    .map(|c| (c.spend_summary, c.value)),
+            );
         for (status, value) in outputs {
             if let SpendStatus::Spent(txid) = status {
                 *spent_by.entry(txid.to_string()).or_insert(0) += value;
@@ -2530,10 +2556,7 @@ fn map_balance(bal: &AccountBalance) -> Balance {
             bal.confirmed_transparent_balance,
             bal.total_transparent_balance,
         ),
-        ironwood: pool_balance(
-            bal.confirmed_ironwood_balance,
-            bal.total_ironwood_balance,
-        ),
+        ironwood: pool_balance(bal.confirmed_ironwood_balance, bal.total_ironwood_balance),
     }
 }
 
@@ -2574,7 +2597,11 @@ mod tests {
 
     // A service backed by the spy, with a wallet meta pinning the Initial-scan boundary
     // at `target`, so `notify_tx` runs the real policy without a live client.
-    async fn service_with_spy(name: &str, spy: Arc<SpyNotifier>, target: u32) -> Arc<WalletService> {
+    async fn service_with_spy(
+        name: &str,
+        spy: Arc<SpyNotifier>,
+        target: u32,
+    ) -> Arc<WalletService> {
         let service = WalletService::load(test_paths(name), spy).await.unwrap();
         *service.meta.write().await = Some(Meta {
             network: Network::Mainnet,
@@ -2600,7 +2627,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-live", spy.clone(), 100).await;
         // Confirmed at or past the import tip N=100: post-import activity, so it notifies.
-        service.notify_tx("txlive", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txlive", true, 42_000_000, true, 120)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "Funds received");
@@ -2621,7 +2650,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-mempool", spy.clone(), 100).await;
         // Mempool is live regardless of height, so a send notifies right away.
-        service.notify_tx("txmempool", false, 10_000_000, false, 0).await;
+        service
+            .notify_tx("txmempool", false, 10_000_000, false, 0)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "Funds sent");
@@ -2631,8 +2662,12 @@ mod tests {
     async fn the_same_live_transaction_notifies_once() {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-once", spy.clone(), 100).await;
-        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
-        service.notify_tx("txdup", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txdup", true, 42_000_000, true, 120)
+            .await;
+        service
+            .notify_tx("txdup", true, 42_000_000, true, 120)
+            .await;
         assert_eq!(spy.calls().len(), 1);
     }
 
@@ -2641,7 +2676,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-off", spy.clone(), 100).await;
         service.notifications_enabled.store(false, Ordering::SeqCst);
-        service.notify_tx("txoff", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txoff", true, 42_000_000, true, 120)
+            .await;
         assert!(spy.calls().is_empty());
     }
 
@@ -2650,7 +2687,9 @@ mod tests {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("notify-discreet", spy.clone(), 100).await;
         service.discreet.store(true, Ordering::SeqCst);
-        service.notify_tx("txhush", true, 42_000_000, true, 120).await;
+        service
+            .notify_tx("txhush", true, 42_000_000, true, 120)
+            .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
         // Neither amount nor direction leaks; the deep link still opens the tx.
@@ -2662,16 +2701,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_discreet_persists_to_meta() {
+    async fn set_discreet_persists_to_settings() {
         let spy = Arc::new(SpyNotifier::new());
         let service = service_with_spy("discreet-persist", spy, 100).await;
         service.paths.ensure_dirs().unwrap();
 
         let state = service.set_discreet(true).await.unwrap();
         assert!(state.discreet);
-        // The choice survives a restart: it's on disk, not just in the atomics.
-        let meta = Meta::load(&service.paths.meta_file).unwrap().unwrap();
-        assert!(meta.discreet);
+        // The choice survives a restart: it's in the app-wide settings file, not a
+        // per-wallet meta, so it holds across wallet switches too.
+        let settings = Settings::load(&service.paths.settings_file).unwrap();
+        assert!(settings.discreet);
     }
 
     #[test]
@@ -2710,7 +2750,10 @@ mod tests {
         let id = txid(0x11);
 
         service
-            .on_tx_summary(id, &summary_at(0x11, TransactionKind::Received, 42_000_000, 120))
+            .on_tx_summary(
+                id,
+                &summary_at(0x11, TransactionKind::Received, 42_000_000, 120),
+            )
             .await;
 
         // The summary's kind, value and height flow to the movement toast.
@@ -2719,10 +2762,20 @@ mod tests {
         assert_eq!(calls[0].0, "Funds received");
         assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}"));
         // ...and to the cache the GUI reads.
-        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(service
+            .txs
+            .read()
+            .await
+            .iter()
+            .any(|t| t.txid == id.to_string()));
         // ...and to the broadcast the GUI folds in.
         match events.try_recv().unwrap() {
-            SyncEvent::Transaction { txid, kind, value_zat, received } => {
+            SyncEvent::Transaction {
+                txid,
+                kind,
+                value_zat,
+                received,
+            } => {
                 assert_eq!(txid, id.to_string());
                 assert_eq!(kind, TxKind::Received);
                 assert_eq!(value_zat, "42000000");
@@ -2765,11 +2818,19 @@ mod tests {
         // Confirmed below the target: the extracted height drives the policy's silent
         // path, yet the cache and event still update so the GUI stays consistent.
         service
-            .on_tx_summary(id, &summary_at(0x33, TransactionKind::Received, 42_000_000, 50))
+            .on_tx_summary(
+                id,
+                &summary_at(0x33, TransactionKind::Received, 42_000_000, 50),
+            )
             .await;
 
         assert!(spy.calls().is_empty());
-        assert!(service.txs.read().await.iter().any(|t| t.txid == id.to_string()));
+        assert!(service
+            .txs
+            .read()
+            .await
+            .iter()
+            .any(|t| t.txid == id.to_string()));
         assert!(matches!(
             events.try_recv().unwrap(),
             SyncEvent::Transaction { .. }
