@@ -75,6 +75,10 @@ _Avoid_: logout, timeout, screen lock
 Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while the Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
 _Avoid_: log out, lock
 
+**Switch Wallet**:
+Selecting another Wallet from the switcher. It changes which Wallet is active without touching the Session lock: the Passphrase already held in the daemon opens the target Wallet's encrypted file directly, so no unlock screen appears. One Passphrase unlocks the whole app, not each Wallet in turn. Distinct from Replace, which imports and wipes, and from Sign Out, which arms the lock.
+_Avoid_: change wallet, log in again, re-unlock
+
 **Remove**:
 The wipe of a single Wallet and its state. Not a v0 user action: v0 exposes only Replace (swap the Wallet, in Settings) and Start over (wipe after a lost Passphrase, on the unlock screen), both named for what the user ends with rather than for the deletion, and both sharing this wipe underneath. Remove surfaces as its own action with multi-key, where a Wallet list takes one Wallet out and the others remain.
 _Avoid_: delete, forget

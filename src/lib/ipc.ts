@@ -153,6 +153,9 @@ export type WalletSummary = {
   network: Network;
   birthdayHeight: number;
   active: boolean;
+  // Last-synced confirmed balance in zatoshis (stringified), or null before a Wallet
+  // has synced. Lets the switcher show a balance without loading the Wallet.
+  lastBalance: string | null;
 };
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.

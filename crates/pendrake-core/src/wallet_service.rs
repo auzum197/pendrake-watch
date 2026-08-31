@@ -657,6 +657,7 @@ impl WalletService {
             network: meta.network,
             birthday_height: meta.birthday_height,
             active: active.as_deref() == Some(id.as_str()),
+            last_balance: meta.last_balance.map(|b| b.to_string()),
         });
     }
     Ok(out)
@@ -669,11 +670,37 @@ impl WalletService {
         let meta = Meta::load(&p.meta_file)?
             .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
 
-        self.generation.fetch_add(1, Ordering::SeqCst);
-        *self.client.lock().await = None;
-        self.clear_read_caches().await;
+        let encryption = if meta.encrypted {
+            let passphrase = self
+                .session_passphrase
+                .lock()
+                .await
+                .clone()
+                .ok_or_else(|| anyhow!("no session passphrase held to switch wallets"))?;
+            Some(EncryptionConfig::new(passphrase))
+        } else {
+            None
+        };
 
+        let prev_active = self.paths.read_active_id()?;
         self.paths.write_active_id(id)?;
+        let config =
+            self.client_config(chain_of(meta.network), &meta.indexer_uri, WalletConfig::Read);
+        let mut client = match LightClient::new(config, false, encryption).await {
+            Ok(c) => c,
+            Err(e) => {
+                if let Some(prev) = prev_active {
+                    self.paths.write_active_id(&prev)?;
+                }
+                return Err(anyhow!("failed to open wallet {id}: {e:?}"));
+            }
+        };
+        client.save_task().await;
+
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        self.clear_read_caches().await;
+        *self.client.lock().await = Some(client);
+
         self.encrypted.store(meta.encrypted, Ordering::SeqCst);
         self.notifications_enabled
             .store(meta.notifications_enabled, Ordering::SeqCst);
@@ -688,24 +715,9 @@ impl WalletService {
             ..SyncStatus::default()
         };
 
-        if meta.encrypted {
-            self.session_locked.store(true, Ordering::SeqCst);
-            *self.meta.write().await = Some(meta);
-        } else {
-            self.session_locked.store(false, Ordering::SeqCst);
-            let config = self.client_config(
-                chain_of(meta.network),
-                &meta.indexer_uri,
-                WalletConfig::Read,
-            );
-            let mut client = LightClient::new(config, false, None)
-                .await
-                .map_err(|e| anyhow!("failed to open wallet {id}: {e}"))?;
-            client.save_task().await;
-            *self.client.lock().await = Some(client);
-            *self.meta.write().await = Some(meta);
-            self.refresh_snapshot().await;
-        }
+        self.session_locked.store(false, Ordering::SeqCst);
+        *self.meta.write().await = Some(meta);
+        self.refresh_snapshot().await;
 
         Ok(self.wallet_state().await)
     }
@@ -1020,7 +1032,9 @@ impl WalletService {
             *self.txs.write().await =
                 summaries.iter().map(|s| map_tx(s, &spent_by)).collect();
         }
+        let mut confirmed_total = None;
         if let Ok(bal) = client.account_balance(AccountId::ZERO).await {
+            confirmed_total = Some(total_confirmed_zats(&bal));
             *self.balance.write().await = Some(map_balance(&bal));
         }
 
@@ -1041,6 +1055,16 @@ impl WalletService {
             .collect();
         *self.addresses.write().await = addrs;
         drop(guard);
+
+        if let Some(total) = confirmed_total {
+            let mut meta_guard = self.meta.write().await;
+            if let Some(meta) = meta_guard.as_mut() {
+                if meta.last_balance != Some(total) {
+                    meta.last_balance = Some(total);
+                    let _ = meta.save(&self.scoped_paths().meta_file);
+                }
+            }
+        }
 
         // Warm the notes cache in the same low-contention window, so a later
         // getNotes that times out behind a sync round serves this snapshot's list
@@ -1089,16 +1113,12 @@ impl WalletService {
             ));
         }
 
-        // A first onboarding sends the passphrase; a post-Replace import omits it and
-        // reuses the one the daemon held across the wipe (docs/adr/0004).
-        let passphrase = match args.passphrase {
+        let held = self.session_passphrase.lock().await.clone();
+        let passphrase = match held {
             Some(p) => p,
-            None => self
-                .session_passphrase
-                .lock()
-                .await
-                .clone()
-                .ok_or_else(|| anyhow!("no session passphrase held for this import"))?,
+            None => args
+                .passphrase
+                .ok_or_else(|| anyhow!("no passphrase provided for the first import"))?,
         };
 
         let chain = chain_of(args.network);
@@ -1135,6 +1155,7 @@ impl WalletService {
             discreet: false,
             anchor_height,
             anchor_hash: Some(anchor_hash),
+            last_balance: None,
         };
 
         // Each UFVK lands under wallets/<fingerprint>/ (multi-wallet layout).
@@ -2489,6 +2510,18 @@ fn map_wallet_note(
     }
 }
 
+fn total_confirmed_zats(bal: &AccountBalance) -> u64 {
+    [
+        bal.confirmed_orchard_balance,
+        bal.confirmed_sapling_balance,
+        bal.confirmed_transparent_balance,
+        bal.confirmed_ironwood_balance,
+    ]
+    .into_iter()
+    .filter_map(|z| z.map(Zatoshis::into_u64))
+    .sum()
+}
+
 fn map_balance(bal: &AccountBalance) -> Balance {
     Balance {
         orchard: pool_balance(bal.confirmed_orchard_balance, bal.total_orchard_balance),
@@ -2557,6 +2590,7 @@ mod tests {
             discreet: false,
             anchor_height: 0,
             anchor_hash: None,
+            last_balance: None,
         });
         service
     }

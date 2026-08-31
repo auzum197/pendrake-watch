@@ -228,6 +228,12 @@ pub struct Meta {
     /// sync round; a mismatch refuses to sync (docs/adr/0010).
     #[serde(default)]
     pub anchor_hash: Option<String>,
+    /// The last-synced confirmed balance in zatoshis, cached so the switcher can show a
+    /// Wallet's balance without loading it (only the active Wallet is open at a time).
+    /// Refreshed whenever the active Wallet's snapshot rebuilds. `None` until a Wallet
+    /// has synced once since this was tracked.
+    #[serde(default)]
+    pub last_balance: Option<u64>,
 }
 
 fn default_true() -> bool {

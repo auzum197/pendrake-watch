@@ -4,7 +4,7 @@ import { balanceSeries } from "@/stories/fixtures";
 
 const meta = {
   component: BalanceChart,
-  args: { points: balanceSeries, freshKeys: new Set<string>() },
+  args: { points: balanceSeries },
   decorators: [(Story) => <div className="w-[40rem]"><Story /></div>],
 } satisfies Meta<typeof BalanceChart>;
 
@@ -12,6 +12,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-export const FreshArrival: Story = {
-  args: { freshKeys: new Set(["tx2"]) },
-};

@@ -132,6 +132,10 @@ pub struct WalletSummary {
     pub network: Network,
     pub birthday_height: u32,
     pub active: bool,
+    /// Last-synced confirmed balance in zatoshis (stringified), or `None` for a Wallet
+    /// that has not synced since this was tracked. Lets the switcher show a balance
+    /// without loading the Wallet.
+    pub last_balance: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

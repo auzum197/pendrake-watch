@@ -18,7 +18,7 @@ function sectionFor(pathname: string) {
 export function AppLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { wallet, sync, loaded } = useWalletData();
+  const { wallet, sync, loaded, switching } = useWalletData();
 
   // Signed-in branch only. Onboarding (/onboarding?mode=add) and unlock live on the
   // root route tree, outside this layout, so "Add wallet" is never blocked here.
@@ -42,7 +42,12 @@ export function AppLayout() {
   }
 
   return (
-    <AppShell active={sectionFor(pathname)} wallet={wallet} sync={sync}>
+    <AppShell
+      active={sectionFor(pathname)}
+      wallet={wallet}
+      sync={sync}
+      switching={switching}
+    >
       <Outlet />
     </AppShell>
   );

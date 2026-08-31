@@ -10,8 +10,9 @@ import {
 	type WalletState,
 	type WalletSummary,
 } from "@/lib/ipc";
-import { formatZec, isActivelySyncing, isSynced } from "@/lib/format";
+import { formatZecApprox, isActivelySyncing } from "@/lib/format";
 import {
+	beginWalletSwitch,
 	clearWalletSnapshotCache,
 	reloadWalletData,
 	setCachedWallet,
@@ -19,10 +20,10 @@ import {
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 import { LifeHashAvatar } from "@/components/onboarding/lifehash-avatar";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
+import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { DotStream } from "@/components/ui/dot-stream/dot-stream";
 import { SyncGlyph } from "../sync-status/sync-status";
 
-/** Display name for the active wallet: custom label, else short fingerprint. */
 function activeDisplayName(wallet: WalletState | null): string {
 	const custom = wallet?.label?.trim();
 	if (custom) return custom;
@@ -43,6 +44,39 @@ async function softSwitchTo(state: WalletState) {
 	setCachedWallet(state);
 	clearWalletSnapshotCache();
 	reloadWalletData();
+}
+
+const RECENCY_KEY = "pendrake.walletRecency";
+
+function readRecency(): Record<string, number> {
+	try {
+		const raw = localStorage.getItem(RECENCY_KEY);
+		return raw ? JSON.parse(raw) : {};
+	} catch {
+		return {};
+	}
+}
+
+function markUsed(id: string) {
+	const recency = readRecency();
+	recency[id] = Date.now();
+	localStorage.setItem(RECENCY_KEY, JSON.stringify(recency));
+}
+
+function orderWallets(wallets: WalletSummary[], activeId: string | null): WalletSummary[] {
+	const recency = readRecency();
+	const others = wallets
+		.filter((w) => w.id !== activeId)
+		.sort((a, b) => {
+			const ra = recency[a.id];
+			const rb = recency[b.id];
+			if (ra !== undefined && rb !== undefined) return rb - ra;
+			if (ra !== undefined) return -1;
+			if (rb !== undefined) return 1;
+			return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+		});
+	const active = wallets.find((w) => w.id === activeId);
+	return active ? [...others, active] : others;
 }
 
 function avatarShape(size: 9 | 10): string {
@@ -69,13 +103,11 @@ function WalletAvatar({
 export function WalletCard({
 	wallet,
 	sync,
-	walletSyncs,
-	walletBalances,
+	switching,
 }: {
 	wallet: WalletState | null;
 	sync: SyncStatus | null;
-	walletSyncs?: Record<string, SyncStatus | null>;
-	walletBalances?: Record<string, bigint>;
+	switching?: boolean;
 }) {
 	const navigate = useNavigate();
 	const [open, setOpen] = useState(false);
@@ -95,12 +127,15 @@ export function WalletCard({
 			return;
 		}
 		setBusy(true);
+		setOpen(false);
+		beginWalletSwitch();
 		try {
 			const state = await selectWallet(id);
-			setOpen(false);
+			markUsed(id);
 			await softSwitchTo(state);
 		} catch (e) {
 			toast.error(String(e));
+			reloadWalletData();
 		} finally {
 			setBusy(false);
 		}
@@ -112,24 +147,37 @@ export function WalletCard({
 	}
 
 	const headerName = activeDisplayName(wallet);
+	const orderedWallets = orderWallets(wallets, wallet?.walletId ?? null);
 
 	return (
 		<div className="relative mt-5 flex flex-col rounded-[1rem] border border-white/10 bg-white/4 p-4">
 			<div className="flex items-center gap-3">
-				<WalletAvatar fingerprint={wallet?.fingerprint ?? null} size={10} />
-				<div className="min-w-0 flex-1">
-					<p className="truncate text-sm font-semibold leading-tight text-white">
-						<DiscreetValue kind="label">{headerName}</DiscreetValue>
-					</p>
-					<div className="mt-1 flex items-center gap-2">
-						<span className="truncate font-mono text-xs text-white/45">
-							{shortFingerprint(wallet?.fingerprint ?? null)}
-						</span>
-						<span className="flex shrink-0 items-center gap-2">
-							<SyncGlyph sync={sync} />
-						</span>
-					</div>
-				</div>
+				{switching ? (
+					<>
+						<Skeleton className="size-10 shrink-0 rounded-full bg-white/10" />
+						<div className="min-w-0 flex-1 space-y-1.5">
+							<Skeleton className="h-3 w-24 bg-white/10" />
+							<Skeleton className="h-2.5 w-16 bg-white/10" />
+						</div>
+					</>
+				) : (
+					<>
+						<WalletAvatar fingerprint={wallet?.fingerprint ?? null} size={10} />
+						<div className="min-w-0 flex-1">
+							<p className="truncate text-xs font-semibold leading-tight text-white">
+								{headerName}
+							</p>
+							<div className="mt-1 flex items-center gap-2">
+								<span className="truncate font-mono text-[10px] text-white/45">
+									{shortFingerprint(wallet?.fingerprint ?? null)}
+								</span>
+								<span className="flex shrink-0 items-center gap-2">
+									<SyncGlyph sync={sync} />
+								</span>
+							</div>
+						</div>
+					</>
+				)}
 				<button
 					type="button"
 					onClick={() => setOpen((o) => !o)}
@@ -151,13 +199,13 @@ export function WalletCard({
 						<p className="px-3 py-3 text-xs text-white/50">No wallets</p>
 					) : (
 						<ul className="max-h-72 divide-y divide-white/[0.06] overflow-y-auto">
-							{wallets.map((w) => {
+							{orderedWallets.map((w) => {
 								const fp = w.fingerprint ? w.fingerprint.slice(0, 8) : null;
 								const named = fp ? w.label !== fp : w.label.length > 0;
-								const wsync = walletSyncs?.[w.id] ?? null;
-								const balance = walletBalances?.[w.id];
-								const showBalance = isSynced(wsync) && balance !== undefined;
-								const showLoader = isActivelySyncing(wsync);
+								const balance =
+									w.lastBalance != null ? BigInt(w.lastBalance) : undefined;
+								const showLoader = w.active && isActivelySyncing(sync);
+								const showBalance = balance !== undefined && !showLoader;
 								return (
 									<li key={w.id}>
 										<button
@@ -178,17 +226,17 @@ export function WalletCard({
 											<div className="min-w-0 flex-1">
 												{named ? (
 													<>
-														<p className="truncate text-sm font-medium text-white">
-															<DiscreetValue kind="label">{w.label}</DiscreetValue>
+														<p className="truncate text-xs font-medium text-white">
+															{w.label}
 														</p>
 														{fp && (
-															<p className="mt-0.5 truncate font-mono text-xs text-white/45">
+															<p className="mt-0.5 truncate font-mono text-[10px] text-white/45">
 																{fp}
 															</p>
 														)}
 													</>
 												) : (
-													<p className="truncate font-mono text-sm font-medium text-white">
+													<p className="truncate font-mono text-xs font-medium text-white">
 														{fp ?? w.label}
 													</p>
 												)}
@@ -197,7 +245,7 @@ export function WalletCard({
 												<div className="shrink-0 text-right">
 													<p className="font-mono text-xs font-medium tabular-nums text-white">
 														<DiscreetValue kind="zec">
-															{formatZec(balance)}
+															{formatZecApprox(balance)}
 														</DiscreetValue>
 													</p>
 													<p className="mt-0.5 text-[10px] text-white/45">

@@ -27,6 +27,7 @@ const wallets: WalletSummary[] = [
     network: "mainnet",
     birthdayHeight: 419_200,
     active: true,
+    lastBalance: "897091655",
   },
   {
     id: "w2",
@@ -35,6 +36,7 @@ const wallets: WalletSummary[] = [
     network: "mainnet",
     birthdayHeight: 2_390_000,
     active: false,
+    lastBalance: null,
   },
   {
     id: "w3",
@@ -43,6 +45,7 @@ const wallets: WalletSummary[] = [
     network: "regtest",
     birthdayHeight: 2_100_000,
     active: false,
+    lastBalance: "12850000000",
   },
   {
     id: "w4",
@@ -51,6 +54,7 @@ const wallets: WalletSummary[] = [
     network: "regtest",
     birthdayHeight: 0,
     active: false,
+    lastBalance: "320400000",
   },
 ];
 
@@ -86,10 +90,9 @@ const meta = {
   argTypes: {
     wallet: { control: false },
     sync: { control: false },
-    walletSyncs: { control: false },
-    walletBalances: { control: false },
+    switching: { control: "boolean" },
   },
-  args: { wallet, sync: synced },
+  args: { wallet, sync: synced, switching: false },
 } satisfies Meta<typeof WalletCard>;
 
 export default meta;
@@ -98,14 +101,6 @@ type Story = StoryObj<typeof meta>;
 export const Collapsed: Story = { args: { sync: syncing } };
 
 export const Switcher: Story = {
-  args: {
-    walletSyncs: { w1: synced, w2: syncing, w3: synced, w4: synced },
-    walletBalances: {
-      w1: 897_091_655n,
-      w3: 12_850_000_000n,
-      w4: 320_400_000n,
-    },
-  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Switch wallet" }));

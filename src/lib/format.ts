@@ -21,6 +21,13 @@ export function formatZec(zatoshis: bigint): string {
   });
 }
 
+export function formatZecApprox(zatoshis: bigint): string {
+  const shown = (Number(zatoshis) / 1e8).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+  return shown === formatZec(zatoshis) ? shown : `~${shown}`;
+}
+
 // The raw zatoshi count, grouped. For per-note amounts, where dust (a few hundred
 // zatoshis) rounds to a misleading 0 in ZEC.
 export function formatZat(zatoshis: bigint): string {

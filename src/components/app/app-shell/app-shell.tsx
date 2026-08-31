@@ -50,16 +50,18 @@ export function AppShell({
 	active,
 	wallet,
 	sync,
+	switching,
 	children,
 }: {
 	active: Section;
 	wallet: WalletState | null;
 	sync: SyncStatus | null;
+	switching?: boolean;
 	children: ReactNode;
 }) {
 	return (
 		<div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
-			<AppSidebar active={active} wallet={wallet} sync={sync} />
+			<AppSidebar active={active} wallet={wallet} sync={sync} switching={switching} />
 			<div className="relative my-3 mr-3 flex-1 rounded-2xl border-2 border-border bg-background">
 				<main
 					data-scroll-restoration-id="app-main"
@@ -146,10 +148,12 @@ function AppSidebar({
 	active,
 	wallet,
 	sync,
+	switching,
 }: {
 	active: Section;
 	wallet: WalletState | null;
 	sync: SyncStatus | null;
+	switching?: boolean;
 }) {
 	const navigate = useNavigate();
 
@@ -159,7 +163,7 @@ function AppSidebar({
 				<img src={pendrakeLogo} alt="Pendrake" className="h-8 select-none" />
 			</div>
 
-			<WalletCard wallet={wallet} sync={sync} />
+			<WalletCard wallet={wallet} sync={sync} switching={switching} />
 
 			<nav className="mt-5 flex flex-col gap-1">
 				<NavItem
@@ -247,10 +251,10 @@ function NavItem({
 			type="button"
 			onClick={active ? undefined : onClick}
 			aria-current={active ? "page" : undefined}
-			className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+			className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
 				active
-					? "bg-brand text-white"
-					: "cursor-pointer text-white/55 hover:bg-white/5 hover:text-white/80"
+					? "bg-brand font-bold text-ink"
+					: "cursor-pointer font-medium text-white/55 hover:bg-white/5 hover:text-white/80"
 			}`}
 		>
 			{icon}

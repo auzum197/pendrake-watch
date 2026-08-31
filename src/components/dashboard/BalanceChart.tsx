@@ -190,14 +190,9 @@ function useTweenedData(target: Datum[], enabled: boolean): Datum[] {
 
 function BalanceChartImpl({
 	points,
-	freshKeys,
 	denom = "zec",
 }: {
 	points: BalancePoint[];
-	// Keys for transactions newly added to the full history, so only a genuine new
-	// arrival pings, not a point a period switch brought back into view. Tracked by the
-	// caller over the whole series (see useFreshTxKeys in dashboard).
-	freshKeys: Set<string>;
 	denom?: Denom;
 }) {
 	const usd = denom === "usd";
@@ -237,7 +232,6 @@ function BalanceChartImpl({
 	// whole curve in from the side. It carries no out-of-order scan insertions to smooth
 	// over, so it renders straight from the target. Only the identity-keyed ZEC series tweens.
 	const tweened = useTweenedData(target, !usd);
-	const fresh = freshKeys;
 	// One render can land before the tween realigns its array, so fall back to the
 	// target then to keep the series complete.
 	const data = usd
@@ -391,33 +385,19 @@ function BalanceChartImpl({
 					dot={(props) => {
 						const { cx, cy, payload } = props;
 						// The leading "balance before the first tx" point isn't a transaction,
-						// so it gets no dot. The last transaction is the emphasized tip. A
-						// freshly arrived point also gets an expanding ring at where it landed.
-						const ping = animationsEnabled() && fresh.has(payload.key) ? (
-							<circle
-								className="balance-ping"
-								cx={cx}
-								cy={cy}
-								r={5}
-								fill="none"
-								stroke="var(--color-brand)"
-								strokeWidth={2}
-							/>
-						) : null;
-						if (payload.key === "start") return <g key={payload.key}>{ping}</g>;
+						// so it gets no dot. The last transaction is the emphasized tip.
+						if (payload.key === "start") return null;
 						// USD dots only the big balance changes (and the tip), so a cluster of
 						// small transactions doesn't crowd the line and the hover glides along
 						// the continuous curve between them. ZEC dots every transaction, dropping
-						// them only on a history too dense to tell them apart. Either way, a
-						// skipped point still draws its fresh-arrival ping.
+						// them only on a history too dense to tell them apart.
 						const bigChange =
 							Boolean(payload.change) &&
 							(payload.jump ?? 0) >= DOT_MIN_FRACTION * max;
 						const drawDot = usd
 							? bigChange || payload.last
 							: !hideDots || payload.last;
-						if (!drawDot)
-							return ping ? <g key={payload.key}>{ping}</g> : null;
+						if (!drawDot) return null;
 						// Every transaction keeps a dot so each balance change stays visible
 						// at a glance. The card-coloured edge rings each dot in the background
 						// colour, so even on a dense history they read as separate points
@@ -436,7 +416,6 @@ function BalanceChartImpl({
 									stroke="var(--card)"
 									strokeWidth={tip ? 2 : denseDots ? 1.25 : 1.5}
 								/>
-								{ping}
 							</g>
 						);
 					}}

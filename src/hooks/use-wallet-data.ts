@@ -22,6 +22,7 @@ export type WalletData = {
   addresses: WalletAddress[];
   loaded: boolean;
   error: string | null;
+  switching: boolean;
   /** Re-fetch wallet + balances/txs/sync without a full page reload. */
   reload: () => Promise<void>;
 };
@@ -29,7 +30,7 @@ export type WalletData = {
 // Last good snapshot, kept in module scope so a route change (e.g. opening a tx
 // and coming back) shows the previous balance and history at once instead of
 // flashing empty while the daemon answers again.
-const cache: Omit<WalletData, "loaded" | "error" | "reload"> = {
+const cache: Omit<WalletData, "loaded" | "error" | "switching" | "reload"> = {
   wallet: null,
   balance: null,
   txs: [],
@@ -39,6 +40,9 @@ const cache: Omit<WalletData, "loaded" | "error" | "reload"> = {
 
 const RELOAD_EVENT = "pendrake-wallet-reload";
 const WALLET_STATE_EVENT = "pendrake-wallet-state";
+const SWITCH_EVENT = "pendrake-wallet-switch";
+
+let pendingSwitch = false;
 
 // Reconcile the cached wallet after a state change made outside the hook (unlock,
 // rename, select). Dispatches so mounted hooks update React state immediately.
@@ -67,6 +71,26 @@ export function reloadWalletData() {
   }
 }
 
+export function beginWalletSwitch() {
+  pendingSwitch = true;
+  clearWalletSnapshotCache();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(SWITCH_EVENT));
+  }
+}
+
+export function onWalletSwitchStart(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(SWITCH_EVENT, cb);
+  return () => window.removeEventListener(SWITCH_EVENT, cb);
+}
+
+export function onWalletReload(cb: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(RELOAD_EVENT, cb);
+  return () => window.removeEventListener(RELOAD_EVENT, cb);
+}
+
 export function getCachedWallet(): WalletState | null {
   return cache.wallet;
 }
@@ -85,6 +109,7 @@ export function useWalletData(): WalletData {
   const [addresses, setAddresses] = useState(cache.addresses);
   const [loaded, setLoaded] = useState(cache.wallet !== null);
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(pendingSwitch);
 
   const applySnapshot = useCallback(
     (next: {
@@ -141,6 +166,8 @@ export function useWalletData(): WalletData {
       setError(String(e));
     } finally {
       setLoaded(true);
+      pendingSwitch = false;
+      setSwitching(false);
     }
   }, [applySnapshot]);
 
@@ -186,6 +213,11 @@ export function useWalletData(): WalletData {
     };
     window.addEventListener(WALLET_STATE_EVENT, onWalletState);
 
+    const onSwitch = () => {
+      if (active) setSwitching(true);
+    };
+    window.addEventListener(SWITCH_EVENT, onSwitch);
+
     const unlisten = onSyncEvent((ev) => {
       if (!active) return;
       switch (ev.event) {
@@ -224,6 +256,7 @@ export function useWalletData(): WalletData {
       clearInterval(timer);
       window.removeEventListener(RELOAD_EVENT, onReload);
       window.removeEventListener(WALLET_STATE_EVENT, onWalletState);
+      window.removeEventListener(SWITCH_EVENT, onSwitch);
       unlisten.then((fn) => fn()).catch(() => {});
     };
   }, [load]);
@@ -236,6 +269,7 @@ export function useWalletData(): WalletData {
     addresses,
     loaded,
     error,
+    switching,
     reload: load,
   };
 }

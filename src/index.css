@@ -117,4 +117,8 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
     }
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    }
 }

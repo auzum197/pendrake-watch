@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
 	IconAlertTriangle,
@@ -7,7 +7,9 @@ import {
 	IconLoader2,
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented/segmented";
+import { DiscreetEye } from "@/components/app/discreet-eye/discreet-eye";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
+import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { TxList } from "@/components/app/tx-list/tx-list";
 import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
@@ -15,7 +17,6 @@ import { usePriceData } from "@/hooks/use-price-data";
 import { setCachedWallet, useWalletData } from "@/hooks/use-wallet-data";
 import {
 	athStanding,
-	type BalancePoint,
 	balanceHistory,
 	type ChartRange,
 	fiatSeries,
@@ -42,7 +43,11 @@ import { animationsEnabled } from "@/lib/motion";
 // reconstructed from the confirmed transaction history.
 
 export function DashboardPage() {
-	const { wallet, balance, txs, sync, error } = useWalletData();
+	const { wallet, balance, txs, sync, error, switching } = useWalletData();
+
+	if (switching) {
+		return <DashboardSkeleton />;
+	}
 
 	return (
 		<>
@@ -57,6 +62,36 @@ export function DashboardPage() {
 					Recent Activity
 				</h2>
 				<TxList txs={txs} limit={5} />
+			</section>
+		</>
+	);
+}
+
+function DashboardSkeleton() {
+	return (
+		<>
+			<div className="rounded-2xl border border-border bg-card p-6">
+				<div className="flex items-center justify-between">
+					<Skeleton className="h-4 w-28" />
+					<Skeleton className="h-7 w-24 rounded-full" />
+				</div>
+				<Skeleton className="mt-4 h-9 w-48" />
+				<Skeleton className="mt-6 h-48 w-full rounded-xl" />
+			</div>
+			<section className="rounded-2xl border border-border bg-card p-6">
+				<Skeleton className="h-5 w-36" />
+				<div className="mt-4 space-y-3">
+					{[0, 1, 2, 3, 4].map((row) => (
+						<div key={row} className="flex items-center gap-3">
+							<Skeleton className="size-9 rounded-full" />
+							<div className="flex-1 space-y-2">
+								<Skeleton className="h-3 w-32" />
+								<Skeleton className="h-3 w-20" />
+							</div>
+							<Skeleton className="h-3 w-16" />
+						</div>
+					))}
+				</div>
 			</section>
 		</>
 	);
@@ -80,59 +115,33 @@ const PERIOD_HIGH: Record<ChartRange, string> = {
 	day: "1-day high",
 };
 
-// Keys for transactions that have just entered the *full* history, so the chart can
-// ping where they landed. Tracked over the whole reconstructed series (not the
-// windowed/downsampled view), so it fires only when a new transaction is detected,
-// never when a period switch merely reveals points that already existed. Cleared once
-// the ping has played, so a later switch doesn't replay it.
-function useFreshTxKeys(points: BalancePoint[]): Set<string> {
-	const seen = useRef(new Set(points.map((p) => p.key)));
-	const [fresh, setFresh] = useState<Set<string>>(new Set());
-	const sig = points.map((p) => p.key).join("|");
-
-	useEffect(() => {
-		const keys = points.map((p) => p.key);
-		const arrived = new Set(keys.filter((k) => !seen.current.has(k)));
-		seen.current = new Set(keys);
-		if (arrived.size === 0) return;
-		setFresh(arrived);
-		const t = setTimeout(() => setFresh(new Set()), 700);
-		return () => clearTimeout(t);
-		// Recompute against the key set, not its array identity.
-	}, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
-
-	return fresh;
-}
-
 // A compact echo of the wallet's sync state, sitting beside the balance label. The
 // detailed progress lives in the sidebar; this is the headline at a glance.
 function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
-  const synced = isSynced(sync);
-  const errored = sync?.state === "error";
-  const active = sync?.state === "syncing" && !synced;
+	const synced = isSynced(sync);
+	const errored = sync?.state === "error";
+	const active = sync?.state === "syncing" && !synced;
 
-  const Icon = synced
-    ? IconCircleCheckFilled
-    : errored
-      ? IconAlertTriangle
-      : active
-        ? IconLoader2
-        : IconLoader2; // or a pause/circle icon for "Not synced"
+	if (!synced && !errored && !active) return null;
 
-  const iconColor = synced
-    ? "text-brand"
-    : errored
-      ? "text-amber-400"
-      : active
-        ? "text-brand motion-safe:animate-spin"
-        : "text-muted-foreground"; // no spin when Not synced
+	const Icon = synced
+		? IconCircleCheckFilled
+		: errored
+			? IconAlertTriangle
+			: IconLoader2;
 
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
-      <Icon className={`size-3.5 shrink-0 ${iconColor}`} />
-      {syncLabel(sync)}
-    </span>
-  );
+	const iconColor = synced
+		? "text-brand"
+		: errored
+			? "text-amber-400"
+			: "text-brand motion-safe:animate-spin";
+
+	return (
+		<span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+			<Icon className={`size-3.5 shrink-0 ${iconColor}`} />
+			{syncLabel(sync)}
+		</span>
+	);
 }
 
 function ChartCard({
@@ -176,9 +185,6 @@ function ChartCard({
 	const activeDenom: Denom = showUsd ? "usd" : "zec";
 	const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
 	const series = showUsd ? fiatPoints : zecSeries;
-	// Freshness tracks the full history, so only a newly detected transaction pings,
-	// not a point a period switch brings back into view.
-	const freshKeys = useFreshTxKeys(points);
 	const hasData = series.length >= 2;
 
 	function onDenom(next: Denom) {
@@ -208,9 +214,10 @@ function ChartCard({
 			<div className="flex items-start justify-between gap-4">
 				<div className="flex flex-col gap-3">
 					<div className="flex items-center gap-3">
-						<span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+						<span className="text-base font-medium text-muted-foreground">
 							Total Balance
 						</span>
+						<DiscreetEye />
 						<HeroSyncPill sync={sync} />
 					</div>
 					{activeDenom === "usd" ? (
@@ -333,11 +340,7 @@ function ChartCard({
 						key={activeDenom === "usd" ? `usd-${range}` : "zec"}
 						className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
 					>
-						<BalanceChart
-							points={series}
-							freshKeys={freshKeys}
-							denom={activeDenom}
-						/>
+						<BalanceChart points={series} denom={activeDenom} />
 					</div>
 				)}
 			</div>
@@ -353,7 +356,11 @@ function ChartCard({
 
 // The last-updated line under the USD total. A spot older than the daemon's staleness
 // cutoff is greyed with an "updated Xh ago" note so a stale price never reads as live.
-function PriceFreshness({ spot }: { spot: { fetchedAt: number; stale?: boolean } }) {
+function PriceFreshness({
+	spot,
+}: {
+	spot: { fetchedAt: number; stale?: boolean };
+}) {
 	const ageMs = Date.now() - spot.fetchedAt * 1000;
 	const mins = Math.max(0, Math.round(ageMs / 60000));
 	const label =
