@@ -1,0 +1,1 @@
+import{c as e}from"./createReactComponent-21_2WyET.js";const o=[["path",{d:"M8 9l4 -4l4 4",key:"svg-0"}],["path",{d:"M16 15l-4 4l-4 -4",key:"svg-1"}]],c=e("outline","selector","Selector",o);export{c as I};
