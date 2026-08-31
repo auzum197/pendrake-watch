@@ -46,17 +46,14 @@ export function FiatConsentDialog({
 				<AlertDialogHeader>
 					<AlertDialogTitle>Show balances in USD?</AlertDialogTitle>
 					<AlertDialogDescription>
-						To price your balance in USD, Pendrake fetches the ZEC price from
-						third-party providers (CoinGecko, Coinbase, Kraken). That's an
-						outbound request beyond your Indexer, so those services see your IP.
+						Pendrake fetches the ZEC price from third-party providers. Those
+						services see your IP address.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 
 				<p className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-					Only the overall ZEC price is fetched, never anything tied to your
-					transactions, so a price lookup can't be linked to your wallet activity.
-					Your balance always shows in ZEC first, with USD added alongside. You can
-					turn this off again any time in Settings.
+					Only the overall ZEC price is fetched. A price lookup can't be linked
+					to your specific wallet activity.
 				</p>
 
 				{error && <span className="text-xs text-destructive">{error}</span>}
