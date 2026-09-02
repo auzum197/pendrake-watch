@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import { useMasked } from "@/lib/discreet";
 import { animationsEnabled } from "@/lib/motion";
+import "./discreet-value.css";
 
-// A sensitive value that masks under Discreet mode. Each kind settles to a fixed
-// dot template, so every masked amount is the same width and neither magnitude nor
-// memo length leaks. Only the value itself is passed in; signs, units rendered as
-// separate styled spans, and "pending" fallbacks stay at the call site.
-//
-// The scramble plays only when the masked state flips while mounted (the eye, the
-// Settings switch, a peek). A value that mounts with Discreet mode already on
-// renders dots at once, so navigating never replays the effect.
 
 export type DiscreetKind =
   | "zec"
@@ -22,26 +21,20 @@ export type DiscreetKind =
   | "label";
 
 const MASKS: Record<DiscreetKind, string> = {
-  zec: "•••••",
-  usd: "$•••••",
-  date: "•• ••• ••••",
-  block: "#•••••••",
-  txid: "••••••••••••",
-  address: "••••••••••••••••••••",
-  memo: "•••••••••••••••",
-  // Wallet custom names in the switcher / identity card.
-  label: "••••••••",
+  zec: "█████",
+  usd: "$█████",
+  date: "██████",
+  block: "#███████",
+  txid: "████████████",
+  address: "████████████████████",
+  memo: "███████████████",
+  label: "████████",
 };
 
-// The settled mask for a kind, for sites that swap subtrees instead of mounting
-// DiscreetValue across the flip (the notes-table copy cells).
 export function maskFor(kind: DiscreetKind): string {
   return MASKS[kind];
 }
 
-// One rAF loop drives every in-flight scramble. A toggle fires dozens at once
-// (headline, chart card, ~20 virtualized rows), so they share a ticker instead of
-// each running its own loop.
 const frames = new Set<(now: number) => void>();
 let raf = 0;
 
@@ -63,24 +56,17 @@ function onFrame(cb: (now: number) => void): () => void {
 }
 
 const SCRAMBLE_MS = 500;
-// Unresolved positions reroll at ~25fps; every frame reads as flicker, not churn.
 const ROLL_MS = 40;
-// Digits and the dot: with tabular figures the span holds width mid-scramble.
-const GLYPHS = "0123456789•";
+const GLYPHS = "0123456789█";
 
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
-// Random glyphs in the target's footprint. Spaces stay, so its structure holds.
 function scrambleGlyphs(to: string): string {
   return Array.from(to, (c) =>
     c === " " ? " " : GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length)),
   ).join("");
 }
 
-// Positions resolve left to right over the duration; the rest churn random
-// glyphs. Ends by handing the display back to the live target via `done`, never
-// by painting a final frame of its own, so a target that moved mid-scramble
-// (a balance update) shows its current value the moment the effect ends.
 function runScramble(
   to: string,
   set: (text: string) => void,
@@ -110,25 +96,146 @@ function runScramble(
   return stop;
 }
 
+const HOLD_MS = 250;
+
+export function DiscreetMask({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={`discreet-mask${className ? ` ${className}` : ""}`}
+    >
+      {Array.from(text).map((glyph, i) => (
+        <span
+          key={i}
+          className={glyph === "█" ? "discreet-mask-block" : undefined}
+          style={{ animationDelay: `${i * 70}ms` }}
+        >
+          {glyph}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function DiscreetPeek({
+  value,
+  mask,
+  className,
+}: {
+  value: string;
+  mask: string;
+  className?: string;
+}) {
+  const [peeked, setPeeked] = useState(false);
+  const wrap = useRef<HTMLSpanElement>(null);
+  const holdTimer = useRef(0);
+  const prevWidth = useRef<number | null>(null);
+  const widthAnim = useRef<Animation | null>(null);
+  const peekedOnce = useRef(false);
+
+  useEffect(
+    () => () => {
+      widthAnim.current?.cancel();
+      window.clearTimeout(holdTimer.current);
+    },
+    [],
+  );
+
+  function press(e: PointerEvent) {
+    if (e.button !== 0) return;
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => {
+      peekedOnce.current = true;
+      prevWidth.current = wrap.current?.offsetWidth ?? null;
+      setPeeked(true);
+    }, HOLD_MS);
+  }
+
+  function release() {
+    window.clearTimeout(holdTimer.current);
+    if (peeked) prevWidth.current = wrap.current?.offsetWidth ?? null;
+    setPeeked(false);
+  }
+
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    const from = prevWidth.current;
+    prevWidth.current = null;
+    if (!el || from == null || !animationsEnabled()) return;
+    const to = el.offsetWidth;
+    if (from === to) return;
+    widthAnim.current?.cancel();
+    el.style.whiteSpace = "nowrap";
+    el.style.clipPath = "inset(0)";
+    const run = el.animate([{ width: `${from}px` }, { width: `${to}px` }], {
+      duration: 200,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    });
+    widthAnim.current = run;
+    run.onfinish = () => {
+      if (widthAnim.current !== run) return;
+      widthAnim.current = null;
+      el.style.whiteSpace = "";
+      el.style.clipPath = "";
+    };
+  }, [peeked]);
+
+  return (
+    <span
+      ref={wrap}
+      className={`tabular-nums discreet-peekable ${className ?? ""}`}
+      aria-label="Hidden"
+      onPointerDown={press}
+      onPointerUp={release}
+      onPointerLeave={release}
+      onPointerCancel={release}
+      style={{ touchAction: "none" }}
+    >
+      {peeked ? (
+        <span
+          aria-hidden
+          key="peek"
+          className={animationsEnabled() ? "discreet-peek-edge" : undefined}
+        >
+          {value}
+        </span>
+      ) : (
+        <DiscreetMask
+          key="mask"
+          text={mask}
+          className={
+            peekedOnce.current && animationsEnabled()
+              ? "discreet-peek-edge"
+              : undefined
+          }
+        />
+      )}
+    </span>
+  );
+}
+
 export function DiscreetValue({
   kind,
   children,
   className,
+  peekable = true,
 }: {
   kind: DiscreetKind;
   children: string;
   className?: string;
+  peekable?: boolean;
 }) {
   const masked = useMasked();
   const target = masked ? MASKS[kind] : children;
-  // Non-null only while a scramble is animating; otherwise the live target
-  // renders directly, so ordinary data updates stay synchronous.
   const [frame, setFrame] = useState<string | null>(null);
   const [prev, setPrev] = useState(masked);
 
-  // A flip must never paint the outgoing value: adjust state during render (the
-  // re-render runs before commit), so the first painted frame is already glyphs.
-  // A hide that painted the real value first would leak the very thing it hides.
   if (prev !== masked) {
     setPrev(masked);
     setFrame(animationsEnabled() ? scrambleGlyphs(target) : null);
@@ -139,9 +246,6 @@ export function DiscreetValue({
 
   useEffect(() => () => cancel.current?.(), []);
 
-  // Drives the animation only. Cancellation between runs is handled here, not
-  // via the effect cleanup: a cleanup would also run on a plain data update
-  // (target change, no flip) and kill an in-flight scramble mid-churn.
   useEffect(() => {
     const flipped = prevMasked.current !== masked;
     prevMasked.current = masked;
@@ -158,12 +262,15 @@ export function DiscreetValue({
   }, [masked, target]);
 
   const text = frame ?? target;
-  return (
-    <span
-      className={`tabular-nums ${className ?? ""}`}
-      aria-label={masked ? "Hidden" : undefined}
-    >
-      {masked ? <span aria-hidden>{text}</span> : text}
-    </span>
-  );
+  if (!masked) {
+    return <span className={`tabular-nums ${className ?? ""}`}>{text}</span>;
+  }
+  if (!peekable) {
+    return (
+      <span className={`tabular-nums ${className ?? ""}`} aria-label="Hidden">
+        <DiscreetMask text={text} />
+      </span>
+    );
+  }
+  return <DiscreetPeek value={children} mask={text} className={className} />;
 }

@@ -7,126 +7,133 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* Dark-only palette, layered by surface. The frame and sidebar sit on --color-ink
-       (the darkest step); the content panel (--background) lifts off it, and cards
-       (--card) lift again off the panel. Borders read a step lighter than the card they
-       outline. Greens stay on the chart tokens; everything else is the new neutral ramp. */
-    --background: #161619;
-    --foreground: #fafafa;
-    --card: #1c1d21;
-    --card-foreground: #fafafa;
-    --popover: #1c1d21;
-    --popover-foreground: #fafafa;
-    --primary: #2e43ff;
-    --primary-foreground: #ffffff;
-    --secondary: #232327;
-    --secondary-foreground: #fafafa;
-    --muted: #232327;
-    --muted-foreground: #9b9ba1;
-    --accent: #232327;
-    --accent-foreground: #fafafa;
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: #2a2b30;
-    --input: #2a2b30;
-    --ring: #3a3b42;
-    --chart-1: oklch(0.897 0.196 126.665);
-    --chart-2: oklch(0.768 0.233 130.85);
-    --chart-3: oklch(0.648 0.2 131.684);
-    --chart-4: oklch(0.532 0.157 131.589);
-    --chart-5: oklch(0.453 0.124 130.933);
-    --radius: 0.875rem;
-    --sidebar: #101012;
-    --sidebar-foreground: #fafafa;
-    --sidebar-primary: #2e43ff;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #232327;
-    --sidebar-accent-foreground: #fafafa;
-    --sidebar-border: #2a2b30;
-    --sidebar-ring: #3a3b42;
+	--background: #161619;
+	--foreground: #fafafa;
+	--card: #1c1d21;
+	--card-foreground: #fafafa;
+	--popover: #1c1d21;
+	--popover-foreground: #fafafa;
+	--primary: #2e58ff;
+	--primary-foreground: #ffffff;
+	--secondary: #232327;
+	--secondary-foreground: #fafafa;
+	--muted: #232327;
+	--muted-foreground: #9b9ba1;
+	--accent: #232327;
+	--accent-foreground: #fafafa;
+	--destructive: oklch(0.704 0.191 22.216);
+	--border: #2a2b30;
+	--input: #2a2b30;
+	--ring: #3a3b42;
+	--chart-1: oklch(0.897 0.196 126.665);
+	--chart-2: oklch(0.768 0.233 130.85);
+	--chart-3: oklch(0.648 0.2 131.684);
+	--chart-4: oklch(0.532 0.157 131.589);
+	--chart-5: oklch(0.453 0.124 130.933);
+	--radius: 0.875rem;
+	--sidebar: #101012;
+	--sidebar-foreground: #fafafa;
+	--sidebar-primary: #2e58ff;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #232327;
+	--sidebar-accent-foreground: #fafafa;
+	--sidebar-border: #2a2b30;
+	--sidebar-ring: #3a3b42;
 }
 
 @theme inline {
-    --font-sans: 'Nunito Sans Variable', sans-serif;
-    --font-heading: 'Space Grotesk Variable', sans-serif;
-    /* Strong ease-out for reveals and entrances, punchier than the built-ins. */
-    --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-    /* Pendrake brand palette, lifted from the designer's frames. Used by the
-       onboarding wizard and the dashboard, independent of the light/dark tokens. */
-    --color-brand: #2e43ff;
-    --color-brand-foreground: #ffffff;
-    --color-ink: #101012;
-    --color-ink-soft: #1a1a1c;
-    --color-ink-line: #2a2a2e;
-    /* Decorative warm gradient, lifted from the designer's frames. Used cautiously,
-       almost never (no neutral surface should reach for it). */
-    --color-accent-from: #ff610c;
-    --color-accent-to: #ef8f20;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+	--font-sans: "Nunito Sans Variable", sans-serif;
+	--font-heading: "Space Grotesk Variable", sans-serif;
+	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+	--color-brand: #2e58ff;
+	--color-brand-foreground: #ffffff;
+	--color-ink: #101012;
+	--color-ink-soft: #1a1a1c;
+	--color-ink-line: #2a2a2e;
+	--color-accent-from: #ff610c;
+	--color-accent-to: #ef8f20;
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-    }
-  body {
-    @apply bg-background text-foreground;
-    }
-  html {
-    @apply font-sans;
-    }
-  /* Tailwind v4 drops Preflight's default pointer cursor on buttons. Restore it
-     for enabled buttons so every clickable control reads as clickable. */
-  button:not(:disabled),
-  [role="button"]:not(:disabled) {
-    cursor: pointer;
-    }
-  ::selection {
-    background-color: var(--primary);
-    color: var(--primary-foreground);
-    }
+	* {
+		@apply border-border outline-ring/50;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+	html {
+		@apply font-sans;
+	}
+	button:not(:disabled),
+	[role="button"]:not(:disabled) {
+		cursor: pointer;
+	}
+	::selection {
+		background-color: var(--primary);
+		color: var(--primary-foreground);
+	}
 
-  img,
-  svg,
-  canvas {
-    -webkit-user-drag: none;
-    -webkit-user-select: none;
-    user-select: none;
-    }
+	img,
+	svg,
+	canvas {
+		-webkit-user-drag: none;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	::-webkit-scrollbar {
+		width: 5px;
+		height: 5px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		border-radius: 9999px;
+		background: color-mix(in oklab, var(--foreground) 18%, transparent);
+	}
+	::-webkit-scrollbar-thumb:hover {
+		background: color-mix(in oklab, var(--foreground) 30%, transparent);
+	}
+	::-webkit-scrollbar-corner {
+		background: transparent;
+	}
 }

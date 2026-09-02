@@ -1,10 +1,8 @@
+import { useEffect } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { hydrateDiscreet, useDiscreet } from "@/lib/discreet";
-import { DiscreetValue } from "./discreet-value";
+import { DiscreetMask, DiscreetPeek, DiscreetValue } from "./discreet-value";
 
-// The store is module-global, so the toggle here drives it directly through
-// hydrateDiscreet (no daemon in Storybook). Flipping it plays the one-shot
-// scramble on every value below.
 function AllKindsDemo() {
 	const hidden = useDiscreet();
 	return (
@@ -56,4 +54,34 @@ type Story = StoryObj<typeof meta>;
 export const AllKinds: Story = {
 	args: { kind: "zec", children: "1,234.5678" },
 	render: () => <AllKindsDemo />,
+};
+
+function PeekDemo() {
+	useEffect(() => {
+		hydrateDiscreet(true);
+	}, []);
+	return <AllKindsDemo />;
+}
+
+export const HoldToPeek: Story = {
+	args: { kind: "zec", children: "1,234.5678" },
+	render: () => <PeekDemo />,
+};
+
+export const Peek: Story = {
+	args: { kind: "zec", children: "1,234.5678" },
+	render: () => (
+		<span className="font-mono text-sm">
+			Balance: <DiscreetPeek value="1,234.5678" mask="█████" /> ZEC
+		</span>
+	),
+};
+
+export const Mask: Story = {
+	args: { kind: "zec", children: "1,234.5678" },
+	render: () => (
+		<span className="discreet-peekable font-mono text-sm">
+			<DiscreetMask text="█████" />
+		</span>
+	),
 };

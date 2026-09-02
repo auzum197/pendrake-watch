@@ -5,6 +5,7 @@ import {
   fiatSeries,
   filterRange,
   formatBlock,
+  formatTxDate,
   formatEta,
   isSynced,
   priceLookup,
@@ -46,8 +47,6 @@ describe("isSynced", () => {
   });
 
   it("is not synced when scanning has only touched the tip region", () => {
-    // Priority scanning reaches the tip early, so height proximity passes while
-    // most of the backlog is unscanned. Low percent must keep this "syncing".
     expect(
       isSynced(
         sync({ syncedHeight: 2_000_000, chainTip: 2_000_000, percent: 6 }),
@@ -68,7 +67,6 @@ describe("syncLabel", () => {
   });
 
   it("keeps wrongChain out of non-error states", () => {
-    // The flag only refines an error; a syncing snapshot reads as syncing.
     expect(syncLabel(sync({ percent: 40, wrongChain: true }))).toBe(
       "Syncing… 40%",
     );
@@ -126,9 +124,6 @@ function tx(part: Partial<Tx>): Tx {
     notes: [],
     ...part,
   };
-  // Default the net delta to the simple case (received +value, sent −value) so the
-  // existing reconstruction tests hold; a test sets netZat explicitly to model a
-  // shield or self-send, where the net change differs from the display value.
   if (part.netZat === undefined) {
     base.netZat = base.kind === "received" ? base.valueZat : `-${base.valueZat}`;
   }
@@ -177,7 +172,6 @@ describe("splitAddress", () => {
   });
 
   it("uses the two-char version prefix for transparent addresses", () => {
-    // base58 t-addrs hold no "1" separator, so lastIndexOf would over-eat.
     const { prefix } = splitAddress("t1Xyz12345abcde67890fghij");
     expect(prefix).toBe("t1");
   });
@@ -198,6 +192,16 @@ describe("formatBlock", () => {
 
   it("dashes a pending transaction with no height", () => {
     expect(formatBlock(undefined)).toBe("—");
+  });
+});
+
+describe("formatTxDate", () => {
+  it("renders the calendar day with its year", () => {
+    expect(formatTxDate(1_701_200_000)).toContain("2023");
+  });
+
+  it("reads seconds and millis the same", () => {
+    expect(formatTxDate(1_701_200_000)).toBe(formatTxDate(1_701_200_000_000));
   });
 });
 
@@ -222,8 +226,6 @@ describe("txsToCsv", () => {
     const lines = txsToCsv(txs).split("\n");
 
     expect(lines[0]).toBe("Block,Date,Type,Status,Amount (ZEC),Txid");
-    // Block 200 sorts above 100, and the plain amount carries no thousands grouping
-    // so no cell smuggles in a comma.
     expect(lines[1]).toBe(
       "200,1970-01-01T00:01:00.000Z,sent,confirmed,0.5,new",
     );
@@ -292,9 +294,6 @@ describe("balanceHistory", () => {
     });
 
     it("tracks the net change, not a shield's display value", () => {
-      // A shield is kind=sent with a large display value but a ~zero balance change
-      // (only the fee leaves). Reconstructing against netZat must not subtract the
-      // shielded amount, which is what produced the phantom starting balance.
       const txs = [
         tx({
           datetime: 1000,
@@ -304,7 +303,6 @@ describe("balanceHistory", () => {
         }),
         tx({ datetime: 2000, kind: "sent", valueZat: String(8 * ZEC), netZat: "0" }),
       ];
-      // Climbs to 10 and holds, not dropping to 2 as the display value implies.
       expect(balanceHistory(txs, orchard(10 * ZEC)).map((p) => p.value)).toEqual([
         0, 10, 10,
       ]);
@@ -318,7 +316,6 @@ describe("balanceHistory", () => {
           valueZat: String(5 * ZEC),
           netZat: String(5 * ZEC),
         }),
-        // 3 ZEC moved to self; only the 0.0001 ZEC fee leaves the wallet.
         tx({ datetime: 2000, kind: "sent", valueZat: String(3 * ZEC), netZat: "-10000" }),
       ];
       expect(
@@ -327,8 +324,6 @@ describe("balanceHistory", () => {
     });
 
     it("falls back to the signed display value when netZat is absent", () => {
-      // A daemon predating netZat omits the field; the chart must still render off
-      // valueZat instead of throwing on BigInt(undefined).
       const txs: Tx[] = [
         {
           txid: "a",
@@ -353,8 +348,6 @@ describe("balanceHistory", () => {
 
   describe("anchoring on the live balance", () => {
     it("ends the curve exactly on the headline balance", () => {
-      // The newest point equals the headline total regardless of how the per-tx
-      // values add up; earlier points are that total minus each later transaction.
       const txs = [
         tx({ datetime: 1000, kind: "received", valueZat: String(3 * ZEC) }),
         tx({ datetime: 2000, kind: "sent", valueZat: String(ZEC) }),
@@ -366,10 +359,6 @@ describe("balanceHistory", () => {
     });
 
     it("surfaces the implied pre-history balance when txs don't reconcile", () => {
-      // When the visible transactions spend more than they receive (e.g. a watch-only
-      // scan missing early receives), anchoring on the real balance makes the leading
-      // point show the balance the wallet must have held before the first visible tx.
-      // The chart can't invent the missing history.
       const txs = [
         tx({
           datetime: 1000,
@@ -378,15 +367,12 @@ describe("balanceHistory", () => {
           netZat: String(-5 * ZEC),
         }),
       ];
-      // Balance 2, one send of 5 → implied start of 7 (2 − (−5)).
       expect(balanceHistory(txs, orchard(2 * ZEC)).map((p) => p.value)).toEqual([7, 2]);
     });
   });
 
   describe("flooring at zero", () => {
     it("floors intermediate points instead of going negative", () => {
-      // A low live balance against larger receives makes the backward walk dip below
-      // zero; those points floor rather than render a negative balance.
       const txs = [
         tx({ datetime: 1000, kind: "received", valueZat: String(ZEC) }),
         tx({ datetime: 2000, kind: "received", valueZat: String(3 * ZEC) }),
@@ -429,8 +415,6 @@ describe("balanceHistory", () => {
     });
 
     it("sizes the margin off the span, not point density", () => {
-      // Three receives packed 10s apart, then one far later. A margin sized off the
-      // gap between adjacent points would all but vanish; the span keeps it visible.
       const txs = [
         tx({ datetime: 1000, kind: "received", valueZat: String(ZEC) }),
         tx({ datetime: 1010, kind: "received", valueZat: String(ZEC) }),
@@ -513,7 +497,6 @@ describe("filterRange", () => {
   });
 });
 
-// Days as unix seconds, matching the daemon's balance/point time unit.
 const daySec = (iso: string) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 1000);
 
 function price(date: string, usd: number): PricePoint {
@@ -535,7 +518,6 @@ describe("priceLookup", () => {
   });
 
   it("carries the last known price forward across a gap", () => {
-    // No 2024-01-02 mark, so it reads the prior day's price.
     expect(priceLookup(prices)(daySec("2024-01-02"))).toBe(30);
     expect(priceLookup(prices)(daySec("2024-01-05"))).toBe(50);
   });
@@ -560,9 +542,6 @@ describe("fiatSeries", () => {
   });
 
   it("waves with the price while the balance holds flat", () => {
-    // A constant 2 ZEC balance across a rising price must trace the price, not a flat
-    // line. Interpolated between the daily marks, the value sweeps 60 -> 100 continuously,
-    // so there are many distinct values, all within balance (2) times the price range.
     const bal = [
       { key: "start", t: daySec("2024-01-01"), value: 2, label: "" },
       { key: "t1", t: daySec("2024-01-01"), value: 2, label: "" },
@@ -572,7 +551,6 @@ describe("fiatSeries", () => {
     expect(new Set(values).size).toBeGreaterThan(5);
     expect(Math.min(...values)).toBeGreaterThanOrEqual(60);
     expect(Math.max(...values)).toBeLessThanOrEqual(100);
-    // The curve actually moves rather than holding one value.
     expect(Math.max(...values)).toBeGreaterThan(Math.min(...values));
   });
 
@@ -582,30 +560,23 @@ describe("fiatSeries", () => {
       { key: "t1", t: daySec("2024-01-01"), value: 2, label: "" },
     ];
     const out = fiatSeries(bal, prices, 50, "all", nowMs);
-    // Dense enough that hover lands anywhere, and every sample carries its ZEC balance.
     expect(out.length).toBeGreaterThan(100);
     expect(out.every((p) => p.zec === 2)).toBe(true);
   });
 
   it("drops a sharp step flagged for a dot at a balance change", () => {
-    // A receive on 2024-01-02 (price 40) jumps the balance 0 -> 3. The step must be
-    // vertical: two points at the same instant carrying old*price and new*price, and only
-    // the new one is flagged as a change (the point that gets a dot).
     const bal = [
       { key: "start", t: daySec("2024-01-01"), value: 0, label: "" },
       { key: "t1", t: daySec("2024-01-02"), value: 3, label: "" },
     ];
     const out = fiatSeries(bal, prices, 50, "all", nowMs);
     const change = out.find((p) => p.change);
-    // jump is the USD size of the step (|3 - 0| * 40), which the chart tests against the
-    // axis peak to decide whether the change is big enough to dot.
     expect(change).toMatchObject({ value: 120, zec: 3, jump: 120 });
     const pre = out.find((p) => p.key === "t1:pre");
     expect(pre).toMatchObject({ value: 0, zec: 0 }); // 0 * 40
   });
 
   it("windows to the selected Span", () => {
-    // A year of flat balance, asking for the last week, keeps only ~week of samples.
     const bal = [
       { key: "start", t: daySec("2023-01-01"), value: 1, label: "" },
       { key: "t1", t: daySec("2023-01-01"), value: 1, label: "" },
@@ -613,7 +584,6 @@ describe("fiatSeries", () => {
     const yearPrices = [price("2023-01-01", 30), price("2024-01-03", 50)];
     const week = fiatSeries(bal, yearPrices, 50, "week", nowMs);
     const span = week[week.length - 1].t - week[0].t;
-    // Seconds in the series' unit: a week (plus a sample's slack), not a year.
     expect(span).toBeLessThanOrEqual(8 * 86_400);
   });
 });

@@ -3,7 +3,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
 	IconAlertTriangle,
 	IconCircleCheckFilled,
-	IconInfoCircle,
 	IconLoader2,
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented/segmented";
@@ -36,11 +35,6 @@ import {
 } from "@/lib/ipc";
 import { animationsEnabled } from "@/lib/motion";
 
-// The designer's Home frame, wired to the live daemon feed through useWalletData. The
-// graph card is the hero: a TOTAL BALANCE header with the headline figure and a sync
-// pill, the currency toggle and a Pools entry on the right, then the "ZEC over time"
-// chart with its range selector. The series has no dedicated daemon command, so it's
-// reconstructed from the confirmed transaction history.
 
 export function DashboardPage() {
 	const { wallet, balance, txs, sync, error, switching } = useWalletData();
@@ -105,8 +99,6 @@ const RANGES: { value: ChartRange; label: string }[] = [
 	{ value: "day", label: "1D" },
 ];
 
-// The high the standing measures against follows the selected window: "all" is the
-// true all-time high, the rest are the peak within that period.
 const PERIOD_HIGH: Record<ChartRange, string> = {
 	all: "all-time high",
 	year: "1-year high",
@@ -115,8 +107,6 @@ const PERIOD_HIGH: Record<ChartRange, string> = {
 	day: "1-day high",
 };
 
-// A compact echo of the wallet's sync state, sitting beside the balance label. The
-// detailed progress lives in the sidebar; this is the headline at a glance.
 function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
 	const synced = isSynced(sync);
 	const errored = sync?.state === "error";
@@ -159,19 +149,12 @@ function ChartCard({
 	const [range, setRange] = useState<ChartRange>("all");
 	const [denom, setDenom] = useState<Denom>("zec");
 	const [consentOpen, setConsentOpen] = useState(false);
-	// Local mirror so the price hook and USD view switch on the instant consent is given,
-	// before the wallet-state poll catches up to the daemon's persisted flag.
 	const [enabledLocal, setEnabledLocal] = useState(false);
 	const fiatEnabled = enabledLocal || !!wallet?.fiatEnabled;
 	const price = usePriceData(fiatEnabled);
 
 	const total = totalConfirmed(balance);
-	// Memoised so a sync-only refresh doesn't hand the chart a fresh array and force a
-	// full recharts reconcile while you're hovering it.
 	const points = useMemo(() => balanceHistory(txs, balance), [txs, balance]);
-	// The USD series marks the ZEC balance against the daily price, already windowed to the
-	// selected Span and sampled densely for a continuous hover. Empty until the price data
-	// lands, so the view falls back to ZEC rather than showing a blank chart.
 	const spotUsd = price.spot?.usdPerZec ?? null;
 	const fiatPoints = useMemo(
 		() =>
@@ -180,7 +163,6 @@ function ChartCard({
 				: [],
 		[denom, points, price.history, spotUsd, range],
 	);
-	// Only render USD once its series is ready; otherwise stay on ZEC so there's no blank.
 	const showUsd = denom === "usd" && fiatPoints.length >= 2;
 	const activeDenom: Denom = showUsd ? "usd" : "zec";
 	const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
@@ -204,9 +186,6 @@ function ChartCard({
 
 	const usdTotal =
 		total !== null && spotUsd !== null ? (Number(total) / 1e8) * spotUsd : null;
-	// The standing reads off the windowed series, so the high it measures against is the
-	// peak within the selected period. The history is provisional mid-sync, so a spinner
-	// marks the number as still settling rather than final.
 	const standing = athStanding(series);
 	const calculating = sync?.state === "syncing" && !isSynced(sync);
 	return (
@@ -243,8 +222,6 @@ function ChartCard({
 							</span>
 						</span>
 					)}
-					{/* Reserve the freshness line's height in both denominations so switching
-					    ZEC <-> USD doesn't resize the header (and shift the chart under it). */}
 					<div className="h-4">
 						{activeDenom === "usd" && price.spot && (
 							<PriceFreshness spot={price.spot} />
@@ -263,7 +240,6 @@ function ChartCard({
 							]}
 						/>
 					</div>
-					{/* Opens the per-pool breakdown (Orchard/Sapling/Transparent). */}
 					<button
 						type="button"
 						onClick={() => navigate({ to: "/pools" })}
@@ -278,15 +254,9 @@ function ChartCard({
 
 			<div className="flex items-center justify-between gap-4">
 				<div className="flex flex-col gap-0.5">
-					<div className="flex items-center gap-1.5">
-						<h2 className="font-heading text-base font-semibold">
-							Balance over time
-						</h2>
-						<IconInfoCircle
-							className="size-4 text-muted-foreground"
-							aria-label="Balance reconstructed from confirmed transactions"
-						/>
-					</div>
+					<h2 className="font-heading text-base font-semibold">
+						Balance over time
+					</h2>
 					{standing && (
 						<span className="flex items-center gap-1.5 text-xs">
 							<span
@@ -319,9 +289,6 @@ function ChartCard({
 				</div>
 			</div>
 
-			{/* Empty state and chart share one grid cell so the first confirmed point
-          crossfades in instead of snapping. The empty state matches the chart's
-          viewBox ratio, so the swap carries no layout shift under it. */}
 			<div className="mt-4 grid text-muted-foreground">
 				<div
 					aria-hidden={hasData}
@@ -331,11 +298,6 @@ function ChartCard({
 					No confirmed activity yet
 				</div>
 				{hasData && (
-					// The USD series can't tween across a period switch (its samples are keyed
-					// by position, so tweening drags the whole curve in from the side), so it
-					// gets a clean entrance instead: keying the wrapper by range remounts it and
-					// replays the fade-and-rise. ZEC keeps one key, so its identity tween across
-					// period switches is untouched.
 					<div
 						key={activeDenom === "usd" ? `usd-${range}` : "zec"}
 						className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
@@ -354,8 +316,6 @@ function ChartCard({
 	);
 }
 
-// The last-updated line under the USD total. A spot older than the daemon's staleness
-// cutoff is greyed with an "updated Xh ago" note so a stale price never reads as live.
 function PriceFreshness({
 	spot,
 }: {

@@ -277,7 +277,7 @@ export function WalletCard({
 											{showBalance ? (
 												<div className="shrink-0 text-right">
 													<p className="font-mono text-xs font-medium tabular-nums text-white">
-														<DiscreetValue kind="zec">
+														<DiscreetValue kind="zec" peekable={false}>
 															{formatZecApprox(balance)}
 														</DiscreetValue>
 													</p>

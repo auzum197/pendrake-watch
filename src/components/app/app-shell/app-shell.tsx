@@ -13,9 +13,11 @@ import {
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
 import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
+import { openSettings, useSettingsModal } from "@/lib/settings-modal";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { Toaster } from "@/components/ui/sonner/sonner";
+import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { WalletCard } from "../wallet-card/wallet-card";
 import "./nav-reveal.css";
 
@@ -44,7 +46,7 @@ async function openAbout() {
 	aboutWindow = win;
 }
 
-type Section = "wallet" | "activity" | "notes" | "settings";
+type Section = "wallet" | "activity" | "notes";
 
 export function AppShell({
 	active,
@@ -59,6 +61,7 @@ export function AppShell({
 	switching?: boolean;
 	children: ReactNode;
 }) {
+	const { open: settingsOpen } = useSettingsModal();
 	return (
 		<div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
 			<AppSidebar active={active} wallet={wallet} sync={sync} switching={switching} />
@@ -74,12 +77,13 @@ export function AppShell({
 			</div>
 			<UnreachableToast
 				unreachable={sync?.unreachable ?? false}
-				onSettings={active === "settings"}
+				onSettings={settingsOpen}
 			/>
 			<WrongChainToast
 				wrongChain={sync?.wrongChain ?? false}
-				onSettings={active === "settings"}
+				onSettings={settingsOpen}
 			/>
+			<SettingsDialog wallet={wallet} />
 			<Toaster position="bottom-right" />
 		</div>
 	);
@@ -94,7 +98,6 @@ function UnreachableToast({
 	unreachable: boolean;
 	onSettings: boolean;
 }) {
-	const navigate = useNavigate();
 	useEffect(() => {
 		if (unreachable && !onSettings) {
 			toast("Can't reach your Indexer.", {
@@ -103,13 +106,13 @@ function UnreachableToast({
 				icon: <IconAlertTriangle className="size-4" />,
 				action: {
 					label: "Change Indexer",
-					onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+					onClick: () => openSettings({ indexer: true }),
 				},
 			});
 		} else {
 			toast.dismiss(UNREACHABLE_TOAST);
 		}
-	}, [unreachable, onSettings, navigate]);
+	}, [unreachable, onSettings]);
 	return null;
 }
 
@@ -122,7 +125,6 @@ function WrongChainToast({
 	wrongChain: boolean;
 	onSettings: boolean;
 }) {
-	const navigate = useNavigate();
 	useEffect(() => {
 		if (wrongChain && !onSettings) {
 			toast(
@@ -133,14 +135,14 @@ function WrongChainToast({
 					icon: <IconAlertTriangle className="size-4" />,
 					action: {
 						label: "Review Indexer",
-						onClick: () => navigate({ to: "/settings", hash: "indexer" }),
+						onClick: () => openSettings({ indexer: true }),
 					},
 				},
 			);
 		} else {
 			toast.dismiss(WRONG_CHAIN_TOAST);
 		}
-	}, [wrongChain, onSettings, navigate]);
+	}, [wrongChain, onSettings]);
 	return null;
 }
 
@@ -185,12 +187,8 @@ function AppSidebar({
 			</nav>
 
 			<nav className="mt-auto flex flex-col gap-1">
-				<NavItem
-					icon={<IconSettings className="size-4" />}
-					label="Settings"
-					active={active === "settings"}
-					onClick={() => navigate({ to: "/settings" })}
-				/>
+				<SettingsNavItem />
+
 				<NavItem
 					icon={<IconHelpCircle className="size-4" />}
 					label="About"
@@ -206,6 +204,18 @@ function AppSidebar({
 				/>
 			</nav>
 		</aside>
+	);
+}
+
+function SettingsNavItem() {
+	const { open } = useSettingsModal();
+	return (
+		<NavItem
+			icon={<IconSettings className="size-4" />}
+			label="Settings"
+			active={open}
+			onClick={() => openSettings()}
+		/>
 	);
 }
 
