@@ -1,21 +1,16 @@
 import { useRef, useState } from "react";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
-import { TxList } from "@/components/app/tx-list";
+import { TxList } from "@/components/app/tx-list/tx-list";
 import { useWalletData } from "@/hooks/use-wallet-data";
 import { txsToCsv } from "@/lib/format";
 import type { Tx } from "@/lib/ipc";
 
 export function ActivityPage() {
-  const { txs, error } = useWalletData();
+  const { txs } = useWalletData();
 
   return (
     <>
       <h1 className="font-heading text-xl font-bold">Activity</h1>
-      {error && (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
-          Can't reach the background process: {error}
-        </p>
-      )}
       <section className="rounded-2xl border border-border bg-card p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-base font-semibold">

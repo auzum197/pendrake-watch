@@ -1,11 +1,24 @@
 //! Filesystem layout and persisted import metadata.
 //!
-//! zingolib owns the wallet file inside `wallet_dir`. Alongside it we persist a
-//! small `meta.json` describing how the wallet was imported, so the daemon can
-//! rebuild [`pendrake_ipc::WalletState`] and reconnect after a restart. The wallet
-//! file is encrypted at rest with the global passphrase (docs/adr/0003) when
-//! `Meta.encrypted` is set. `meta.json` itself is plaintext and holds nothing
-//! secret, the viewing key lives only inside the encrypted wallet file.
+//! Layout (multi-wallet ready):
+//!
+//! ```text
+//! $PENDRAKE_DATA_DIR/
+//!   active_wallet_id      # the Selected Wallet's id (file name kept for old installs)
+//!   daemon.sock
+//!   price_cache.json      # shared; public ZEC/USD only
+//!   settings.json         # app-wide prefs (Discreet mode); shared
+//!   wallets/
+//!     <id>/
+//!       meta.json
+//!       wallet/           # zingolib wallet dir
+//!       notified.json     # per-wallet seen-set
+//! ```
+//!
+//! A legacy single-wallet tree (`meta.json` + `wallet/` at the data root) is
+//! migrated once into `wallets/<id>/` on startup. zingolib owns the wallet file
+//! inside `wallet_dir`. `meta.json` is plaintext and holds nothing secret; the
+//! viewing key lives only inside the encrypted wallet file (docs/adr/0003).
 
 use std::path::{Path, PathBuf};
 
@@ -16,14 +29,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone)]
 pub struct Paths {
     pub root: PathBuf,
+    pub socket: PathBuf,
+    /// Reconciled spot + daily price series (AUZ-83). Shared across wallets.
+    pub price_cache_file: PathBuf,
+    /// App-wide preferences shared across wallets (docs/adr/0009). Currently just
+    /// Discreet mode, which is a viewing preference for the whole app, not a wallet.
+    pub settings_file: PathBuf,
+    /// `$root/wallets`.
+    pub wallets_dir: PathBuf,
+    /// File holding the Selected Wallet's id (one line).
+    pub selected_id_file: PathBuf,
+    /// Set when this `Paths` is scoped to a wallet via [`Self::for_wallet`].
+    pub wallet_id: Option<String>,
+    /// zingolib wallet directory for the scoped wallet.
     pub wallet_dir: PathBuf,
     pub meta_file: PathBuf,
-    pub socket: PathBuf,
-    /// Txids already notified, so a restart doesn't re-announce past receipts.
+    /// Txids already notified for this wallet.
     pub notified_file: PathBuf,
-    /// Reconciled spot + daily price series, so the GUI opens on a value instead of a
-    /// blank while the first fetch runs (AUZ-83). Plaintext; holds nothing secret.
-    pub price_cache_file: PathBuf,
 }
 
 impl Paths {
@@ -39,20 +61,125 @@ impl Paths {
     }
 
     pub fn with_root(root: PathBuf) -> Self {
+        let wallets_dir = root.join("wallets");
         Self {
+            socket: root.join("daemon.sock"),
+            price_cache_file: root.join("price_cache.json"),
+            settings_file: root.join("settings.json"),
+            selected_id_file: root.join("active_wallet_id"),
+            wallets_dir,
+            wallet_id: None,
+            // Placeholders until `for_wallet` / migration; legacy names kept so
+            // migrate can still see the old root files.
             wallet_dir: root.join("wallet"),
             meta_file: root.join("meta.json"),
-            socket: root.join("daemon.sock"),
             notified_file: root.join("notified.json"),
-            price_cache_file: root.join("price_cache.json"),
             root,
         }
     }
 
+    /// Scope paths to one wallet under `wallets/<id>/`.
+    pub fn for_wallet(&self, id: &str) -> Self {
+        let dir = self.wallets_dir.join(id);
+        Self {
+            wallet_id: Some(id.to_string()),
+            wallet_dir: dir.join("wallet"),
+            meta_file: dir.join("meta.json"),
+            notified_file: dir.join("notified.json"),
+            ..self.clone()
+        }
+    }
+
     pub fn ensure_dirs(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.wallet_dir)
-            .with_context(|| format!("creating data dir {}", self.wallet_dir.display()))?;
+        std::fs::create_dir_all(&self.wallets_dir).with_context(|| {
+            format!("creating wallets dir {}", self.wallets_dir.display())
+        })?;
+        if self.wallet_id.is_some() {
+            std::fs::create_dir_all(&self.wallet_dir).with_context(|| {
+                format!("creating wallet dir {}", self.wallet_dir.display())
+            })?;
+        }
         Ok(())
+    }
+
+    pub fn read_selected_id(&self) -> Result<Option<String>> {
+        match std::fs::read_to_string(&self.selected_id_file) {
+            Ok(s) => {
+                let id = s.trim();
+                Ok((!id.is_empty()).then(|| id.to_string()))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).context("reading the selected wallet id"),
+        }
+    }
+
+    pub fn write_selected_id(&self, id: &str) -> Result<()> {
+        std::fs::write(&self.selected_id_file, id.as_bytes())
+            .context("writing the selected wallet id")?;
+        Ok(())
+    }
+
+    pub fn clear_selected_id(&self) -> Result<()> {
+        match std::fs::remove_file(&self.selected_id_file) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e).context("clearing the selected wallet id"),
+        }
+    }
+
+    pub fn list_wallet_ids(&self) -> Result<Vec<String>> {
+        let mut ids = Vec::new();
+        let entries = match std::fs::read_dir(&self.wallets_dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ids),
+            Err(e) => return Err(e).context("reading wallets dir"),
+        };
+        for entry in entries {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                ids.push(entry.file_name().to_string_lossy().into_owned());
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    }
+
+    /// Move a legacy root-level wallet into `wallets/<id>/` once.
+    ///
+    /// Returns the new wallet id when a migration ran.
+    pub fn migrate_legacy_if_needed(&self) -> Result<Option<String>> {
+        let legacy_meta = self.root.join("meta.json");
+        if !legacy_meta.exists() {
+            return Ok(None);
+        }
+        // Already on the multi-wallet layout.
+        if self.read_selected_id()?.is_some() {
+            return Ok(None);
+        }
+        let meta =
+            Meta::load(&legacy_meta)?.context("legacy meta.json missing after exists check")?;
+        let id = meta
+            .fingerprint
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "default".to_string());
+        let dest = self.for_wallet(&id);
+        std::fs::create_dir_all(self.wallets_dir.join(&id))
+            .with_context(|| format!("creating {}", self.wallets_dir.join(&id).display()))?;
+        let legacy_wallet = self.root.join("wallet");
+        if legacy_wallet.exists() {
+            std::fs::rename(&legacy_wallet, &dest.wallet_dir)
+                .with_context(|| "moving legacy wallet/")?;
+        }
+        std::fs::rename(&legacy_meta, &dest.meta_file)
+            .with_context(|| "moving legacy meta.json")?;
+        let legacy_notified = self.root.join("notified.json");
+        if legacy_notified.exists() {
+            let _ = std::fs::rename(&legacy_notified, &dest.notified_file);
+        }
+        self.write_selected_id(&id)?;
+        tracing::info!(%id, "migrated legacy wallet into wallets/<id>");
+        Ok(Some(id))
     }
 
     /// The IPC endpoint the server binds and clients connect to: the `socket` path
@@ -86,6 +213,11 @@ pub struct Meta {
     /// before this was tracked.
     #[serde(default)]
     pub fingerprint: Option<String>,
+    /// Optional user-facing name for the wallet switcher. Plaintext in meta.json
+    /// (not secret); the GUI masks it when Discreet mode is on. Empty / unset falls
+    /// back to a short fingerprint in listWallets.
+    #[serde(default)]
+    pub label: Option<String>,
     /// Whether transaction and scan-complete notifications fire, toggled from
     /// Settings. Defaults true so a wallet imported before this existed keeps
     /// notifying, matching the prior always-on behavior.
@@ -110,6 +242,12 @@ pub struct Meta {
     /// sync round; a mismatch refuses to sync (docs/adr/0010).
     #[serde(default)]
     pub anchor_hash: Option<String>,
+    /// The last-synced confirmed balance in zatoshis, cached so the switcher can show a
+    /// Wallet's balance while it is locked or Unavailable. Refreshed whenever the
+    /// Wallet's snapshot rebuilds. `None` until a Wallet has synced once since this
+    /// was tracked.
+    #[serde(default)]
+    pub last_balance: Option<u64>,
 }
 
 fn default_true() -> bool {
@@ -132,6 +270,34 @@ impl Meta {
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, &bytes).context("writing meta.json.tmp")?;
         std::fs::rename(&tmp, path).context("renaming meta.json")?;
+        Ok(())
+    }
+}
+
+/// App-wide preferences held at the data root, shared by every wallet. Discreet
+/// mode is a viewing choice for the whole app (docs/adr/0009), so it lives here
+/// rather than in per-wallet meta and survives switching wallets.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default)]
+    pub discreet: bool,
+}
+
+impl Settings {
+    /// Read settings.json, or the defaults when it doesn't exist yet.
+    pub fn load(path: &Path) -> Result<Self> {
+        match std::fs::read(path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).context("parsing settings.json"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(e).context("reading settings.json"),
+        }
+    }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(self).context("serializing settings.json")?;
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, &bytes).context("writing settings.json.tmp")?;
+        std::fs::rename(&tmp, path).context("renaming settings.json")?;
         Ok(())
     }
 }

@@ -1,51 +1,52 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Pendrake Watch",
-  "mainBinaryName": "pendrake-watch",
-  "version": "0.1.0",
-  "identifier": "com.auzum197.pendrake-watch",
-  "build": {
-    "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1430",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "pendrake-watch",
-        "width": 800,
-        "height": 600,
-        "theme": "Dark",
-        "backgroundColor": "#101012",
-        "titleBarStyle": "Transparent",
-        "hiddenTitle": true
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": ["pendrake"]
-      }
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "externalBin": ["binaries/pendraked"],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "macOS": {
-      "signingIdentity": null
-    }
-  }
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Pendrake Watch",
+	"mainBinaryName": "pendrake-watch",
+	"version": "0.1.0",
+	"identifier": "com.auzum197.pendrake-watch",
+	"build": {
+		"beforeDevCommand": "pnpm dev",
+		"devUrl": "http://localhost:1430",
+		"beforeBuildCommand": "pnpm build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "pendrake-watch",
+				"width": 800,
+				"height": 600,
+				"theme": "Dark",
+				"backgroundColor": "#101012",
+				"titleBarStyle": "Overlay",
+				"trafficLightPosition": { "x": 16, "y": 26 },
+				"hiddenTitle": true
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["pendrake"]
+			}
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"externalBin": ["binaries/pendraked"],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"macOS": {
+			"signingIdentity": null
+		}
+	}
 }

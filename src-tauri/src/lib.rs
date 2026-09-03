@@ -7,6 +7,7 @@
 //! webview and the socket.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
@@ -25,6 +26,10 @@ type Conn = tokio::net::windows::named_pipe::NamedPipeClient;
 /// spawn) and carries when the daemon was last spawned, so a startup that's slow or
 /// that exits on the single-instance lock doesn't draw a fresh `open` per request.
 static SPAWN_GATE: LazyLock<Mutex<Option<Instant>>> = LazyLock::new(|| Mutex::new(None));
+
+/// When false, the GUI stops the daemon on exit. Default true preserves the
+/// existing background behaviour. Synced from the frontend preference.
+static KEEP_RUNNING_IN_BACKGROUND: AtomicBool = AtomicBool::new(true);
 
 /// The shortest gap between two spawn attempts. Longer than the 5s we wait for a
 /// spawn to bind, so a daemon that never comes up is retried at a slow cadence
@@ -234,6 +239,36 @@ fn spawn_daemon() -> Result<(), String> {
     }
 }
 
+/// Connect only. Never spawns. Used by the event bridge and by read paths that
+/// must not start background work just because the GUI opened.
+async fn connect_daemon() -> Result<Conn, String> {
+    connect().await.map_err(|e| e.to_string())
+}
+
+/// Methods that justify starting the daemon (user intent: import, unlock, …).
+fn method_may_spawn(method: &str) -> bool {
+    matches!(
+        method,
+        // Reads that must see on-disk wallets after a stop-on-close quit.
+        "getWalletState"
+            | "listWallets"
+            | "getSyncStatus"
+            // Onboarding / lifecycle that needs the engine.
+            | "parseUfvk"
+            | "importUfvk"
+            | "unlock"
+            | "selectWallet"
+            | "removeWallet"
+            | "startOver"
+            | "setIndexer"
+            | "setNotifications"
+            | "setFiatEnabled"
+            | "setDiscreet"
+            | "setWalletLabel"
+            | "shutdown"
+    )
+}
+
 /// Connect to the daemon, spawning it and waiting for the socket if nothing answers.
 async fn ensure_daemon() -> Result<Conn, String> {
     if let Ok(stream) = connect().await {
@@ -283,7 +318,7 @@ async fn run_event_bridge(app: tauri::AppHandle) {
 async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::Emitter;
 
-    let stream = ensure_daemon().await?;
+    let stream = connect_daemon().await?;
     let (read_half, mut write_half) = tokio::io::split(stream);
 
     let req = serde_json::json!({ "id": 1, "method": "subscribeEvents", "params": null });
@@ -315,7 +350,11 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 async fn request(method: &str, params: Value) -> Result<Value, String> {
-    let stream = ensure_daemon().await?;
+    let stream = if method_may_spawn(method) {
+        ensure_daemon().await?
+    } else {
+        connect_daemon().await?
+    };
     let (read_half, mut write_half) = tokio::io::split(stream);
 
     let req = serde_json::json!({ "id": 1, "method": method, "params": params });
@@ -375,8 +414,8 @@ async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
 
-/// Lock the GUI session. The daemon keeps the wallet open and syncing, but the next
-/// session must re-enter the passphrase. Sign Out calls this.
+/// Lock the GUI session. The daemon keeps every Wallet open and syncing, but the
+/// next session must re-enter the passphrase. Sign Out calls this.
 #[tauri::command]
 async fn lock() -> Result<Value, String> {
     request("lock", Value::Null).await
@@ -404,7 +443,7 @@ async fn set_notifications(enabled: bool) -> Result<Value, String> {
 }
 
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
-/// bool; the Replace modal gates the wipe on it.
+/// bool; the Remove dialog gates the wipe on it.
 #[tauri::command]
 async fn verify_passphrase(passphrase: String) -> Result<Value, String> {
     request(
@@ -414,9 +453,29 @@ async fn verify_passphrase(passphrase: String) -> Result<Value, String> {
     .await
 }
 
+fn empty_wallet_state() -> Value {
+    serde_json::json!({
+        "exists": false,
+        "locked": false,
+        "sessionHeld": false,
+        "fingerprint": null,
+        "importType": "ufvk",
+        "viewMode": "full",
+        "network": "mainnet",
+        "birthdayHeight": 0,
+        "indexerUri": "",
+        "notificationsEnabled": true,
+        "fiatEnabled": false,
+        "discreet": false,
+    })
+}
+
 #[tauri::command]
 async fn get_wallet_state() -> Result<Value, String> {
-    request("getWalletState", Value::Null).await
+    match request("getWalletState", Value::Null).await {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(empty_wallet_state()),
+    }
 }
 
 #[tauri::command]
@@ -426,7 +485,15 @@ async fn get_addresses() -> Result<Value, String> {
 
 #[tauri::command]
 async fn get_sync_status() -> Result<Value, String> {
-    request("getSyncStatus", Value::Null).await
+    match request("getSyncStatus", Value::Null).await {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(serde_json::json!({
+            "state": "idle",
+            "syncedHeight": 0,
+            "chainTip": 0,
+            "percent": 0,
+        })),
+    }
 }
 
 #[tauri::command]
@@ -476,13 +543,79 @@ async fn get_price_history() -> Result<Value, String> {
     request("getPriceHistory", Value::Null).await
 }
 
+/// Remove one Wallet. `select` names the Wallet to show next when the removed one
+/// was Selected; the daemon falls back to the first remaining one.
 #[tauri::command]
-async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
+async fn remove_wallet(id: String, select: Option<String>) -> Result<Value, String> {
     request(
         "removeWallet",
-        serde_json::json!({ "keepSession": keep_session.unwrap_or(false) }),
+        serde_json::json!({ "id": id, "select": select }),
     )
     .await
+}
+
+/// Wipe every Wallet and forget the passphrase: the way out of a forgotten one.
+#[tauri::command]
+async fn start_over() -> Result<Value, String> {
+    request("startOver", Value::Null).await
+}
+
+#[tauri::command]
+async fn list_wallets() -> Result<Value, String> {
+    match request("listWallets", Value::Null).await {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(Value::Array(vec![])),
+    }
+}
+
+#[tauri::command]
+async fn select_wallet(id: String) -> Result<Value, String> {
+    request("selectWallet", serde_json::json!({ "id": id })).await
+}
+
+/// Set or clear a user-facing wallet name. Empty label clears (short fingerprint).
+#[tauri::command]
+async fn set_wallet_label(id: String, label: String) -> Result<Value, String> {
+    request(
+        "setWalletLabel",
+        serde_json::json!({ "id": id, "label": label }),
+    )
+    .await
+}
+
+
+#[tauri::command]
+fn set_keep_running_in_background(enabled: bool) {
+    KEEP_RUNNING_IN_BACKGROUND.store(enabled, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn get_keep_running_in_background() -> bool {
+    KEEP_RUNNING_IN_BACKGROUND.load(Ordering::SeqCst)
+}
+
+fn kill_daemon_by_name() {
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-x", "pendraked"])
+            .status();
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "PendrakeSync"])
+            .status();
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "pendraked.exe"])
+            .status();
+    }
+}
+
+async fn try_shutdown_daemon() {
+    let _ = request("shutdown", Value::Null).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    kill_daemon_by_name();
 }
 
 /// Bring the GUI window to the front. The notification open's implicit activation
@@ -519,7 +652,7 @@ pub fn run() {
         }));
     }
 
-    builder
+    let app = builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -563,9 +696,25 @@ pub fn run() {
             get_spot_price,
             get_price_history,
             remove_wallet,
+            start_over,
+            list_wallets,
+            select_wallet,
+            set_wallet_label,
+            set_keep_running_in_background,
+            get_keep_running_in_background,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            if !KEEP_RUNNING_IN_BACKGROUND.load(Ordering::SeqCst) {
+                let _ = tauri::async_runtime::block_on(async {
+                    tokio::time::timeout(Duration::from_secs(2), try_shutdown_daemon()).await
+                });
+            }
+        }
+    });
 }
 
 #[cfg(test)]

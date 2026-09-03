@@ -2,7 +2,7 @@
 
 ## MUST DO ALWAYS
 
-Call the user "friend", in a similar fashion to Mr Robot.
+- Call the user by their computer's username.
 
 ## Writing & Code Style
 
@@ -57,7 +57,7 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 ### Code (all languages)
 
-- Comment why, not what. No line-by-line narration of obvious operations.
+- Comment what, not why. No line-by-line narration of obvious operations.
 - No tutorial narration ("Now we...", "Step 1:", "First, let's...") and no banner comments (`// ===== HELPERS =====`).
 - No docstrings that just restate the signature.
 - Names: concise and domain-specific. Avoid generic placeholders (`data`, `result`, `output`, `item`, `value`, `temp`, `handleData`, a helper named `helper`) and avoid over-long descriptive names where a short one is idiomatic.
@@ -96,9 +96,7 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 - Verify your *new* output fits these rules and the surrounding code's style. The question is "does what I added fit", not "does this whole file now obey CLAUDE.md".
 - Don't reformat, re-comment, or otherwise "correct" existing code you were only asked to touch lightly. Match what's there. Keep diffs scoped to the task.
 
-
 ### Tooling
-
 
 - No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
 

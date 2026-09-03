@@ -46,16 +46,20 @@ pub fn parse_ufvk(input: &str) -> Result<UfvkIdentity, UfvkError> {
         NetworkType::Test => return Err(UfvkError::Testnet),
     };
 
-    let pools = ufvk
-        .items()
-        .into_iter()
-        .filter_map(|item| match item {
-            Fvk::Orchard(_) => Some(Pool::Orchard),
-            Fvk::Sapling(_) => Some(Pool::Sapling),
-            Fvk::P2pkh(_) => Some(Pool::Transparent),
-            Fvk::Unknown { .. } => None,
-        })
-        .collect();
+    // Ironwood reuses the Orchard FVK (no separate typecode). Any key that can
+    // view Orchard can also view the post-NU6.3 Ironwood pool.
+    let mut pools = Vec::new();
+    for item in ufvk.items() {
+        match item {
+            Fvk::Orchard(_) => {
+                pools.push(Pool::Orchard);
+                pools.push(Pool::Ironwood);
+            }
+            Fvk::Sapling(_) => pools.push(Pool::Sapling),
+            Fvk::P2pkh(_) => pools.push(Pool::Transparent),
+            Fvk::Unknown { .. } => {}
+        }
+    }
 
     Ok(UfvkIdentity {
         network,
@@ -89,11 +93,18 @@ mod tests {
             .encode(&net)
     }
 
+    fn assert_shielded_pools(pools: &[Pool]) {
+        assert!(pools.contains(&Pool::Orchard));
+        assert!(pools.contains(&Pool::Ironwood));
+        assert!(pools.contains(&Pool::Sapling));
+        assert_eq!(pools.len(), 3);
+    }
+
     #[test]
     fn decodes_mainnet_with_pools_and_fingerprint() {
         let id = parse_ufvk(&sample_ufvk(NetworkType::Main)).unwrap();
         assert_eq!(id.network, UfvkNetwork::Mainnet);
-        assert_eq!(id.pools, vec![Pool::Orchard, Pool::Sapling]);
+        assert_shielded_pools(&id.pools);
         assert_eq!(id.fingerprint.len(), 32);
         assert!(id.fingerprint.bytes().all(|b| b.is_ascii_hexdigit()));
     }
@@ -102,7 +113,7 @@ mod tests {
     fn decodes_regtest_with_pools() {
         let id = parse_ufvk(&sample_ufvk(NetworkType::Regtest)).unwrap();
         assert_eq!(id.network, UfvkNetwork::Regtest);
-        assert_eq!(id.pools, vec![Pool::Orchard, Pool::Sapling]);
+        assert_shielded_pools(&id.pools);
     }
 
     #[test]

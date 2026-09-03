@@ -13,16 +13,13 @@ export function networkFromUfvk(ufvk: string): Network {
 		: "mainnet";
 }
 
-// The Indexer step is regtest-only: mainnet uses DEFAULT_INDEXER and skips it,
-// regtest must supply one during onboarding (CONTEXT.md "Indexer", story 13). The
-// Passphrase step is dropped when the daemon already holds the session passphrase,
-// which is the post-Replace case: the new Wallet inherits it (docs/adr/0004).
-export function onboardingSteps(
-	network: Network,
-	sessionHeld = false,
-): OnboardingStep[] {
-	const steps: OnboardingStep[] =
-		network === "mainnet" ? ["identity"] : ["identity", "indexer"];
+// The Indexer step follows the identity on both networks, differing only in what it
+// offers: mainnet picks from the curated list or a custom URL, regtest has no public
+// default and must supply one (CONTEXT.md "Indexer"). The Passphrase step is dropped
+// when the daemon already holds the session passphrase, which is the post-Replace
+// case: the new Wallet inherits it (docs/adr/0004).
+export function onboardingSteps(sessionHeld = false): OnboardingStep[] {
+	const steps: OnboardingStep[] = ["identity", "indexer"];
 	if (!sessionHeld) {
 		steps.push("passphrase");
 	}

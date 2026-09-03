@@ -90,6 +90,13 @@ pub struct WalletState {
     /// tell a post-Replace empty-but-unlocked daemon from a cold one and skip Set
     /// Password (docs/adr/0004).
     pub session_held: bool,
+    /// The Selected Wallet's id under `wallets/<id>/`. `None` when no wallet exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallet_id: Option<String>,
+    /// Optional user-facing name. `None` when unset (GUI falls back to short fingerprint).
+    /// Masked in the UI when Discreet mode is on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     /// The current Wallet's fingerprint, the value that seeds its LifeHash. `None`
     /// for a wallet imported before fingerprints were persisted, or when no wallet
     /// exists.
@@ -113,6 +120,49 @@ pub struct WalletState {
     /// new-transaction notification text (docs/adr/0009).
     #[serde(default)]
     pub discreet: bool,
+    /// Why the Selected Wallet's file could not be opened, when it could not. The
+    /// GUI explains the failure and offers Remove instead of the dashboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletSummary {
+    pub id: String,
+    /// Resolved display name: custom label, or short fingerprint when unset.
+    pub label: String,
+    pub fingerprint: Option<String>,
+    pub network: Network,
+    pub birthday_height: u32,
+    /// Whether this is the Selected Wallet, the one the GUI shows.
+    pub selected: bool,
+    /// Last-synced confirmed balance in zatoshis (stringified), or `None` for a Wallet
+    /// that has not synced since this was tracked. Refreshed after every round, so
+    /// the switcher shows a live figure for an open Wallet and the last known one for
+    /// a Wallet that is locked or Unavailable.
+    pub last_balance: Option<String>,
+    /// This Wallet's own sync status while it is open, `None` while it waits for the
+    /// Passphrase or is Unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync: Option<SyncStatus>,
+    /// Why the wallet file could not be opened, when it could not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectWalletArgs {
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetWalletLabelArgs {
+    pub id: String,
+    /// Empty string clears the custom name (back to short fingerprint).
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -133,13 +183,15 @@ pub enum UfvkNetwork {
 }
 
 /// A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
-/// experimental typecodes are dropped rather than surfaced.
+/// experimental typecodes are dropped rather than surfaced. Ironwood is the
+/// post-NU6.3 shielded pool; the same Orchard FVK views it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Pool {
     Orchard,
     Sapling,
     Transparent,
+    Ironwood,
 }
 
 /// What a successful UFVK decode tells the GUI: the network it is bound to, a
@@ -258,17 +310,19 @@ pub struct VerifyPassphraseArgs {
     pub passphrase: String,
 }
 
-#[derive(Debug, Default, Deserialize)]
+/// Remove one Wallet. The session passphrase is kept, so a later Add wallet skips
+/// Set Password (docs/adr/0004). `select` names the Wallet to show next when the
+/// removed one was Selected: the GUI passes its most recently used other Wallet,
+/// and the daemon falls back to the first remaining one.
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveArgs {
-    /// Keep the in-memory session passphrase across the wipe. Replace sets this so
-    /// onboarding can skip Set Password; Start over leaves it false and drops the
-    /// passphrase (docs/adr/0004).
+    pub id: String,
     #[serde(default)]
-    pub keep_session: bool,
+    pub select: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncState {
     Idle,
@@ -278,14 +332,14 @@ pub enum SyncState {
 
 /// What the scanner is doing right now, derived from the latest batch lifecycle
 /// event. Drives the progress label; `None` until the first event arrives.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncPhase {
     Scanning,
     Committing,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
     pub state: SyncState,
@@ -294,7 +348,7 @@ pub struct SyncStatus {
     pub percent: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<SyncPhase>,
-    /// Sapling+orchard notes scanned in the sync window (progress numerator).
+    /// Shielded notes scanned in the sync window (progress numerator).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scanned_outputs: Option<u64>,
     /// Total notes to scan in the window (progress denominator).
@@ -406,9 +460,11 @@ pub struct BatchSummary {
     pub timing: BatchTiming,
 }
 
-/// A line the daemon pushes to a subscribed client as the wallet scans. Tagged by
+/// A line the daemon pushes to a subscribed client as the Wallets scan. Tagged by
 /// `event`, so a reader distinguishes it from a request [`Response`] (which carries
-/// `ok`/`id`) on the shared connection.
+/// `ok`/`id`) on the shared connection. Every Wallet syncs at once, so each
+/// wallet-bearing variant names the Wallet it belongs to by `wallet_id`; the GUI
+/// folds the Selected Wallet's events into the screen and the rest into the switcher.
 // `rename_all` covers the variant tags only; `rename_all_fields` makes the fields
 // inside struct variants camelCase too (`valueZat`, `wrongChain`), which is what
 // the GUI's SyncEvent type has always read.
@@ -417,24 +473,33 @@ pub struct BatchSummary {
 pub enum SyncEvent {
     /// A fresh snapshot: the overall bar/phase/counts/ETA plus the active batches.
     Progress {
+        wallet_id: String,
         status: SyncStatus,
         batches: Vec<BatchProgress>,
     },
     /// A scan range committed; the GUI appends it to the recent-batches log.
-    BatchDone { batch: BatchSummary },
+    BatchDone {
+        wallet_id: String,
+        batch: BatchSummary,
+    },
     /// A newly committed transaction the GUI should fold into balance and history.
     Transaction {
+        wallet_id: String,
         txid: String,
         kind: TxKind,
         value_zat: String,
         received: bool,
     },
     /// The round reached the chain tip; `status` is the terminal idle snapshot.
-    Finished { status: SyncStatus },
+    Finished {
+        wallet_id: String,
+        status: SyncStatus,
+    },
     /// The round failed; the GUI shows the message and waits for the next round.
     /// `unreachable` is set only for a connectivity failure to the Indexer, gating
     /// the "Change server" CTA (AUZ-47).
     Error {
+        wallet_id: String,
         message: String,
         #[serde(default, skip_serializing_if = "is_false")]
         unreachable: bool,
@@ -461,6 +526,7 @@ pub struct Balance {
     pub orchard: Option<PoolBalance>,
     pub sapling: Option<PoolBalance>,
     pub transparent: Option<PoolBalance>,
+    pub ironwood: Option<PoolBalance>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]

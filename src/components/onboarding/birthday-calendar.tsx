@@ -8,8 +8,8 @@ import {
 } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { Button } from "@/components/ui/button/button";
+import { Calendar } from "@/components/ui/calendar/calendar";
 import "./birthday-calendar.css";
 
 // Zcash mainnet launched in October 2016, so no real Wallet predates it, and a
