@@ -20,6 +20,7 @@ export function Toaster(props: ComponentProps<typeof Sonner>) {
 				} as CSSProperties
 			}
 			toastOptions={{
+				classNames: { title: "select-text", description: "select-text" },
 				actionButtonStyle: {
 					background: "var(--primary)",
 					color: "var(--primary-foreground)",

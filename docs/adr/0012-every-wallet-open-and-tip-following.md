@@ -1,0 +1,11 @@
+# Every Wallet is open and in Tip-follow, and sync is never started by hand
+
+The daemon opens every Wallet on disk when it starts or unlocks, runs one sync loop per Wallet, and never waits for a start command. Before this, the daemon held one `LightClient` and one `SyncStatus`, the Selected Wallet was the only open one, a Switch dropped the previous client, and sync began only when the sidebar chip was pressed. That made the promise on the first line of `CONTEXT.md` (notify while the window is closed) hold for one Wallet only, and only after a manual step. ADR-0001 chose one file per Wallet and accepted "N concurrent sync loops" as the cost. This decision cashes that in: `client`, `meta`, `sync`, the read caches and the loop generation are keyed by fingerprint, every `SyncEvent` and `SyncStatus` carries the fingerprint, and the `pendrake://tx` deep link gains it as the ADR-0001 amendment planned.
+
+## Considered Options
+
+Opening only the Selected Wallet and auto-starting its sync on Switch was rejected. It removes the manual step but leaves every other Wallet silent, so a Received transaction on a non-Selected Wallet produces no notification, which is the product's reason to exist. Keeping a manual start for the Initial scan only, on the grounds that it is heavy, was rejected too: the user pasted a UFVK to see its history, and a gate after import is friction with no benefit. A cap on concurrent Initial scans was considered and deferred. zingolib keeps all sync state per client and shares only the rayon thread pool, so concurrent scans contend for CPU but stay correct, and a watch-only wallet with a handful of keys does not need the cap yet.
+
+## Consequences
+
+Memory scales with the number of Wallets, one shard tree and one batcher each. The sidebar chip becomes an indicator with no action, since recovery is the loop's own backoff and the restart an Indexer change sends. Unreachable-Indexer notifications are deduplicated per Indexer per outage, because several Wallets often share one. Wrong chain stays per Wallet, since the Anchor is a per-Wallet fact. A Wallet whose file fails to open becomes Unavailable instead of stopping the daemon. Replace is retired in favour of Remove plus Add wallet, and Start over must wipe every Wallet, which the single-wallet `remove` did not do. The `syncWallet` IPC method goes away.

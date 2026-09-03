@@ -37,19 +37,37 @@ import { animationsEnabled } from "@/lib/motion";
 
 
 export function DashboardPage() {
-	const { wallet, balance, txs, sync, error, switching } = useWalletData();
+	const { wallet, balance, txs, sync, switching } = useWalletData();
+	return (
+		<DashboardView
+			wallet={wallet}
+			balance={balance}
+			txs={txs}
+			sync={sync}
+			switching={switching}
+		/>
+	);
+}
 
+export function DashboardView({
+	wallet,
+	balance,
+	txs,
+	sync,
+	switching,
+}: {
+	wallet: WalletState | null;
+	balance: Balance | null;
+	txs: Tx[];
+	sync: SyncStatus | null;
+	switching: boolean;
+}) {
 	if (switching) {
 		return <DashboardSkeleton />;
 	}
 
 	return (
 		<>
-			{error && (
-				<p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
-					Can't reach the background process: {error}
-				</p>
-			)}
 			<ChartCard wallet={wallet} balance={balance} txs={txs} sync={sync} />
 			<section className="rounded-2xl border border-border bg-card p-6">
 				<h2 className="font-heading text-base font-semibold">

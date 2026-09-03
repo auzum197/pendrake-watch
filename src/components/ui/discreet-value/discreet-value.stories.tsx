@@ -24,7 +24,7 @@ function AllKindsDemo() {
 				Date: <DiscreetValue kind="date">Jan 5, 2026, 09:14</DiscreetValue>
 			</span>
 			<span>
-				Block: <DiscreetValue kind="block">#2,381,554</DiscreetValue>
+				Block: <DiscreetValue kind="block">2,381,554</DiscreetValue>
 			</span>
 			<span>
 				Txid:{" "}

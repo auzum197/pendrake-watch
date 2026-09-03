@@ -1,9 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import {
 	IconActivity,
-	IconAlertTriangle,
 	IconHelpCircle,
 	IconHome,
 	IconListDetails,
@@ -19,6 +17,8 @@ import pendrakeLogo from "@/assets/pendrake-logo.svg";
 import { Toaster } from "@/components/ui/sonner/sonner";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { WalletCard } from "../wallet-card/wallet-card";
+import { WalletPalette } from "../wallet-palette/wallet-palette";
+import { appToast, TOAST_ID } from "../app-toast/app-toast";
 import "./nav-reveal.css";
 
 let aboutWindow: WebviewWindow | null = null;
@@ -53,18 +53,20 @@ export function AppShell({
 	wallet,
 	sync,
 	switching,
+	error,
 	children,
 }: {
 	active: Section;
 	wallet: WalletState | null;
 	sync: SyncStatus | null;
 	switching?: boolean;
+	error?: string | null;
 	children: ReactNode;
 }) {
 	const { open: settingsOpen } = useSettingsModal();
 	return (
 		<div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
-			<AppSidebar active={active} wallet={wallet} sync={sync} switching={switching} />
+			<AppSidebar active={active} wallet={wallet} switching={switching} />
 			<div className="relative my-3 mr-3 flex-1 rounded-2xl border-2 border-border bg-background">
 				<main
 					data-scroll-restoration-id="app-main"
@@ -75,6 +77,7 @@ export function AppShell({
 					</div>
 				</main>
 			</div>
+			<Toaster position="bottom-right" />
 			<UnreachableToast
 				unreachable={sync?.unreachable ?? false}
 				onSettings={settingsOpen}
@@ -83,13 +86,12 @@ export function AppShell({
 				wrongChain={sync?.wrongChain ?? false}
 				onSettings={settingsOpen}
 			/>
+			<DaemonToast error={error ?? null} />
 			<SettingsDialog wallet={wallet} />
-			<Toaster position="bottom-right" />
+			<WalletPalette wallet={wallet} />
 		</div>
 	);
 }
-
-const UNREACHABLE_TOAST = "indexer-unreachable";
 
 function UnreachableToast({
 	unreachable,
@@ -100,23 +102,21 @@ function UnreachableToast({
 }) {
 	useEffect(() => {
 		if (unreachable && !onSettings) {
-			toast("Can't reach your Indexer.", {
-				id: UNREACHABLE_TOAST,
-				duration: Infinity,
-				icon: <IconAlertTriangle className="size-4" />,
-				action: {
-					label: "Change Indexer",
-					onClick: () => openSettings({ indexer: true }),
-				},
-			});
+			appToast.unreachable();
 		} else {
-			toast.dismiss(UNREACHABLE_TOAST);
+			appToast.dismiss(TOAST_ID.unreachable);
 		}
 	}, [unreachable, onSettings]);
 	return null;
 }
 
-const WRONG_CHAIN_TOAST = "wrong-chain";
+function DaemonToast({ error }: { error: string | null }) {
+	useEffect(() => {
+		if (error) appToast.daemon(error);
+		else appToast.dismiss(TOAST_ID.daemon);
+	}, [error]);
+	return null;
+}
 
 function WrongChainToast({
 	wrongChain,
@@ -127,20 +127,9 @@ function WrongChainToast({
 }) {
 	useEffect(() => {
 		if (wrongChain && !onSettings) {
-			toast(
-				"Your Indexer is serving a different chain than this Wallet synced.",
-				{
-					id: WRONG_CHAIN_TOAST,
-					duration: Infinity,
-					icon: <IconAlertTriangle className="size-4" />,
-					action: {
-						label: "Review Indexer",
-						onClick: () => openSettings({ indexer: true }),
-					},
-				},
-			);
+			appToast.wrongChain();
 		} else {
-			toast.dismiss(WRONG_CHAIN_TOAST);
+			appToast.dismiss(TOAST_ID.wrongChain);
 		}
 	}, [wrongChain, onSettings]);
 	return null;
@@ -149,12 +138,10 @@ function WrongChainToast({
 function AppSidebar({
 	active,
 	wallet,
-	sync,
 	switching,
 }: {
 	active: Section;
 	wallet: WalletState | null;
-	sync: SyncStatus | null;
 	switching?: boolean;
 }) {
 	const navigate = useNavigate();
@@ -162,10 +149,10 @@ function AppSidebar({
 	return (
 		<aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
 			<div className="flex items-center justify-center px-2 py-2">
-				<img src={pendrakeLogo} alt="Pendrake" className="h-8 select-none" />
+				<img src={pendrakeLogo} alt="Pendrake" className="h-8" />
 			</div>
 
-			<WalletCard wallet={wallet} sync={sync} switching={switching} />
+			<WalletCard wallet={wallet} switching={switching} />
 
 			<nav className="mt-5 flex flex-col gap-1">
 				<NavItem

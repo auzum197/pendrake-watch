@@ -3,10 +3,8 @@ import {
 	IconAlertTriangle,
 	IconCircleCheckFilled,
 	IconLoader2,
-	IconRefresh,
 } from "@tabler/icons-react";
-import { toast } from "sonner";
-import { syncWallet, type SyncStatus } from "@/lib/ipc";
+import type { SyncStatus } from "@/lib/ipc";
 import { formatEta, isSynced } from "@/lib/format";
 
 const clampPct = (p: number) => Math.min(100, Math.max(0, p));
@@ -66,24 +64,9 @@ function useCreepingPercent(sync: SyncStatus | null, syncing: boolean): number {
 	return displayed;
 }
 
-// The wallet's sync state as a compact chip. When idle (not at tip) or on error,
-// the chip is a control that starts tip-follow via syncWallet (manual multi-wallet).
 export function SyncChip({ sync }: { sync: SyncStatus | null }) {
-	const [busy, setBusy] = useState(false);
 	const base =
 		"inline-flex shrink-0 items-center gap-1 text-[0.625rem] font-medium leading-none";
-
-	async function startSync() {
-		if (busy) return;
-		setBusy(true);
-		try {
-			await syncWallet();
-		} catch (e) {
-			toast.error(String(e));
-		} finally {
-			setBusy(false);
-		}
-	}
 
 	if (!sync) {
 		return (
@@ -103,20 +86,10 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 	}
 	if (sync.state === "error") {
 		return (
-			<button
-				type="button"
-				onClick={startSync}
-				disabled={busy}
-				className={`${base} cursor-pointer text-amber-400 hover:underline disabled:opacity-60`}
-				title="Retry sync"
-			>
-				{busy ? (
-					<IconLoader2 className="size-3 motion-safe:animate-spin" />
-				) : (
-					<IconAlertTriangle className="size-3" />
-				)}
-				{busy ? "Starting…" : "Retry sync"}
-			</button>
+			<span className={`${base} text-amber-400`} title={sync.error}>
+				<IconAlertTriangle className="size-3" />
+				Retrying
+			</span>
 		);
 	}
 	if (isSynced(sync)) {
@@ -127,74 +100,11 @@ export function SyncChip({ sync }: { sync: SyncStatus | null }) {
 			</span>
 		);
 	}
-	// Actively scanning.
-	if (sync.state === "syncing" || isSyncing(sync)) {
-		return (
-			<span className={`${base} text-white/70`}>
-				<IconLoader2 className="size-3 motion-safe:animate-spin" />
-				Syncing
-			</span>
-		);
-	}
-	// Idle but not synced (never scanned, or waiting for a user-started round).
 	return (
-		<button
-			type="button"
-			onClick={startSync}
-			disabled={busy}
-			className={`${base} cursor-pointer text-brand hover:underline disabled:opacity-60`}
-			title="Sync this wallet to the chain tip"
-		>
-			{busy ? (
-				<IconLoader2 className="size-3 motion-safe:animate-spin" />
-			) : null}
-			{busy ? "Starting…" : "Sync"}
-		</button>
-	);
-}
-
-export function SyncGlyph({ sync }: { sync: SyncStatus | null }) {
-	const [busy, setBusy] = useState(false);
-
-	async function startSync() {
-		if (busy) return;
-		setBusy(true);
-		try {
-			await syncWallet();
-		} catch (e) {
-			toast.error(String(e));
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	const scanning =
-		busy || !sync || sync.state === "syncing" || isSyncing(sync);
-	const title = !sync
-		? "Connecting"
-		: sync.state === "error"
-			? sync.wrongChain
-				? "Wrong chain"
-				: "Retry sync"
-			: isSynced(sync)
-				? "Synced"
-				: scanning
-					? "Syncing"
-					: "Sync this wallet to the chain tip";
-
-	return (
-		<button
-			type="button"
-			onClick={startSync}
-			disabled={busy}
-			aria-label={title}
-			title={title}
-			className="flex shrink-0 cursor-pointer items-center text-white/45 transition-colors hover:text-white/80 disabled:opacity-60"
-		>
-			<IconRefresh
-				className={`size-3.5 ${scanning ? "motion-safe:animate-spin" : ""}`}
-			/>
-		</button>
+		<span className={`${base} text-white/70`}>
+			<IconLoader2 className="size-3 motion-safe:animate-spin" />
+			Syncing
+		</span>
 	);
 }
 

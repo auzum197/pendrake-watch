@@ -172,7 +172,7 @@ export function TxDetailPage() {
             </DiscreetValue>
           </dd>
           <dt className="self-start text-muted-foreground">Txid</dt>
-          <dd className="break-all font-mono text-xs">
+          <dd className="break-all font-mono text-xs select-text">
             <DiscreetValue kind="txid">{tx.txid}</DiscreetValue>
           </dd>
         </dl>
@@ -265,7 +265,7 @@ function NoteCard({ note }: { note: Note }) {
       {note.memo && (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Memo</span>
-          <p className="whitespace-pre-wrap wrap-break-word rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground">
+          <p className="whitespace-pre-wrap wrap-break-word rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground select-text">
             <DiscreetValue kind="memo">{note.memo}</DiscreetValue>
           </p>
         </div>
@@ -286,7 +286,7 @@ function Address({ value }: { value: string }) {
     return <DiscreetValue kind="address">{value}</DiscreetValue>;
   }
   return (
-    <span className="break-all font-mono" title={value}>
+    <span className="break-all font-mono select-text" title={value}>
       <span className="text-brand">{prefix}</span>
       <span className="text-foreground">{head}</span>
       {tail && (

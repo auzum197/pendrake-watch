@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button/button";
 import { Switch } from "@/components/ui/switch/switch";
 import { IndexerPicker } from "@/components/indexer/indexer-picker";
-import { ReplaceDialog } from "@/components/settings/replace-dialog";
+import { RemoveDialog } from "@/components/settings/remove-dialog";
 import type { WalletState } from "@/lib/ipc";
 import { CUSTOM_INDEXER, indexerReady, resolveIndexer } from "@/lib/indexer";
 import {
@@ -64,10 +64,10 @@ const TEXT = {
 		descriptionRegtest:
 			"This regtest Wallet has no public default, so point it at your own Indexer.",
 	},
-	replace: {
-		title: "Replace Wallet",
+	remove: {
+		title: "Remove Wallet",
 		description:
-			"Import a different UFVK in place of this one. Erases the current Wallet's identity and history. This can't be undone.",
+			"Erases this Wallet's identity and history from this device. Your other Wallets keep syncing. This can't be undone.",
 	},
 	reduceMotion: {
 		title: "Reduce motion",
@@ -82,7 +82,7 @@ type GeneralKey =
 	| "fiat"
 	| "discreet"
 	| "indexer"
-	| "replace";
+	| "remove";
 
 function Highlighted({ text, query }: { text: string; query: string }) {
 	const q = query.trim().toLowerCase();
@@ -129,12 +129,12 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 			TEXT.indexer.descriptionMainnet,
 			TEXT.indexer.descriptionRegtest,
 		),
-		replace: hit(TEXT.replace.title, TEXT.replace.description),
+		remove: hit(TEXT.remove.title, TEXT.remove.description),
 	};
 	const walletExists = wallet?.exists ?? false;
 	const hasGeneral =
 		generalVisible.background ||
-		generalVisible.replace ||
+		generalVisible.remove ||
 		(walletExists &&
 			(generalVisible.notifications ||
 				generalVisible.fiat ||
@@ -301,7 +301,7 @@ function GeneralPanel({
 	query?: string;
 	visible?: Record<GeneralKey, boolean>;
 }) {
-	const [replacing, setReplacing] = useState(false);
+	const [removing, setRemoving] = useState(false);
 	const show = (key: GeneralKey) => visible?.[key] ?? true;
 
 	return (
@@ -336,31 +336,32 @@ function GeneralPanel({
 				/>
 			)}
 
-			{show("replace") && (
+			{wallet?.exists && show("remove") && (
 				<section className="py-6 first:pt-0 last:pb-0">
 					<div className="flex items-start justify-between gap-6">
 						<div className="flex flex-col gap-1">
 							<span className="text-base font-medium text-destructive">
-								<Highlighted text={TEXT.replace.title} query={query} />
+								<Highlighted text={TEXT.remove.title} query={query} />
 							</span>
 							<span className="text-sm text-muted-foreground">
-								<Highlighted text={TEXT.replace.description} query={query} />
+								<Highlighted text={TEXT.remove.description} query={query} />
 							</span>
 						</div>
 						<Button
 							variant="destructive"
 							className="shrink-0"
-							onClick={() => setReplacing(true)}
+							onClick={() => setRemoving(true)}
 						>
-							Replace…
+							Remove…
 						</Button>
 					</div>
 				</section>
 			)}
 
-			<ReplaceDialog
-				open={replacing}
-				onOpenChange={setReplacing}
+			<RemoveDialog
+				open={removing}
+				onOpenChange={setRemoving}
+				walletId={wallet?.walletId ?? null}
 				fingerprint={wallet?.fingerprint ?? null}
 				network={wallet?.network ?? "mainnet"}
 			/>

@@ -1,5 +1,26 @@
 # Pendrake Watch — Update log
 
+## 2026-09-02: the wallet switcher unfolds
+
+The sidebar card unfolds the other Wallets over the nav, most recently used first, and ⌘K opens the same list as a searchable palette.
+
+---
+
+## 2026-09-02: every Wallet open and in Tip-follow
+
+The daemon opens every Wallet on disk and syncs each one on its own.
+
+- Switching only changes which Wallet is shown.
+- Events, sync status and notification deep links carry the Wallet's id.
+- The notification body names the Wallet.
+- An unreachable Indexer notifies once per Indexer per outage.
+- A Wallet whose file will not open loads as Unavailable.
+- Replace is retired in favour of Remove and Add wallet.
+- Start over wipes every Wallet.
+- `active` became `selected` on the wire, `removeWallet` takes an id and `startOver` is a separate method.
+
+---
+
 **Date:** 2026-08-17  
 **Focus:** Ironwood (NU6.3) support, multi-wallet accounts, manual sync, local build hardening, onboarding indexer choice, Notes UI polish
 

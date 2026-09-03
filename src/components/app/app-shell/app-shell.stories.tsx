@@ -57,6 +57,9 @@ export const Unreachable: Story = {
 export const WrongChain: Story = {
   args: { sync: { ...synced, state: "error", wrongChain: true } },
 };
+export const DaemonDown: Story = {
+  args: { sync: synced, error: "connection to the daemon socket was refused" },
+};
 export const NoWallet: Story = {
   args: { wallet: null, sync: null },
 };

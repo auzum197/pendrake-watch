@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconSearch } from "@tabler/icons-react";
+import { appToast, TOAST_ID } from "@/components/app/app-toast/app-toast";
 import { PoolDot } from "@/components/notes/badges";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import {
@@ -40,6 +41,12 @@ export function NotesPage() {
   const [sort, setSort] = useState<Sort>({ key: "idx", dir: "asc" });
   const [reveal] = useState(animationsEnabled);
 
+  useEffect(() => {
+    if (!error) return;
+    appToast.daemon(error);
+    return () => appToast.dismiss(TOAST_ID.daemon);
+  }, [error]);
+
   const visible = useMemo(
     () =>
       notes.filter((n) => matchesFilter(n, filter) && matchesSearch(n, query)),
@@ -73,12 +80,6 @@ export function NotesPage() {
           Every output the wallet can see.
         </p>
       </div>
-
-      {error && (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
-          Can't reach the background process: {error}
-        </p>
-      )}
 
       {loaded ? (
         <SummaryBar notes={visible} className={reveal ? "reveal-up" : ""} />

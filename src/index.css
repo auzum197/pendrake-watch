@@ -101,6 +101,13 @@
 	}
 	html {
 		@apply font-sans;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	input,
+	textarea {
+		-webkit-user-select: text;
+		user-select: text;
 	}
 	button:not(:disabled),
 	[role="button"]:not(:disabled) {

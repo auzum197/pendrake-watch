@@ -71,6 +71,12 @@ export function reloadWalletData() {
   }
 }
 
+export function showSelectedWallet(state: WalletState) {
+  setCachedWallet(state);
+  clearWalletSnapshotCache();
+  reloadWalletData();
+}
+
 export function beginWalletSwitch() {
   pendingSwitch = true;
   clearWalletSnapshotCache();
@@ -220,6 +226,9 @@ export function useWalletData(): WalletData {
 
     const unlisten = onSyncEvent((ev) => {
       if (!active) return;
+      if (ev.event !== "priceUpdate" && ev.walletId !== cache.wallet?.walletId) {
+        return;
+      }
       switch (ev.event) {
         case "progress":
           cache.sync = ev.status;

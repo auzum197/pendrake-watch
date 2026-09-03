@@ -4,7 +4,7 @@
 //!
 //! ```text
 //! $PENDRAKE_DATA_DIR/
-//!   active_wallet_id      # which wallet is selected
+//!   active_wallet_id      # the Selected Wallet's id (file name kept for old installs)
 //!   daemon.sock
 //!   price_cache.json      # shared; public ZEC/USD only
 //!   settings.json         # app-wide prefs (Discreet mode); shared
@@ -37,11 +37,11 @@ pub struct Paths {
     pub settings_file: PathBuf,
     /// `$root/wallets`.
     pub wallets_dir: PathBuf,
-    /// File holding the active wallet id (one line).
-    pub active_id_file: PathBuf,
+    /// File holding the Selected Wallet's id (one line).
+    pub selected_id_file: PathBuf,
     /// Set when this `Paths` is scoped to a wallet via [`Self::for_wallet`].
     pub wallet_id: Option<String>,
-    /// zingolib wallet directory for the active (or scoped) wallet.
+    /// zingolib wallet directory for the scoped wallet.
     pub wallet_dir: PathBuf,
     pub meta_file: PathBuf,
     /// Txids already notified for this wallet.
@@ -66,7 +66,7 @@ impl Paths {
             socket: root.join("daemon.sock"),
             price_cache_file: root.join("price_cache.json"),
             settings_file: root.join("settings.json"),
-            active_id_file: root.join("active_wallet_id"),
+            selected_id_file: root.join("active_wallet_id"),
             wallets_dir,
             wallet_id: None,
             // Placeholders until `for_wallet` / migration; legacy names kept so
@@ -102,20 +102,29 @@ impl Paths {
         Ok(())
     }
 
-    pub fn read_active_id(&self) -> Result<Option<String>> {
-        match std::fs::read_to_string(&self.active_id_file) {
+    pub fn read_selected_id(&self) -> Result<Option<String>> {
+        match std::fs::read_to_string(&self.selected_id_file) {
             Ok(s) => {
                 let id = s.trim();
                 Ok((!id.is_empty()).then(|| id.to_string()))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e).context("reading active_wallet_id"),
+            Err(e) => Err(e).context("reading the selected wallet id"),
         }
     }
 
-    pub fn write_active_id(&self, id: &str) -> Result<()> {
-        std::fs::write(&self.active_id_file, id.as_bytes()).context("writing active_wallet_id")?;
+    pub fn write_selected_id(&self, id: &str) -> Result<()> {
+        std::fs::write(&self.selected_id_file, id.as_bytes())
+            .context("writing the selected wallet id")?;
         Ok(())
+    }
+
+    pub fn clear_selected_id(&self) -> Result<()> {
+        match std::fs::remove_file(&self.selected_id_file) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e).context("clearing the selected wallet id"),
+        }
     }
 
     pub fn list_wallet_ids(&self) -> Result<Vec<String>> {
@@ -144,7 +153,7 @@ impl Paths {
             return Ok(None);
         }
         // Already on the multi-wallet layout.
-        if self.read_active_id()?.is_some() {
+        if self.read_selected_id()?.is_some() {
             return Ok(None);
         }
         let meta =
@@ -168,7 +177,7 @@ impl Paths {
         if legacy_notified.exists() {
             let _ = std::fs::rename(&legacy_notified, &dest.notified_file);
         }
-        self.write_active_id(&id)?;
+        self.write_selected_id(&id)?;
         tracing::info!(%id, "migrated legacy wallet into wallets/<id>");
         Ok(Some(id))
     }
@@ -234,9 +243,9 @@ pub struct Meta {
     #[serde(default)]
     pub anchor_hash: Option<String>,
     /// The last-synced confirmed balance in zatoshis, cached so the switcher can show a
-    /// Wallet's balance without loading it (only the active Wallet is open at a time).
-    /// Refreshed whenever the active Wallet's snapshot rebuilds. `None` until a Wallet
-    /// has synced once since this was tracked.
+    /// Wallet's balance while it is locked or Unavailable. Refreshed whenever the
+    /// Wallet's snapshot rebuilds. `None` until a Wallet has synced once since this
+    /// was tracked.
     #[serde(default)]
     pub last_balance: Option<u64>,
 }

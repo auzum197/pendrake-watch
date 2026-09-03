@@ -9,10 +9,7 @@ export type ViewMode = "full" | "incoming-only";
 export type WalletState = {
   exists: boolean;
   locked: boolean;
-  // The daemon holds the session passphrase in memory. After a Replace-wipe this
-  // stays true, so onboarding skips Set Password (docs/adr/0004).
   sessionHeld: boolean;
-  // Active wallet id under wallets/<id>/. Absent/null when none.
   walletId?: string | null;
   // Optional user-facing name. Null/absent falls back to short fingerprint in the UI.
   // Masked when Discreet mode is on.
@@ -36,6 +33,7 @@ export type WalletState = {
   // Whether Discreet mode is on (docs/adr/0009). The UI masks sensitive values and
   // the daemon redacts notification text. Absent reads as false.
   discreet?: boolean;
+  unavailable?: string;
 };
 
 export type WalletAddress = {
@@ -56,7 +54,6 @@ export type ImportUfvkInput = {
   birthday: BirthdayInput;
   indexerUri: string;
   network: Network;
-  // Omitted on a post-Replace import: the daemon reuses the held session passphrase.
   passphrase?: string;
 };
 
@@ -144,7 +141,6 @@ export type Tx = {
   notes: Note[];
 };
 
-// Multi-wallet registry entry (Phase 1).
 export type WalletSummary = {
   id: string;
   // Resolved display name: custom label, or short fingerprint when unset.
@@ -152,10 +148,11 @@ export type WalletSummary = {
   fingerprint: string | null;
   network: Network;
   birthdayHeight: number;
-  active: boolean;
+  selected: boolean;
   // Last-synced confirmed balance in zatoshis (stringified), or null before a Wallet
-  // has synced. Lets the switcher show a balance without loading the Wallet.
   lastBalance: string | null;
+  sync?: SyncStatus;
+  unavailable?: string;
 };
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.
@@ -193,15 +190,10 @@ export function unlock(passphrase: string): Promise<WalletState> {
   return invoke("unlock", { passphrase });
 }
 
-// Lock the GUI session. The daemon keeps the wallet open and syncing; re-entry needs
-// the passphrase. Sign Out calls this.
 export function lock(): Promise<void> {
   return invoke("lock");
 }
 
-// Point the Wallet at a different Indexer. The daemon connects to the new server
-// before persisting, so this rejects when the server is unreachable or the URL is
-// malformed, leaving the current Indexer in place.
 export function setIndexer(indexerUri: string): Promise<WalletState> {
   return invoke("set_indexer", { indexerUri });
 }
@@ -213,7 +205,6 @@ export function setNotifications(enabled: boolean): Promise<WalletState> {
 }
 
 // Re-authenticate against the held session passphrase without touching the wallet.
-// Gates the Replace wipe; true only when the passphrase matches.
 export function verifyPassphrase(passphrase: string): Promise<boolean> {
   return invoke("verify_passphrase", { passphrase });
 }
@@ -311,24 +302,23 @@ export function getPriceHistory(): Promise<PricePoint[]> {
   return invoke("get_price_history");
 }
 
-// Wipe the current Wallet. Replace passes keepSession so the daemon retains the
-// session passphrase across the wipe (docs/adr/0004); Start over leaves it false.
-export function removeWallet(keepSession = false): Promise<void> {
-  return invoke("remove_wallet", { keepSession });
+export function removeWallet(
+  id: string,
+  select?: string,
+): Promise<WalletState> {
+  return invoke("remove_wallet", { id, select });
 }
 
-// Multi-wallet registry (Phase 1).
+export function startOver(): Promise<void> {
+  return invoke("start_over");
+}
+
 export function listWallets(): Promise<WalletSummary[]> {
   return invoke("list_wallets");
 }
 
 export function selectWallet(id: string): Promise<WalletState> {
   return invoke("select_wallet", { id });
-}
-
-// Start tip-follow sync for the active wallet (or optional id).
-export function syncWallet(id?: string): Promise<SyncStatus> {
-  return invoke("sync_wallet", id ? { id } : {});
 }
 
 // Set or clear a user-facing wallet name. Empty string clears (short fingerprint).
@@ -380,14 +370,18 @@ export type BatchSummary = {
   timing: BatchTiming;
 };
 
-// Pushed from the daemon through the Tauri bridge as the wallet scans. Tagged by
-// `event`, mirroring the pendrake-ipc `SyncEvent` enum.
 export type SyncEvent =
-  | { event: "progress"; status: SyncStatus; batches: BatchProgress[] }
-  | { event: "batchDone"; batch: BatchSummary }
-  | { event: "finished"; status: SyncStatus }
+  | {
+      event: "progress";
+      walletId: string;
+      status: SyncStatus;
+      batches: BatchProgress[];
+    }
+  | { event: "batchDone"; walletId: string; batch: BatchSummary }
+  | { event: "finished"; walletId: string; status: SyncStatus }
   | {
       event: "transaction";
+      walletId: string;
       txid: string;
       kind: TxKind;
       valueZat: string;
@@ -395,6 +389,7 @@ export type SyncEvent =
     }
   | {
       event: "error";
+      walletId: string;
       message: string;
       unreachable?: boolean;
       wrongChain?: boolean;

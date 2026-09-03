@@ -4,7 +4,7 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen } from "@tauri-apps/api/event";
 import { getWalletState } from "@/lib/ipc";
-import { stashPendingTxid } from "@/lib/deep-link";
+import { selectLinkedWallet, stashPendingLink } from "@/lib/deep-link";
 import { openSettings } from "@/lib/settings-modal";
 
 export function RootLayout() {
@@ -19,22 +19,41 @@ export function RootLayout() {
 				} catch {
 					continue;
 				}
+				const walletId = parsed.searchParams.get("wallet") ?? undefined;
 				if (parsed.host === "tx") {
 					const txid = parsed.searchParams.get("txid");
 					if (txid) {
 						const state = await getWalletState().catch(() => null);
 						if (state?.locked) {
-							stashPendingTxid(txid);
+							stashPendingLink({ txid, walletId });
 							navigate({ to: "/unlock", replace: true });
 						} else {
+							await selectLinkedWallet(walletId, state?.walletId).catch(
+								() => {},
+							);
 							navigate({ to: "/tx/$txid", params: { txid } });
 						}
 						return;
 					}
+				} else if (parsed.host === "wallet") {
+					const state = await getWalletState().catch(() => null);
+					if (!state?.locked) {
+						await selectLinkedWallet(walletId, state?.walletId).catch(
+							() => {},
+						);
+					}
+					navigate({ to: "/dashboard" });
+					return;
 				} else if (
 					parsed.host === "settings" &&
 					parsed.pathname === "/indexer"
 				) {
+					const state = await getWalletState().catch(() => null);
+					if (!state?.locked) {
+						await selectLinkedWallet(walletId, state?.walletId).catch(
+							() => {},
+						);
+					}
 					navigate({ to: "/dashboard" });
 					openSettings({ indexer: true });
 					return;

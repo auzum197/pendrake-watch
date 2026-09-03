@@ -10,7 +10,7 @@ import wordmark from "@/assets/pendrake-wordmark.png";
 // a drag, and the pointer stays an arrow rather than turning into an I-beam over text.
 export function AboutCard() {
 	return (
-		<div className="flex cursor-default select-none flex-col items-center px-8 text-center">
+		<div className="flex cursor-default flex-col items-center px-8 text-center">
 			<AppIcon />
 			<img
 				src={wordmark}

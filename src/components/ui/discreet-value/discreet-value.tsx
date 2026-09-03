@@ -24,7 +24,7 @@ const MASKS: Record<DiscreetKind, string> = {
   zec: "█████",
   usd: "$█████",
   date: "██████",
-  block: "#███████",
+  block: "███████",
   txid: "████████████",
   address: "████████████████████",
   memo: "███████████████",
@@ -114,7 +114,6 @@ export function DiscreetMask({
         <span
           key={i}
           className={glyph === "█" ? "discreet-mask-block" : undefined}
-          style={{ animationDelay: `${i * 70}ms` }}
         >
           {glyph}
         </span>

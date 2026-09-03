@@ -1,14 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, mocked, userEvent, within } from "storybook/test";
+import { expect, mocked, userEvent, waitFor, within } from "storybook/test";
 import { WalletCard } from "./wallet-card";
 import { withRouter } from "@/stories/with-router";
 import { listWallets } from "@/lib/ipc";
-import type { SyncStatus, WalletState, WalletSummary } from "@/lib/ipc";
+import type { WalletState, WalletSummary } from "@/lib/ipc";
 
 const wallet: WalletState = {
   exists: true,
   locked: false,
   sessionHeld: true,
+  walletId: "w1",
   fingerprint: "a1b2c3d4e5f6",
   label: "Cold storage",
   importType: "ufvk",
@@ -26,7 +27,7 @@ const wallets: WalletSummary[] = [
     fingerprint: "a1b2c3d4e5f6",
     network: "mainnet",
     birthdayHeight: 419_200,
-    active: true,
+    selected: true,
     lastBalance: "897091655",
   },
   {
@@ -35,8 +36,15 @@ const wallets: WalletSummary[] = [
     fingerprint: "0099aabbccdd",
     network: "mainnet",
     birthdayHeight: 2_390_000,
-    active: false,
-    lastBalance: null,
+    selected: false,
+    lastBalance: "89709165",
+    sync: {
+      state: "syncing",
+      syncedHeight: 2_100_000,
+      chainTip: 2_400_000,
+      percent: 12,
+      phase: "scanning",
+    },
   },
   {
     id: "w3",
@@ -44,7 +52,7 @@ const wallets: WalletSummary[] = [
     fingerprint: "e4608135aabb",
     network: "regtest",
     birthdayHeight: 2_100_000,
-    active: false,
+    selected: false,
     lastBalance: "12850000000",
   },
   {
@@ -53,34 +61,24 @@ const wallets: WalletSummary[] = [
     fingerprint: "5c17fe902bd1",
     network: "regtest",
     birthdayHeight: 0,
-    active: false,
+    selected: false,
     lastBalance: "320400000",
+    unavailable: "wallet file could not be read",
   },
 ];
-
-const syncing: SyncStatus = {
-  state: "syncing",
-  syncedHeight: 2_390_000,
-  chainTip: 2_400_000,
-  percent: 62,
-  phase: "scanning",
-  etaSeconds: 540,
-};
-
-const synced: SyncStatus = {
-  state: "idle",
-  syncedHeight: 2_400_000,
-  chainTip: 2_400_000,
-  percent: 100,
-};
 
 const meta = {
   component: WalletCard,
   decorators: [
     withRouter,
     (Story) => (
-      <div className="w-64">
+      <div className="flex h-[420px] w-64 flex-col bg-ink px-3 pt-4 text-white">
         <Story />
+        <nav className="mt-5 flex flex-col gap-1">
+          <span className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-ink">Home</span>
+          <span className="px-3 py-2 text-sm font-medium text-white/55">Activity</span>
+          <span className="px-3 py-2 text-sm font-medium text-white/55">Notes</span>
+        </nav>
       </div>
     ),
   ],
@@ -89,21 +87,22 @@ const meta = {
   },
   argTypes: {
     wallet: { control: false },
-    sync: { control: false },
     switching: { control: "boolean" },
   },
-  args: { wallet, sync: synced, switching: false },
+  args: { wallet, switching: false },
 } satisfies Meta<typeof WalletCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Collapsed: Story = { args: { sync: syncing } };
+export const Collapsed: Story = {};
 
-export const Switcher: Story = {
+export const Unfolded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Switch wallet" }));
-    await expect(await canvas.findByText("Spending")).toBeVisible();
+    await waitFor(() => expect(canvas.getByText("Spending")).toBeVisible());
   },
 };
+
+export const Switching: Story = { args: { switching: true } };

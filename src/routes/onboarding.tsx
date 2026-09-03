@@ -156,7 +156,7 @@ export function OnboardingPage() {
 
 	return (
 		<div className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-ink px-10 py-12 text-white">
-			<img src={pendrakeLogo} alt="Pendrake" className="h-[27px] select-none" />
+			<img src={pendrakeLogo} alt="Pendrake" className="h-[27px]" />
 			<div className="flex w-full flex-1 flex-col justify-center py-10">
 				<div className="mx-auto flex w-full max-w-md flex-col gap-7">
 					{current === "identity" && (

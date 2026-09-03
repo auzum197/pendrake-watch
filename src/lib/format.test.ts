@@ -186,8 +186,8 @@ describe("splitAddress", () => {
 });
 
 describe("formatBlock", () => {
-  it("groups the height and prefixes it", () => {
-    expect(formatBlock(2_345_678)).toBe("#2,345,678");
+  it("groups the height", () => {
+    expect(formatBlock(2_345_678)).toBe("2,345,678");
   });
 
   it("dashes a pending transaction with no height", () => {

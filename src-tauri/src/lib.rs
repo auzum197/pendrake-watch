@@ -245,7 +245,7 @@ async fn connect_daemon() -> Result<Conn, String> {
     connect().await.map_err(|e| e.to_string())
 }
 
-/// Methods that justify starting the daemon (user intent: import, unlock, sync, …).
+/// Methods that justify starting the daemon (user intent: import, unlock, …).
 fn method_may_spawn(method: &str) -> bool {
     matches!(
         method,
@@ -257,9 +257,9 @@ fn method_may_spawn(method: &str) -> bool {
             | "parseUfvk"
             | "importUfvk"
             | "unlock"
-            | "syncWallet"
             | "selectWallet"
             | "removeWallet"
+            | "startOver"
             | "setIndexer"
             | "setNotifications"
             | "setFiatEnabled"
@@ -414,8 +414,8 @@ async fn unlock(passphrase: String) -> Result<Value, String> {
     request("unlock", serde_json::json!({ "passphrase": passphrase })).await
 }
 
-/// Lock the GUI session. The daemon keeps the wallet open and syncing, but the next
-/// session must re-enter the passphrase. Sign Out calls this.
+/// Lock the GUI session. The daemon keeps every Wallet open and syncing, but the
+/// next session must re-enter the passphrase. Sign Out calls this.
 #[tauri::command]
 async fn lock() -> Result<Value, String> {
     request("lock", Value::Null).await
@@ -443,7 +443,7 @@ async fn set_notifications(enabled: bool) -> Result<Value, String> {
 }
 
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
-/// bool; the Replace modal gates the wipe on it.
+/// bool; the Remove dialog gates the wipe on it.
 #[tauri::command]
 async fn verify_passphrase(passphrase: String) -> Result<Value, String> {
     request(
@@ -543,13 +543,21 @@ async fn get_price_history() -> Result<Value, String> {
     request("getPriceHistory", Value::Null).await
 }
 
+/// Remove one Wallet. `select` names the Wallet to show next when the removed one
+/// was Selected; the daemon falls back to the first remaining one.
 #[tauri::command]
-async fn remove_wallet(keep_session: Option<bool>) -> Result<Value, String> {
+async fn remove_wallet(id: String, select: Option<String>) -> Result<Value, String> {
     request(
         "removeWallet",
-        serde_json::json!({ "keepSession": keep_session.unwrap_or(false) }),
+        serde_json::json!({ "id": id, "select": select }),
     )
     .await
+}
+
+/// Wipe every Wallet and forget the passphrase: the way out of a forgotten one.
+#[tauri::command]
+async fn start_over() -> Result<Value, String> {
+    request("startOver", Value::Null).await
 }
 
 #[tauri::command]
@@ -563,11 +571,6 @@ async fn list_wallets() -> Result<Value, String> {
 #[tauri::command]
 async fn select_wallet(id: String) -> Result<Value, String> {
     request("selectWallet", serde_json::json!({ "id": id })).await
-}
-
-#[tauri::command]
-async fn sync_wallet(id: Option<String>) -> Result<Value, String> {
-    request("syncWallet", serde_json::json!({ "id": id })).await
 }
 
 /// Set or clear a user-facing wallet name. Empty label clears (short fingerprint).
@@ -693,9 +696,9 @@ pub fn run() {
             get_spot_price,
             get_price_history,
             remove_wallet,
+            start_over,
             list_wallets,
             select_wallet,
-            sync_wallet,
             set_wallet_label,
             set_keep_running_in_background,
             get_keep_running_in_background,

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/app-shell/app-shell";
+import { UnavailableWallet } from "@/components/app/unavailable-wallet/unavailable-wallet";
 import { useWalletData } from "@/hooks/use-wallet-data";
 
 function sectionFor(pathname: string) {
@@ -13,7 +14,7 @@ function sectionFor(pathname: string) {
 export function AppLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { wallet, sync, loaded, switching } = useWalletData();
+  const { wallet, sync, loaded, switching, error } = useWalletData();
 
   useEffect(() => {
     if (!loaded || !wallet) return;
@@ -36,8 +37,9 @@ export function AppLayout() {
       wallet={wallet}
       sync={sync}
       switching={switching}
+      error={error}
     >
-      <Outlet />
+      {wallet.unavailable ? <UnavailableWallet wallet={wallet} /> : <Outlet />}
     </AppShell>
   );
 }

@@ -264,7 +264,7 @@ function BalanceChartImpl({
 										<span>{fullDate(p?.t ?? tMin)}</span>
 										{p?.height ? (
 											<span className="text-muted-foreground">
-												Block #{p.height.toLocaleString()}
+												Block {p.height.toLocaleString()}
 											</span>
 										) : null}
 									</span>

@@ -10,17 +10,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog/alert-dialog";
 import { HoldButton } from "@/components/ui/hold-button/hold-button";
-import { removeWallet, unlock as unlockWallet } from "@/lib/ipc";
+import { startOver as startOverWallets, unlock as unlockWallet } from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
-import { takePendingTxid } from "@/lib/deep-link";
+import { selectLinkedWallet, takePendingLink } from "@/lib/deep-link";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
-// decrypts the wallet, so collecting it here is the lock. The real version hands
-// the passphrase to the daemon over IPC (`Unlock { passphrase }`); until that
-// lands this checks the in-session passphrase. A forgotten passphrase can't be
-// recovered (Argon2, never stored), so the only way out is the destructive "Start
-// over", which wipes the store and returns to onboarding via the remove machinery.
 export function UnlockPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -35,9 +30,12 @@ export function UnlockPage() {
   const alreadyOpen = useRef(getCachedWallet()?.locked === false).current;
   useEffect(() => {
     if (!alreadyOpen) return;
-    const txid = takePendingTxid();
-    if (txid) navigate({ to: "/tx/$txid", params: { txid }, replace: true });
-    else navigate({ to: "/dashboard", replace: true });
+    const link = takePendingLink();
+    if (link) {
+      navigate({ to: "/tx/$txid", params: { txid: link.txid }, replace: true });
+    } else {
+      navigate({ to: "/dashboard", replace: true });
+    }
   }, [alreadyOpen, navigate]);
 
   async function submit() {
@@ -49,12 +47,13 @@ export function UnlockPage() {
       // the layout guard on the next screen doesn't read a stale lock and bounce
       // straight back here.
       setCachedWallet(state);
-      // Resume a deep link that arrived while locked, otherwise land on the
-      // dashboard. Replace so the lock screen drops out of history and backing out
-      // of the tx never re-prompts.
-      const txid = takePendingTxid();
-      if (txid) navigate({ to: "/tx/$txid", params: { txid }, replace: true });
-      else navigate({ to: "/dashboard", replace: true });
+      const link = takePendingLink();
+      if (link) {
+        await selectLinkedWallet(link.walletId, state.walletId).catch(() => {});
+        navigate({ to: "/tx/$txid", params: { txid: link.txid }, replace: true });
+      } else {
+        navigate({ to: "/dashboard", replace: true });
+      }
     } catch {
       setError(true);
     } finally {
@@ -63,10 +62,9 @@ export function UnlockPage() {
   }
 
   async function startOver() {
-    // Wipe the wallet, then let the confirm modal animate closed before leaving.
     // Navigating right away unmounts this whole screen and cuts the exit
     // animation, so hold the route until the 150ms close has played.
-    await removeWallet();
+    await startOverWallets();
     setConfirmStartOver(false);
     await new Promise((resolve) => setTimeout(resolve, 200));
     navigate({ to: "/onboarding" });
@@ -78,7 +76,7 @@ export function UnlockPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-ink px-10 py-12 text-white">
-      <img src={pendrakeLogo} alt="Pendrake" className="h-[27px] select-none" />
+      <img src={pendrakeLogo} alt="Pendrake" className="h-[27px]" />
       <div className="flex w-full flex-1 flex-col justify-center py-10">
         <form
           className="mx-auto flex w-full max-w-md flex-col gap-7"

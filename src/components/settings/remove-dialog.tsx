@@ -12,25 +12,28 @@ import {
 } from "@/components/ui/alert-dialog/alert-dialog";
 import { Button } from "@/components/ui/button/button";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
-import { removeWallet, verifyPassphrase, type Network } from "@/lib/ipc";
+import {
+  listWallets,
+  removeWallet,
+  verifyPassphrase,
+  type Network,
+} from "@/lib/ipc";
+import { mostRecentOther } from "@/lib/wallet-recency";
+import { showSelectedWallet } from "@/hooks/use-wallet-data";
 import { cn } from "@/lib/utils";
 
 type Step = "explain" | "reauth";
 
-// Replace is the v0 path to a different Wallet (CONTEXT.md): a destructive swap
-// behind a two-step confirmation. Step one names what the wipe erases, step two
-// re-authenticates against the daemon's held passphrase. Nothing is touched until
-// the final confirm, so cancelling at either step leaves the Wallet intact. On
-// confirm the daemon keeps the session passphrase across the wipe, so onboarding
-// skips Set Password and the new Wallet inherits it (docs/adr/0004).
-export function ReplaceDialog({
+export function RemoveDialog({
   open,
   onOpenChange,
+  walletId,
   fingerprint,
   network,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  walletId: string | null;
   fingerprint: string | null;
   network: Network;
 }) {
@@ -41,11 +44,6 @@ export function ReplaceDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // The two steps have different heights, so a raw swap makes the centered dialog
-  // jump. The active step drives the wrapper height (observed below); on a step
-  // change the height transitions to the new value while the outgoing step fades
-  // out over the incoming one. The wrapper stays clipped so content never spills
-  // mid-morph, with a touch of horizontal room so the input's focus ring shows.
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number>();
   const [leaving, setLeaving] = useState<Step | null>(null);
@@ -69,8 +67,6 @@ export function ReplaceDialog({
     setStep(next);
   }
 
-  // Closing resets the flow so reopening starts clean and a failed attempt never
-  // lingers. No IPC has fired before the final confirm, so the Wallet is untouched.
   function change(next: boolean) {
     if (!next) {
       setStep("explain");
@@ -83,6 +79,7 @@ export function ReplaceDialog({
   }
 
   async function confirm() {
+    if (!walletId) return;
     setBusy(true);
     setError(null);
     try {
@@ -91,9 +88,17 @@ export function ReplaceDialog({
         setBusy(false);
         return;
       }
-      // keepSession so the new Wallet inherits the passphrase (docs/adr/0004).
-      await removeWallet(true);
-      navigate({ to: "/onboarding" });
+      const wallets = await listWallets().catch(() => []);
+      const state = await removeWallet(
+        walletId,
+        mostRecentOther(wallets, walletId),
+      );
+      if (state.exists) {
+        showSelectedWallet(state);
+        onOpenChange(false);
+      } else {
+        navigate({ to: "/onboarding" });
+      }
     } catch (e) {
       setError(String(e));
       setBusy(false);
@@ -104,12 +109,11 @@ export function ReplaceDialog({
     s === "explain" ? (
       <>
         <AlertDialogHeader>
-          <AlertDialogTitle>Replace this Wallet?</AlertDialogTitle>
+          <AlertDialogTitle>Remove this Wallet?</AlertDialogTitle>
           <AlertDialogDescription>
-            Replacing imports a different UFVK in place of this one. The current
-            Wallet's identity and synced history are erased and can't be
-            recovered. It's watch-only, so re-importing the UFVK restores it,
-            with no funds at risk.
+            Removing erases this Wallet's identity and synced history from this
+            device. Your other Wallets keep syncing. It's watch-only, so
+            re-importing the UFVK restores it, with no funds at risk.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -126,7 +130,7 @@ export function ReplaceDialog({
             <span className="text-xs font-medium capitalize text-muted-foreground">
               {network}
             </span>
-            <span className="truncate font-mono text-xs text-muted-foreground">
+            <span className="truncate font-mono text-xs text-muted-foreground select-text">
               {fingerprint ?? "Unknown fingerprint"}
             </span>
           </div>
@@ -142,7 +146,7 @@ export function ReplaceDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Confirm your passphrase</AlertDialogTitle>
           <AlertDialogDescription>
-            Enter your passphrase to replace the Wallet. This wipes it
+            Enter your passphrase to remove the Wallet. This wipes it
             immediately and can't be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -188,7 +192,7 @@ export function ReplaceDialog({
             disabled={passphrase.length === 0 || busy}
             onClick={confirm}
           >
-            {busy ? "Replacing…" : "Replace Wallet"}
+            {busy ? "Removing…" : "Remove Wallet"}
           </Button>
         </AlertDialogFooter>
       </>

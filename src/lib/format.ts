@@ -370,7 +370,7 @@ export function splitAddress(addr: string, visible = 6): AddressParts {
 }
 
 export function formatBlock(height: number | undefined): string {
-  return height ? `#${height.toLocaleString()}` : "—";
+  return height ? height.toLocaleString() : "—";
 }
 
 export function formatTxDate(epoch: number): string {

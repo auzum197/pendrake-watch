@@ -99,14 +99,6 @@ impl NotificationPolicy {
         }
     }
 
-    /// Forget the seen-set and the live edge: a wiped or re-imported wallet starts a
-    /// clean policy.
-    pub fn reset(&self) {
-        self.seen().clear();
-        *self.live.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        let _ = std::fs::remove_file(&self.file);
-    }
-
     fn seen(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
         self.seen.lock().unwrap_or_else(|e| e.into_inner())
     }

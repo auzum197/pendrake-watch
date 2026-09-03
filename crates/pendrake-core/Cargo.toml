@@ -13,12 +13,20 @@ pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "chore/ad
 
 zingo-netutils = "5"
 
-zcash_protocol   = "=0.10.0"
+zcash_protocol = "=0.10.0"
 zcash_primitives = "=0.29.0"
-zcash_address    = "=0.13.0"
+zcash_address = "=0.13.0"
 
-zcash_client_backend = { version = "=0.24.0-rc.1", default-features = false, features = ["lightwalletd-tonic", "orchard", "transparent-inputs"] }
-zcash_keys = { version = "=0.15.0", default-features = false, features = ["transparent-inputs", "sapling", "orchard"] }
+zcash_client_backend = { version = "=0.24.0-rc.1", default-features = false, features = [
+    "lightwalletd-tonic",
+    "orchard",
+    "transparent-inputs",
+] }
+zcash_keys = { version = "=0.15.0", default-features = false, features = [
+    "transparent-inputs",
+    "sapling",
+    "orchard",
+] }
 
 zip32 = "0.2"
 # Hashes the canonical UFVK encoding into a stable fingerprint.
@@ -58,6 +66,5 @@ tonic = "0.14"
 # Isolated data dir per single-instance test, cleaned up on drop.
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
-# net-delta tests feed through map_tx. Pinned to the version zingolib links so the
-# type unifies (a git copy resolves to a distinct, incompatible ConfirmationStatus).
-zingo-status = "0.2"
+
+zingo-status = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
