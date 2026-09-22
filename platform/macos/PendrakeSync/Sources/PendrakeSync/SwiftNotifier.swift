@@ -1,4 +1,5 @@
 import Foundation
+import PendrakeFFI
 import UserNotifications
 
 // The service's Notifier, implemented in Swift. uniffi invokes `notify` from a

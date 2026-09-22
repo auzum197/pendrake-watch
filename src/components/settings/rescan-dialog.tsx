@@ -12,9 +12,6 @@ import { Button } from "@/components/ui/button/button";
 import { appToast } from "@/components/app/app-toast/app-toast";
 import { rescanWallet } from "@/lib/ipc";
 
-// One step: explain what a rescan drops and where it starts, then queue it. The
-// daemon answers as soon as the rescan is queued, so the dialog closes at once and
-// the plate's sync ring carries the progress from there.
 export function RescanDialog({
 	open,
 	onOpenChange,

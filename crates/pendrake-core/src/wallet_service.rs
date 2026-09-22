@@ -1473,7 +1473,6 @@ impl WalletService {
             let client = guard
                 .as_ref()
                 .ok_or_else(|| anyhow!("no wallet to rescan"))?;
-            // Not running is fine: the loop is idle and the wake-up below starts it.
             let _ = client.stop_sync();
         }
         w.set_sync(|s| {
@@ -2004,8 +2003,6 @@ impl WalletService {
             started.map_err(|e| anyhow!("sync start failed: {e:?}"))?;
             rx
         };
-        // The engine just emptied the wallet, so the caches the GUI reads must not
-        // keep serving the old history while the scan rebuilds it.
         if rescan {
             self.refresh_snapshot(w).await;
         }
@@ -2075,8 +2072,6 @@ impl WalletService {
             }
         };
 
-        // A round cut short for a rescan is not a finish: the next round starts at
-        // once and the ring would otherwise flash full before dropping to zero.
         if w.rescan_pending.load(Ordering::SeqCst) {
             return Ok(());
         }

@@ -1,4 +1,5 @@
 import AppKit
+import PendrakeFFI
 import UserNotifications
 
 // Background-only helper (LSUIElement): no Dock icon, still a GUI-session app so
