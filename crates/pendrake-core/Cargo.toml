@@ -8,8 +8,8 @@ description = "Pendrake core: zingolib watch-only wallet construction and wallet
 [dependencies]
 pendrake-ipc = { path = "../pendrake-ipc" }
 
-zingolib = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
-pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
+zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
+pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 
 zingo-netutils = "5"
 
@@ -65,4 +65,4 @@ tonic = "0.14"
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
 
-zingolib-status = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
+zingolib-status = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }

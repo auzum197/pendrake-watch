@@ -1,5 +1,11 @@
 # Pendrake Watch — Update log
 
+## 2026-09-22: zingolib pinned to stable-auz again
+
+`chore/add-ironwood` was merged into `auzum197/zingolib` `stable-auz` (PR #10) and the branch was deleted upstream, so `zingolib`, `pepper-sync` and `zingolib-status` now track `stable-auz` at `e645fd03`. That line also brings the in-process mock indexer, the `zingolib-tui` crate and the removal of the spend code. Nothing in `pendrake-core` used the removed paths, so no source changes were needed.
+
+---
+
 ## 2026-09-03: wallets get a home in Settings
 
 Settings gains a Wallets category: a list of every Wallet on the left and a plate for the focused one on the right, with the LifeHash inside a sync ring, the name renamed in place, the fingerprint strip, balance, Birthday and Indexer, per-Wallet transaction alerts, Use and Remove.
@@ -45,10 +51,10 @@ The daemon opens every Wallet on disk and syncs each one on its own.
 |------|--------|------|
 | **pendrake-watch** | `feat/multi-wallet` | This work: multi-wallet UI/daemon, manual sync, soft refresh, this changelog |
 | **pendrake-watch** | `main` | Stable line; Ironwood UI/daemon mapping may land or already live separately |
-| **zingolib** (e.g. `auzum197/zingolib`) | `chore/add-ironwood` | Ironwood protocol: `IronwoodNote`, tree/actions fields, pepper-sync scan |
-| **zingolib** (earlier pin) | e.g. `stable-auz` | Pre-Ironwood; replaced for NU6.3 support |
+| **zingolib** (`auzum197/zingolib`) | `stable-auz` | Current pin. Ironwood protocol (`IronwoodNote`, tree/actions fields, pepper-sync scan) merged in from `chore/add-ironwood`, plus mock indexer and spend-code removal |
+| **zingolib** (earlier pin) | `chore/add-ironwood` | Ironwood feature branch, merged into `stable-auz` and deleted upstream |
 
-**Do not confuse:** `chore/add-ironwood` is a **library** branch. Multi-wallet lives on **pendrake-watch** `feat/multi-wallet` and only *depends on* the Ironwood zingolib branch via `Cargo.toml` git deps (`zingolib` / `pepper-sync`).
+**Do not confuse:** `stable-auz` (formerly `chore/add-ironwood`) is a **library** branch. Multi-wallet lives on **pendrake-watch** `feat/multi-wallet` and only *depends on* the Ironwood zingolib branch via `Cargo.toml` git deps (`zingolib` / `pepper-sync`).
 
 ---
 
