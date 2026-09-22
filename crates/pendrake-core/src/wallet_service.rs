@@ -97,6 +97,12 @@ const INDEXER_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 /// lands between writer critical sections well inside it.
 const NOTES_READ_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Delay after a failed passphrase check, doubling per consecutive failure up to
+/// the cap. The check itself is a constant-time compare against the held
+/// passphrase, so without this a local peer could guess at socket speed.
+const VERIFY_DELAY_BASE: Duration = Duration::from_millis(250);
+const VERIFY_DELAY_MAX: Duration = Duration::from_secs(5);
+
 pub struct WalletService {
     paths: Paths,
     notifier: Arc<dyn Notifier>,
@@ -139,6 +145,9 @@ pub struct WalletService {
     /// it so a later Add wallet skips Set Password; Start over drops it
     /// (docs/adr/0004). Never persisted.
     session_passphrase: Mutex<Option<Zeroizing<String>>>,
+    /// Consecutive failed passphrase checks. Held across the failure delay, so
+    /// checks run one at a time and guesses cannot be parallelized.
+    verify_failures: Mutex<u32>,
     /// Armed by `run` so a `shutdown` IPC request can wake the host process.
     /// Taken on first use; subsequent calls are no-ops.
     shutdown_tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
@@ -683,6 +692,7 @@ impl WalletService {
             encrypted: AtomicBool::new(false),
             subscribers: AtomicUsize::new(0),
             session_passphrase: Mutex::new(None),
+            verify_failures: Mutex::new(0),
             shutdown_tx: std::sync::Mutex::new(None),
             paths,
         });
@@ -1602,12 +1612,22 @@ impl WalletService {
 
     /// Re-authenticate a passphrase against the held session passphrase, the one
     /// that opened every Wallet. Used by the Remove dialog before it wipes
-    /// anything (docs/adr/0004). False when nothing is held.
+    /// anything (docs/adr/0004), by `exportUfvk`, and by a warm `unlock`. False
+    /// when nothing is held. A failure costs a delay that grows with each
+    /// consecutive miss, taken while the gate is held so attempts serialize.
     async fn verify_passphrase(&self, passphrase: &str) -> bool {
-        match &*self.session_passphrase.lock().await {
+        let mut failures = self.verify_failures.lock().await;
+        let matched = match &*self.session_passphrase.lock().await {
             Some(held) => ct_eq(held.as_bytes(), passphrase.as_bytes()),
             None => false,
+        };
+        if matched {
+            *failures = 0;
+            return true;
         }
+        *failures = failures.saturating_add(1);
+        tokio::time::sleep(verify_delay(*failures)).await;
+        false
     }
 
     /// The UFVK a Wallet was imported from, re-encoded off its open engine so it comes
@@ -2531,6 +2551,12 @@ fn now_secs() -> u64 {
 
 /// Constant-time byte comparison, so re-auth doesn't leak the passphrase through
 /// early-exit timing. Differing lengths short-circuit, which only reveals length.
+/// The wait after the `failures`th consecutive miss: 250ms, 500ms, 1s, ... capped.
+fn verify_delay(failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(8);
+    (VERIFY_DELAY_BASE * 2u32.pow(doublings)).min(VERIFY_DELAY_MAX)
+}
+
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -3271,6 +3297,28 @@ mod tests {
         let meta: Meta = serde_json::from_value(json).unwrap();
         assert_eq!(meta.anchor_height, 0);
         assert_eq!(meta.anchor_hash, None);
+    }
+
+    #[test]
+    fn a_wrong_passphrase_waits_longer_each_time_up_to_the_cap() {
+        assert_eq!(verify_delay(1), Duration::from_millis(250));
+        assert_eq!(verify_delay(2), Duration::from_millis(500));
+        assert_eq!(verify_delay(3), Duration::from_secs(1));
+        assert_eq!(verify_delay(6), Duration::from_secs(5));
+        assert_eq!(verify_delay(u32::MAX), Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn a_correct_passphrase_resets_the_failure_count() {
+        let service = WalletService::load(test_paths("verify-reset"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
+
+        assert!(!service.verify_passphrase("nope").await);
+        assert_eq!(*service.verify_failures.lock().await, 1);
+        assert!(service.verify_passphrase("pw").await);
+        assert_eq!(*service.verify_failures.lock().await, 0);
     }
 
     #[test]
