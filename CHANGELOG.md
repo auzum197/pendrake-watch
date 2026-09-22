@@ -1,5 +1,15 @@
 # Pendrake Watch — Update log
 
+## 2026-09-22: rescan from the Wallet plate
+
+Each Wallet's plate in Settings gains a Rescan button beside Use and Alerts. It opens a short confirmation naming the Birthday block, then queues a rescan on the daemon. The engine drops the scanned history and starts again from the Birthday, and the plate's sync ring falls to zero and refills as the scan runs.
+
+- New `rescanWallet` daemon method, refused while locked or for an unavailable Wallet. It flags the Wallet, stops the in-flight round, and wakes the sync loop, which calls the engine's `rescan` instead of `sync` for that one round.
+- A round cut short by a rescan does not report itself as finished, so the ring never flashes full before dropping.
+- The snapshot caches are rebuilt right after the wallet is cleared, so balance and notes read empty rather than stale until the scan finds them again.
+
+---
+
 ## 2026-09-22: zingolib pinned to stable-auz again
 
 `chore/add-ironwood` was merged into `auzum197/zingolib` `stable-auz` (PR #10) and the branch was deleted upstream, so `zingolib`, `pepper-sync` and `zingolib-status` now track `stable-auz` at `e645fd03`. That line also brings the in-process mock indexer, the `zingolib-tui` crate and the removal of the spend code. Nothing in `pendrake-core` used the removed paths, so no source changes were needed.

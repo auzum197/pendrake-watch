@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, mocked, userEvent, within } from "storybook/test";
 import {
   exportUfvk,
+  rescanWallet,
   setNotifications,
   setWalletLabel,
   type SyncStatus,
@@ -58,6 +59,7 @@ const meta = {
     mocked(exportUfvk).mockResolvedValue(UFVK);
     mocked(setWalletLabel).mockResolvedValue(STATE);
     mocked(setNotifications).mockResolvedValue(STATE);
+    mocked(rescanWallet).mockResolvedValue(STATE);
   },
 } satisfies Meta<typeof WalletPlate>;
 
@@ -99,6 +101,18 @@ export const Rename: Story = {
       FINGERPRINT,
       "Rainy day",
     );
+  },
+};
+
+export const Rescan: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: /rescan…/i }));
+    const dialog = within(await within(document.body).findByRole("alertdialog"));
+    await expect(dialog.getByText(/from block 419,200/i)).toBeVisible();
+    await userEvent.click(dialog.getByRole("button", { name: /^rescan$/i }));
+    await expect(mocked(rescanWallet)).toHaveBeenCalledWith(FINGERPRINT);
+    await expect(args.onChanged).toHaveBeenCalled();
   },
 };
 

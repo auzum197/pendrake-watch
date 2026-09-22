@@ -22,7 +22,7 @@ use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ExportUfvkArgs,
     ImportType, ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool,
-    PoolBalance, PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs,
+    PoolBalance, PricePoint, PriceSpot, RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs,
     SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent,
     SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
     VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
@@ -185,6 +185,9 @@ pub(crate) struct LoadedWallet {
     /// once. Used when the Indexer changes, so the switch takes effect immediately
     /// instead of after the current wait elapses.
     restart: Notify,
+    /// Set by `rescanWallet` and consumed by the next round, which then clears the
+    /// scanned history and starts from the Birthday instead of resuming.
+    rescan_pending: AtomicBool,
 }
 
 impl LoadedWallet {
@@ -206,6 +209,7 @@ impl LoadedWallet {
             fiat_enabled: AtomicBool::new(meta.fiat_enabled),
             generation: AtomicU64::new(0),
             restart: Notify::new(),
+            rescan_pending: AtomicBool::new(false),
             meta: RwLock::new(meta),
         }
     }
@@ -945,6 +949,10 @@ impl WalletService {
                     self.export_ufvk(&args.id, &args.passphrase).await?,
                 )?)
             }
+            "rescanWallet" => {
+                let args: RescanArgs = serde_json::from_value(params)?;
+                Ok(to_value(self.rescan(&args.id).await?)?)
+            }
             "setFiatEnabled" => {
                 let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
                 Ok(to_value(self.set_fiat_enabled(args.enabled).await?)?)
@@ -1499,6 +1507,38 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
+    /// Drop a Wallet's scanned history and scan again from its Birthday. The flag
+    /// is picked up by the next round; stopping the in-flight one and waking the
+    /// loop makes that round start now. The engine does the clearing itself, so
+    /// nothing here touches the wallet file. The returned state is the Selected
+    /// Wallet's, whichever Wallet was rescanned.
+    async fn rescan(&self, id: &str) -> Result<WalletState> {
+        let w = self.wallet(id).await?;
+        if let Some(reason) = w.unavailable.read().await.as_deref() {
+            return Err(anyhow!("this Wallet can't be rescanned: {reason}"));
+        }
+        w.rescan_pending.store(true, Ordering::SeqCst);
+        {
+            let guard = w.client.lock().await;
+            let client = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("no wallet to rescan"))?;
+            // Not running is fine: the loop is idle and the wake-up below starts it.
+            let _ = client.stop_sync();
+        }
+        w.set_sync(|s| {
+            s.state = SyncState::Syncing;
+            s.percent = 0;
+            s.eta_seconds = None;
+            s.error = None;
+            s.unreachable = false;
+            s.wrong_chain = false;
+        })
+        .await;
+        w.restart.notify_one();
+        Ok(self.wallet_state().await)
+    }
+
     /// Toggle whether a Wallet's transaction and scan-complete toasts fire, the
     /// Selected one when `id` is `None`. The in-memory atomic gates the hot notify
     /// path; the meta flag persists the choice. The "Indexer unreachable" alert is
@@ -1992,18 +2032,26 @@ impl WalletService {
         // lock, so the wallet file stays frozen and unlock stays responsive.
         self.verify_chain_identity(w).await?;
 
+        let rescan = w.rescan_pending.swap(false, Ordering::SeqCst);
         // Subscribe before kicking the sync task off so the SessionStarted event,
         // which carries the progress denominator, is never missed.
         let mut events = {
             let mut guard = w.client.lock().await;
             let client = guard.as_mut().ok_or_else(|| anyhow!("no wallet"))?;
             let rx = client.subscribe_sync_events();
-            client
-                .sync()
-                .await
-                .map_err(|e| anyhow!("sync start failed: {e:?}"))?;
+            let started = if rescan {
+                client.rescan().await
+            } else {
+                client.sync().await
+            };
+            started.map_err(|e| anyhow!("sync start failed: {e:?}"))?;
             rx
         };
+        // The engine just emptied the wallet, so the caches the GUI reads must not
+        // keep serving the old history while the scan rebuilds it.
+        if rescan {
+            self.refresh_snapshot(w).await;
+        }
 
         let mut view = RoundView::default();
         let mut poll = tokio::time::interval(POLL_INTERVAL);
@@ -2069,6 +2117,12 @@ impl WalletService {
                 }
             }
         };
+
+        // A round cut short for a rescan is not a finish: the next round starts at
+        // once and the ring would otherwise flash full before dropping to zero.
+        if w.rescan_pending.load(Ordering::SeqCst) {
+            return Ok(());
+        }
 
         let status = self.finalize(w, u32::from(result.sync_end_height)).await;
         // The round is done, so the wallet lock is free: rebuild the cache before

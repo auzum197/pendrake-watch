@@ -271,6 +271,14 @@ pub struct SetNotificationsArgs {
     pub id: Option<String>,
 }
 
+/// Drop one Wallet's scanned history and scan again from its Birthday. Settings
+/// addresses any Wallet by id, so the Selected one need not change.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RescanArgs {
+    pub id: String,
+}
+
 /// Release a Wallet's UFVK, gated on the session Passphrase. The GUI shows it once
 /// and never stores it, so there is no matching read method.
 #[derive(Debug, Deserialize)]

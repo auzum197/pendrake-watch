@@ -324,6 +324,13 @@ export function removeWallet(
   return invoke("remove_wallet", { id, select });
 }
 
+// Drop one Wallet's scanned history and scan again from its Birthday. Resolves
+// once the daemon has queued the rescan; progress arrives on the sync-event
+// stream like any other round.
+export function rescanWallet(id: string): Promise<WalletState> {
+  return invoke("rescan_wallet", { id });
+}
+
 export function startOver(): Promise<void> {
   return invoke("start_over");
 }

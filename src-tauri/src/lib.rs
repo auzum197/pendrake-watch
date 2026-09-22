@@ -265,6 +265,7 @@ fn method_may_spawn(method: &str) -> bool {
             | "setFiatEnabled"
             | "setDiscreet"
             | "setWalletLabel"
+            | "rescanWallet"
             | "shutdown"
     )
 }
@@ -566,6 +567,13 @@ async fn remove_wallet(id: String, select: Option<String>) -> Result<Value, Stri
     .await
 }
 
+/// Drop one Wallet's scanned history and scan again from its Birthday. Returns the
+/// Selected Wallet's state; progress arrives on the sync-event stream.
+#[tauri::command]
+async fn rescan_wallet(id: String) -> Result<Value, String> {
+    request("rescanWallet", serde_json::json!({ "id": id })).await
+}
+
 /// Wipe every Wallet and forget the passphrase: the way out of a forgotten one.
 #[tauri::command]
 async fn start_over() -> Result<Value, String> {
@@ -709,6 +717,7 @@ pub fn run() {
             get_spot_price,
             get_price_history,
             remove_wallet,
+            rescan_wallet,
             start_over,
             list_wallets,
             select_wallet,

@@ -5,7 +5,7 @@ import {
 	type CSSProperties,
 	type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { IconArrowsExchange, IconPencil } from "@tabler/icons-react";
+import { IconArrowsExchange, IconPencil, IconRefresh } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button/button";
 import { Switch } from "@/components/ui/switch/switch";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
@@ -17,6 +17,7 @@ import { setCachedWallet } from "@/hooks/use-wallet-data";
 import { setNotifications, setWalletLabel, type WalletSummary } from "@/lib/ipc";
 import { formatZec } from "@/lib/format";
 import { RemoveDialog } from "./remove-dialog";
+import { RescanDialog } from "./rescan-dialog";
 import { UfvkReveal } from "./ufvk-reveal";
 import "./wallets.css";
 
@@ -102,6 +103,7 @@ export function WalletPlate({
 
 	const [editing, setEditing] = useState(false);
 	const [alerts, setAlerts] = useState(wallet.notificationsEnabled ?? true);
+	const [rescanning, setRescanning] = useState(false);
 	const [removing, setRemoving] = useState(false);
 
 	async function rename(next: string) {
@@ -222,6 +224,16 @@ export function WalletPlate({
 						Use this Wallet
 					</Button>
 				)}
+				{!wallet.unavailable && (
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setRescanning(true)}
+					>
+						<IconRefresh data-icon="inline-start" />
+						Rescan…
+					</Button>
+				)}
 				<label className="flex items-center gap-2 text-sm">
 					<Switch
 						checked={alerts}
@@ -239,6 +251,14 @@ export function WalletPlate({
 					Remove…
 				</Button>
 			</div>
+
+			<RescanDialog
+				open={rescanning}
+				onOpenChange={setRescanning}
+				walletId={wallet.id}
+				birthdayHeight={wallet.birthdayHeight}
+				onQueued={onChanged}
+			/>
 
 			<RemoveDialog
 				open={removing}
