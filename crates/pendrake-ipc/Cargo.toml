@@ -8,3 +8,9 @@ description = "Pendrake IPC wire protocol shared by the daemon and the GUI clien
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+# TypeScript bindings for the GUI, written by `cargo test --features bindings`
+# (see `just bindings`). Optional so the daemon and the GUI host never compile it.
+ts-rs = { version = "12", features = ["serde-compat", "no-serde-warnings"], optional = true }
+
+[features]
+bindings = ["dep:ts-rs"]

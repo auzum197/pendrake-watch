@@ -30,6 +30,8 @@ const wallets: WalletSummary[] = [
     birthdayHeight: 419_200,
     selected: true,
     lastBalance: "897091655",
+    notificationsEnabled: true,
+    indexerUri: "https://zec.rocks:443",
   },
   {
     id: "w2",
@@ -39,6 +41,8 @@ const wallets: WalletSummary[] = [
     birthdayHeight: 2_390_000,
     selected: false,
     lastBalance: "89709165",
+    notificationsEnabled: true,
+    indexerUri: "https://zec.rocks:443",
     sync: {
       state: "syncing",
       syncedHeight: 2_100_000,
@@ -55,6 +59,8 @@ const wallets: WalletSummary[] = [
     birthdayHeight: 2_000_000,
     selected: false,
     lastBalance: "320400000",
+    notificationsEnabled: true,
+    indexerUri: "https://zec.rocks:443",
   },
 ];
 

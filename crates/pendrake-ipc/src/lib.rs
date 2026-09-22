@@ -173,6 +173,8 @@ impl Response {
     }
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
@@ -180,6 +182,8 @@ pub enum Network {
     Regtest,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ImportType {
@@ -187,6 +191,8 @@ pub enum ImportType {
     Seed,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ViewMode {
@@ -194,6 +200,8 @@ pub enum ViewMode {
     IncomingOnly,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletState {
@@ -207,10 +215,12 @@ pub struct WalletState {
     pub session_held: bool,
     /// The Selected Wallet's id under `wallets/<id>/`. `None` when no wallet exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub wallet_id: Option<String>,
     /// Optional user-facing name. `None` when unset (GUI falls back to short fingerprint).
     /// Masked in the UI when Discreet mode is on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub label: Option<String>,
     /// The current Wallet's fingerprint, the value that seeds its LifeHash. `None`
     /// for a wallet imported before fingerprints were persisted, or when no wallet
@@ -228,19 +238,22 @@ pub struct WalletState {
     pub notifications_enabled: bool,
     /// Whether fiat (USD) price display is enabled. Off until the user consents to the
     /// third-party price egress via the toggle's modal (docs/adr/0008). Gates the price
-    /// refresh loop, so nothing is fetched while false.
-    #[serde(default)]
+    /// refresh loop, so nothing is fetched while false. Off stays off the wire.
+    #[serde(default, skip_serializing_if = "is_false")]
     pub fiat_enabled: bool,
     /// Whether Discreet mode is on. The GUI masks sensitive values; the daemon redacts
-    /// new-transaction notification text (docs/adr/0009).
-    #[serde(default)]
+    /// new-transaction notification text (docs/adr/0009). Off stays off the wire.
+    #[serde(default, skip_serializing_if = "is_false")]
     pub discreet: bool,
     /// Why the Selected Wallet's file could not be opened, when it could not. The
     /// GUI explains the failure and offers Remove instead of the dashboard.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub unavailable: Option<String>,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletSummary {
@@ -260,9 +273,11 @@ pub struct WalletSummary {
     /// This Wallet's own sync status while it is open, `None` while it waits for the
     /// Passphrase or is Unavailable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub sync: Option<SyncStatus>,
     /// Why the wallet file could not be opened, when it could not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub unavailable: Option<String>,
     /// Whether this Wallet's transaction and scan-complete toasts fire, mirroring its
     /// `Meta`. Per-Wallet, so the switcher's Settings row reads it without selecting
@@ -300,16 +315,21 @@ pub struct ParseUfvkArgs {
     pub ufvk: String,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletAddress {
     pub ua: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub transparent: Option<String>,
 }
 
 /// The network a UFVK declares. Distinct from [`Network`]: a key can be testnet,
 /// which Pendrake rejects, so the decode result carries only the two it accepts.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum UfvkNetwork {
@@ -320,6 +340,8 @@ pub enum UfvkNetwork {
 /// A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
 /// experimental typecodes are dropped rather than surfaced. Ironwood is the
 /// post-NU6.3 shielded pool; the same Orchard FVK views it.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Pool {
@@ -331,6 +353,8 @@ pub enum Pool {
 
 /// What a successful UFVK decode tells the GUI: the network it is bound to, a
 /// stable fingerprint that seeds its LifeHash, and the pools it can watch.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UfvkIdentity {
@@ -342,6 +366,8 @@ pub struct UfvkIdentity {
 /// The verdict of a `parseUfvk` request. A testnet or malformed key is a decode
 /// outcome the GUI renders inline, not a transport failure, so it rides back as
 /// an `ok` result tagged by `kind` rather than a daemon error.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ParseUfvkResult {
@@ -354,6 +380,8 @@ pub enum ParseUfvkResult {
 /// single source of truth that turns this into a starting block height, so the GUI
 /// sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only and
 /// carries unix seconds for midnight UTC of the picked day; `Default` is blank.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "value", rename_all = "lowercase")]
 pub enum BirthdayInput {
@@ -362,6 +390,8 @@ pub enum BirthdayInput {
     Default,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportUfvkArgs {
@@ -374,6 +404,7 @@ pub struct ImportUfvkArgs {
     /// Omitted on a post-Replace import, where the daemon reuses the session
     /// passphrase it held across the wipe (docs/adr/0004).
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub passphrase: Option<String>,
 }
 
@@ -422,6 +453,8 @@ pub struct SetDiscreetArgs {
 
 /// How much a reconciled price can be trusted. `High` means two or more providers agreed
 /// on the point; `Low` means it came from a single source (e.g. the bundled pre-2020 tail).
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
@@ -431,6 +464,8 @@ pub enum Confidence {
 
 /// One reconciled daily price mark in USD, keyed by UTC date. `diverged` is set when the
 /// contributing sources spread beyond the reconciliation threshold, so the UI can flag it.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PricePoint {
@@ -444,6 +479,8 @@ pub struct PricePoint {
 
 /// The current reconciled spot price. `fetched_at` (unix seconds) lets the GUI show
 /// staleness; `stale` is set when it's serving a last-known value after a failed refresh.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceSpot {
@@ -479,6 +516,8 @@ pub struct RemoveArgs {
     pub select: Option<String>,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncState {
@@ -489,6 +528,8 @@ pub enum SyncState {
 
 /// What the scanner is doing right now, derived from the latest batch lifecycle
 /// event. Drives the progress label; `None` until the first event arrives.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncPhase {
@@ -496,6 +537,8 @@ pub enum SyncPhase {
     Committing,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
@@ -504,17 +547,22 @@ pub struct SyncStatus {
     pub chain_tip: u32,
     pub percent: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub phase: Option<SyncPhase>,
     /// Shielded notes scanned in the sync window (progress numerator).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub scanned_outputs: Option<u64>,
     /// Total notes to scan in the window (progress denominator).
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub total_outputs: Option<u64>,
     /// Estimated seconds to completion from the observed scan rate.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub eta_seconds: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub error: Option<String>,
     /// Set only when the failure was a connectivity failure to the Indexer, so the
     /// GUI can offer "Change server". Off (and absent from the wire) otherwise.
@@ -526,6 +574,7 @@ pub struct SyncStatus {
     #[serde(default, skip_serializing_if = "is_false")]
     pub wrong_chain: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub last_synced_at: Option<u64>,
 }
 
@@ -551,6 +600,8 @@ impl Default for SyncStatus {
 /// Where a single scan range is in its lifecycle: decrypting (`Scanning`), queued
 /// behind the serialized commit stage (`Waiting`), or holding the wallet lock and
 /// writing (`Committing`).
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum BatchPhase {
@@ -562,6 +613,8 @@ pub enum BatchPhase {
 /// One in-flight scan range. The GUI keys on `id` and animates the active bar
 /// from `phase_started_at_ms` against `expected_secs`, so it advances smoothly
 /// between pushes.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchProgress {
@@ -575,11 +628,14 @@ pub struct BatchProgress {
     /// Estimated duration of the active phase from measured throughput; `None`
     /// while waiting, where no work is progressing.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub expected_secs: Option<f64>,
 }
 
 /// The commit phase split into its sub-phases, in seconds. Mirrors pepper-sync's
 /// `CommitTiming` for the full per-batch diagnostic.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitBreakdown {
@@ -593,6 +649,8 @@ pub struct CommitBreakdown {
 }
 
 /// Measured wall-clock cost of a committed batch, in seconds.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchTiming {
@@ -606,6 +664,8 @@ pub struct BatchTiming {
 }
 
 /// A finished scan range with its measured timing, for the recent-batches log.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BatchSummary {
@@ -625,6 +685,8 @@ pub struct BatchSummary {
 // `rename_all` covers the variant tags only; `rename_all_fields` makes the fields
 // inside struct variants camelCase too (`valueZat`, `wrongChain`), which is what
 // the GUI's SyncEvent type has always read.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event")]
 pub enum SyncEvent {
@@ -670,6 +732,8 @@ pub enum SyncEvent {
     PriceUpdate { spot: PriceSpot },
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolBalance {
@@ -677,15 +741,27 @@ pub struct PoolBalance {
     pub total: String,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub orchard: Option<PoolBalance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub sapling: Option<PoolBalance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub transparent: Option<PoolBalance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub ironwood: Option<PoolBalance>,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TxKind {
@@ -693,6 +769,8 @@ pub enum TxKind {
     Sent,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum TxStatus {
@@ -702,6 +780,8 @@ pub enum TxStatus {
 
 /// Which side of a transaction an output sits on. A Sent transaction still
 /// produces a Received change note, so one transaction can carry both.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteDirection {
@@ -713,6 +793,8 @@ pub enum NoteDirection {
 /// reusing [`Pool`] to say which. Identified within its transaction by `pool` and
 /// `output_index`, since there is no per-note id upstream. Only shielded notes
 /// carry a `memo`; only Sent outputs carry a `recipient`.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
@@ -721,8 +803,10 @@ pub struct Note {
     pub output_index: u32,
     pub value_zat: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub memo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub recipient: Option<String>,
 }
 
@@ -730,6 +814,8 @@ pub struct Note {
 /// view. `Pending` is a note still in an unconfirmed transaction. `Spent` is one
 /// whose spend has been seen (confirmed or in flight). `Unspent` is a confirmed,
 /// still-spendable note.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteStatus {
@@ -745,6 +831,8 @@ pub enum NoteStatus {
 /// height it was spent at when that spend is confirmed. `height` and `spentHeight`
 /// are null when unknown (an unconfirmed note, or an in-flight spend). Values are
 /// zatoshi strings, matching the rest of the wire.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletNote {
@@ -758,12 +846,17 @@ pub struct WalletNote {
     pub spent_height: Option<u32>,
 }
 
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tx {
     pub txid: String,
     /// Unix seconds.
     pub datetime: u64,
+    /// Absent while the transaction is unconfirmed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "bindings", ts(optional))]
     pub block_height: Option<u32>,
     pub kind: TxKind,
     pub value_zat: String,

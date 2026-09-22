@@ -46,6 +46,7 @@ const WALLETS: WalletSummary[] = [
     selected: false,
     lastBalance: null,
     unavailable: "wallet file could not be read",
+    notificationsEnabled: true,
     indexerUri: "http://127.0.0.1:9067",
   },
 ];

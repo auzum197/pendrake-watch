@@ -323,27 +323,6 @@ describe("balanceHistory", () => {
       ).toEqual([0, 5, 4.9999]);
     });
 
-    it("falls back to the signed display value when netZat is absent", () => {
-      const txs: Tx[] = [
-        {
-          txid: "a",
-          datetime: 1000,
-          kind: "received",
-          valueZat: String(2 * ZEC),
-          status: "confirmed",
-          notes: [],
-        },
-        {
-          txid: "b",
-          datetime: 2000,
-          kind: "sent",
-          valueZat: String(ZEC),
-          status: "confirmed",
-          notes: [],
-        },
-      ];
-      expect(balanceHistory(txs, orchard(ZEC)).map((p) => p.value)).toEqual([0, 2, 1]);
-    });
   });
 
   describe("anchoring on the live balance", () => {

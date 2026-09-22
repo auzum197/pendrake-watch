@@ -1,163 +1,45 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// Mirrors the daemon's pendrake-ipc wire types, camelCase across the boundary.
-export type Network = "mainnet" | "regtest";
-export type ImportType = "ufvk" | "seed";
-export type ViewMode = "full" | "incoming-only";
+// The wire types are generated from the daemon's pendrake-ipc crate by
+// `just bindings`, so the two sides cannot drift. They are re-exported here as
+// aliases (a plain re-export would survive into the Storybook module mock);
+// nothing imports from generated/ directly.
+import type * as Wire from "./generated/wire";
 
-export type WalletState = {
-  exists: boolean;
-  locked: boolean;
-  sessionHeld: boolean;
-  walletId?: string | null;
-  // Optional user-facing name. Null/absent falls back to short fingerprint in the UI.
-  // Masked when Discreet mode is on.
-  label?: string | null;
-  // The current Wallet's fingerprint, seeding its LifeHash. Null when no wallet
-  // exists or it predates fingerprint persistence.
-  fingerprint: string | null;
-  importType: ImportType;
-  viewMode: ViewMode;
-  network: Network;
-  birthdayHeight: number;
-  // The Indexer this Wallet syncs against, editable from Settings. Empty when no
-  // wallet exists.
-  indexerUri: string;
-  // Whether transaction and scan-complete notifications fire. The "Indexer
-  // unreachable" alert is independent of this.
-  notificationsEnabled: boolean;
-  // Whether fiat (USD) price display is on. Off until the user consents to the price
-  // egress via the toggle's modal (docs/adr/0008). Absent reads as false.
-  fiatEnabled?: boolean;
-  // Whether Discreet mode is on (docs/adr/0009). The UI masks sensitive values and
-  // the daemon redacts notification text. Absent reads as false.
-  discreet?: boolean;
-  unavailable?: string;
-};
-
-export type WalletAddress = {
-  ua: string;
-  transparent?: string;
-};
-
-// The user's raw Birthday choice. The daemon's resolver turns it into a starting
-// height (mirrors pendrake-ipc BirthdayInput), so the GUI never pre-resolves. A
-// date is unix seconds for midnight UTC of the picked day, mainnet only.
-export type BirthdayInput =
-  | { kind: "height"; value: number }
-  | { kind: "date"; value: number }
-  | { kind: "default" };
-
-export type ImportUfvkInput = {
-  ufvk: string;
-  birthday: BirthdayInput;
-  indexerUri: string;
-  network: Network;
-  passphrase?: string;
-};
-
-// A UFVK declares its own network. Testnet is rejected, so a decoded key is one
-// of these two (mirrors the daemon's pendrake-ipc UfvkNetwork).
-export type UfvkNetwork = "mainnet" | "regtest";
-
-export type Pool = "orchard" | "sapling" | "transparent" | "ironwood";
-
-export type UfvkIdentity = {
-  network: UfvkNetwork;
-  fingerprint: string;
-  pools: Pool[];
-};
-
-// The decode verdict, tagged by `kind`. A testnet or malformed key is a result
-// the Identity screen renders inline, not a thrown daemon error.
-export type ParseUfvkResult =
-  | ({ kind: "valid" } & UfvkIdentity)
-  | { kind: "testnet" }
-  | { kind: "malformed"; reason: string };
-
-export type SyncState = "idle" | "syncing" | "error";
-export type SyncPhase = "scanning" | "committing";
-
-export type SyncStatus = {
-  state: SyncState;
-  syncedHeight: number;
-  chainTip: number;
-  percent: number;
-  phase?: SyncPhase;
-  scannedOutputs?: number;
-  totalOutputs?: number;
-  etaSeconds?: number;
-  error?: string;
-  // Set only when the sync error was the Indexer being unreachable, gating the
-  // "Change server" CTA. Absent reads as false.
-  unreachable?: boolean;
-  // Set only when the Indexer is serving a chain without this Wallet's Anchor
-  // (ADR-0010). The daemon keeps it mutually exclusive with `unreachable`.
-  wrongChain?: boolean;
-  lastSyncedAt?: number;
-};
-
-export type PoolBalance = {
-  confirmed: string;
-  total: string;
-};
-
-export type Balance = {
-  orchard?: PoolBalance;
-  sapling?: PoolBalance;
-  transparent?: PoolBalance;
-  ironwood?: PoolBalance;
-};
-
-export type TxKind = "received" | "sent";
-export type TxStatus = "confirmed" | "pending";
-export type NoteDirection = "received" | "sent";
-
-// One output within a transaction: a shielded Note or a transparent UTXO (`pool`
-// says which). There's no per-note id, so a note is identified by its pool and
-// outputIndex. Only shielded notes carry a memo; only Sent outputs carry a
-// recipient. Empty memos are stripped daemon-side, so a present `memo` is real.
-export type Note = {
-  pool: Pool;
-  direction: NoteDirection;
-  outputIndex: number;
-  valueZat: string;
-  memo?: string;
-  recipient?: string;
-};
-
-export type Tx = {
-  txid: string;
-  datetime: number;
-  blockHeight?: number;
-  kind: TxKind;
-  valueZat: string;
-  // Signed net balance change in zatoshis (received +, sent/shield/self −). The
-  // chart reconstructs against this; valueZat stays the display amount. Optional so
-  // a daemon predating the field doesn't break the client (the chart falls back).
-  netZat?: string;
-  status: TxStatus;
-  notes: Note[];
-};
-
-export type WalletSummary = {
-  id: string;
-  // Resolved display name: custom label, or short fingerprint when unset.
-  label: string;
-  fingerprint: string | null;
-  network: Network;
-  birthdayHeight: number;
-  selected: boolean;
-  // Last-synced confirmed balance in zatoshis (stringified), or null before a Wallet
-  lastBalance: string | null;
-  sync?: SyncStatus;
-  unavailable?: string;
-  // Per-Wallet settings surfaced in Settings > Wallets. A daemon predating them
-  // omits both; the UI reads absent as "alerts on" and an empty Indexer.
-  notificationsEnabled?: boolean;
-  indexerUri?: string;
-};
+export type Balance = Wire.Balance;
+export type BatchPhase = Wire.BatchPhase;
+export type BatchProgress = Wire.BatchProgress;
+export type BatchSummary = Wire.BatchSummary;
+export type BatchTiming = Wire.BatchTiming;
+export type BirthdayInput = Wire.BirthdayInput;
+export type CommitBreakdown = Wire.CommitBreakdown;
+export type Confidence = Wire.Confidence;
+export type ImportType = Wire.ImportType;
+export type Network = Wire.Network;
+export type Note = Wire.Note;
+export type NoteDirection = Wire.NoteDirection;
+export type NoteStatus = Wire.NoteStatus;
+export type ParseUfvkResult = Wire.ParseUfvkResult;
+export type Pool = Wire.Pool;
+export type PoolBalance = Wire.PoolBalance;
+export type PricePoint = Wire.PricePoint;
+export type PriceSpot = Wire.PriceSpot;
+export type SyncEvent = Wire.SyncEvent;
+export type SyncPhase = Wire.SyncPhase;
+export type SyncState = Wire.SyncState;
+export type SyncStatus = Wire.SyncStatus;
+export type Tx = Wire.Tx;
+export type TxKind = Wire.TxKind;
+export type TxStatus = Wire.TxStatus;
+export type UfvkIdentity = Wire.UfvkIdentity;
+export type UfvkNetwork = Wire.UfvkNetwork;
+export type ViewMode = Wire.ViewMode;
+export type WalletAddress = Wire.WalletAddress;
+export type WalletNote = Wire.WalletNote;
+export type WalletState = Wire.WalletState;
+export type WalletSummary = Wire.WalletSummary;
+export type ImportUfvkInput = Wire.ImportUfvkArgs;
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.
 export const DEFAULT_INDEXER = "https://zec.rocks:443";
@@ -248,53 +130,10 @@ export function getTransaction(txid: string): Promise<Tx | null> {
   return invoke("get_transaction", { txid });
 }
 
-export type NoteStatus = "unspent" | "spent" | "pending";
-
-// One received output the wallet controls, flattened across pools, for the notes
-// debug view. Distinct from `Note` (an output inside one transaction's detail):
-// this is a wallet-wide row with its spend state resolved. `height` is null while
-// the note's transaction is unconfirmed, and `spentHeight` is null unless the spend
-// has confirmed. `idx` is a stable row number the daemon assigns over the returned
-// order, the default table sort. Values are zatoshi strings.
-export type WalletNote = {
-  idx: number;
-  pool: Pool;
-  valueZat: string;
-  status: NoteStatus;
-  height: number | null;
-  txid: string;
-  change: boolean;
-  spentHeight: number | null;
-};
-
 // Every note the wallet can see, with spend status, for the notes debug view.
 export function getNotes(): Promise<WalletNote[]> {
   return invoke("get_notes");
 }
-
-// How much a reconciled price can be trusted. "high" means two or more providers
-// agreed; "low" means a single source (e.g. the bundled pre-2020 tail).
-export type Confidence = "high" | "low";
-
-// The current reconciled ZEC/USD spot. `fetchedAt` (unix seconds) drives the staleness
-// marker; `stale` is set when the daemon is serving a last-known value after a failed
-// refresh. `diverged` flags when the contributing sources disagreed.
-export type PriceSpot = {
-  usdPerZec: number;
-  fetchedAt: number;
-  sources: string[];
-  stale?: boolean;
-  diverged?: boolean;
-};
-
-// One reconciled daily price mark, keyed by UTC date (YYYY-MM-DD). The chart marks the
-// balance held on each day against this to trace the fiat curve.
-export type PricePoint = {
-  date: string;
-  usdPerZec: number;
-  confidence: Confidence;
-  diverged?: boolean;
-};
 
 // Record consent to the price egress and start (or stop) the daemon's price refresh.
 export function setFiatEnabled(enabled: boolean): Promise<WalletState> {
@@ -347,76 +186,6 @@ export function selectWallet(id: string): Promise<WalletState> {
 export function setWalletLabel(id: string, label: string): Promise<WalletState> {
   return invoke("set_wallet_label", { id, label });
 }
-
-export type BatchPhase = "scanning" | "waiting" | "committing";
-
-// One in-flight scan range. Animate the active bar from `phaseStartedAtMs`
-// against `expectedSecs`; both clocks share the local machine with the daemon.
-export type BatchProgress = {
-  id: string;
-  start: number;
-  end: number;
-  priority: string;
-  outputs: number;
-  phase: BatchPhase;
-  phaseStartedAtMs: number;
-  expectedSecs?: number;
-};
-
-export type CommitBreakdown = {
-  checkpoints: number;
-  frontiers: number;
-  insertTree: number;
-  spendFetch: number;
-  spendCpu: number;
-  cleanup: number;
-  other: number;
-};
-
-export type BatchTiming = {
-  totalSecs: number;
-  waitSecs: number;
-  fetchSecs: number;
-  decryptionSecs: number;
-  treeSecs: number;
-  commitSecs: number;
-  commit: CommitBreakdown;
-};
-
-export type BatchSummary = {
-  id: string;
-  start: number;
-  end: number;
-  priority: string;
-  outputs: number;
-  timing: BatchTiming;
-};
-
-export type SyncEvent =
-  | {
-      event: "progress";
-      walletId: string;
-      status: SyncStatus;
-      batches: BatchProgress[];
-    }
-  | { event: "batchDone"; walletId: string; batch: BatchSummary }
-  | { event: "finished"; walletId: string; status: SyncStatus }
-  | {
-      event: "transaction";
-      walletId: string;
-      txid: string;
-      kind: TxKind;
-      valueZat: string;
-      received: boolean;
-    }
-  | {
-      event: "error";
-      walletId: string;
-      message: string;
-      unreachable?: boolean;
-      wrongChain?: boolean;
-    }
-  | { event: "priceUpdate"; spot: PriceSpot };
 
 export function onSyncEvent(
   handler: (event: SyncEvent) => void,

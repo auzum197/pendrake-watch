@@ -62,6 +62,8 @@ function summaryFor({ state, selected, named, hasBalance }: Knobs): WalletSummar
     birthdayHeight: 419_200,
     selected,
     lastBalance: hasBalance ? "897091655" : null,
+    notificationsEnabled: true,
+    indexerUri: "https://zec.rocks:443",
     sync: state === "unavailable" || state === "closed" ? undefined : SYNC[state],
     unavailable:
       state === "unavailable" ? "wallet file could not be read" : undefined,
