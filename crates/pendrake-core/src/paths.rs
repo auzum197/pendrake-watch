@@ -94,6 +94,14 @@ impl Paths {
         std::fs::create_dir_all(&self.wallets_dir).with_context(|| {
             format!("creating wallets dir {}", self.wallets_dir.display())
         })?;
+        // Wallet files, the notified-txid sets and the IPC socket all live under
+        // the root, so owner-only here keeps every one of them from other users.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&self.root, std::fs::Permissions::from_mode(0o700))
+                .with_context(|| format!("restricting data dir {}", self.root.display()))?;
+        }
         if self.wallet_id.is_some() {
             std::fs::create_dir_all(&self.wallet_dir).with_context(|| {
                 format!("creating wallet dir {}", self.wallet_dir.display())
@@ -299,5 +307,22 @@ impl Settings {
         std::fs::write(&tmp, &bytes).context("writing settings.json.tmp")?;
         std::fs::rename(&tmp, path).context("renaming settings.json")?;
         Ok(())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::Paths;
+
+    #[test]
+    fn the_data_dir_is_owner_only() {
+        let root = std::env::temp_dir().join("pendrake-test-data-dir-mode");
+        let _ = std::fs::remove_dir_all(&root);
+        let paths = Paths::with_root(root.clone());
+        paths.ensure_dirs().unwrap();
+        let mode = std::fs::metadata(&root).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
     }
 }
