@@ -51,6 +51,7 @@ use zingolib::wallet::summary::data::{
 };
 use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
+use zeroize::Zeroizing;
 use zip32::AccountId;
 
 use crate::birthday::resolve_birthday;
@@ -137,7 +138,7 @@ pub struct WalletService {
     /// imported or unlocked. It opens every Wallet (docs/adr/0011). Remove keeps
     /// it so a later Add wallet skips Set Password; Start over drops it
     /// (docs/adr/0004). Never persisted.
-    session_passphrase: Mutex<Option<String>>,
+    session_passphrase: Mutex<Option<Zeroizing<String>>>,
     /// Armed by `run` so a `shutdown` IPC request can wake the host process.
     /// Taken on first use; subsequent calls are no-ops.
     shutdown_tx: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>>,
@@ -902,6 +903,7 @@ impl WalletService {
                 self.set_notifications(enabled, id.as_deref()).await?,
             )?),
             Call::ExportUfvk(ExportUfvkArgs { id, passphrase }) => {
+                let passphrase = Zeroizing::new(passphrase);
                 Ok(to_value(self.export_ufvk(&id, &passphrase).await?)?)
             }
             Call::RescanWallet(RescanArgs { id }) => Ok(to_value(self.rescan(&id).await?)?),
@@ -914,13 +916,14 @@ impl WalletService {
             Call::GetSpotPrice => Ok(to_value(self.spot_price().await)?),
             Call::GetPriceHistory => Ok(to_value(self.price_history().await)?),
             Call::Unlock(UnlockArgs { passphrase }) => {
-                Ok(to_value(self.unlock(passphrase).await?)?)
+                Ok(to_value(self.unlock(Zeroizing::new(passphrase)).await?)?)
             }
             Call::Lock => {
                 self.lock_session();
                 Ok(serde_json::Value::Null)
             }
             Call::VerifyPassphrase(VerifyPassphraseArgs { passphrase }) => {
+                let passphrase = Zeroizing::new(passphrase);
                 Ok(to_value(self.verify_passphrase(&passphrase).await)?)
             }
             Call::RemoveWallet(RemoveArgs { id, select }) => {
@@ -1178,9 +1181,10 @@ impl WalletService {
         let held = self.session_passphrase.lock().await.clone();
         let passphrase = match held {
             Some(p) => p,
-            None => args
-                .passphrase
-                .ok_or_else(|| anyhow!("no passphrase provided for the first import"))?,
+            None => Zeroizing::new(
+                args.passphrase
+                    .ok_or_else(|| anyhow!("no passphrase provided for the first import"))?,
+            ),
         };
 
         let chain = chain_of(args.network);
@@ -1246,7 +1250,7 @@ impl WalletService {
         let mut client = LightClient::new(
             config,
             true,
-            Some(EncryptionConfig::new(passphrase.clone())),
+            Some(EncryptionConfig::new(String::clone(&passphrase))),
         )
         .await
         .map_err(|e| anyhow!("client creation failed: {e:?}"))?;
@@ -1334,7 +1338,7 @@ impl WalletService {
     /// wrong passphrase is rejected in both. A file the Passphrase opens every
     /// other Wallet with but not this one is an invariant violation: that Wallet
     /// becomes Unavailable rather than blocking the rest.
-    async fn unlock(self: &Arc<Self>, passphrase: String) -> Result<WalletState> {
+    async fn unlock(self: &Arc<Self>, passphrase: Zeroizing<String>) -> Result<WalletState> {
         if self.session_passphrase.lock().await.is_some() {
             if self.verify_passphrase(&passphrase).await {
                 self.session_locked.store(false, Ordering::SeqCst);
@@ -3286,7 +3290,7 @@ mod tests {
         // Nothing held (cold daemon): every guess is rejected.
         assert!(!service.verify_passphrase("anything").await);
 
-        *service.session_passphrase.lock().await = Some("correct horse".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("correct horse".into()));
         assert!(service.verify_passphrase("correct horse").await);
         assert!(!service.verify_passphrase("wrong").await);
     }
@@ -3308,7 +3312,7 @@ mod tests {
         let err = service.export_ufvk("w1", "anything").await.unwrap_err();
         assert!(err.to_string().contains("passphrase does not match"));
 
-        *service.session_passphrase.lock().await = Some("correct horse".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("correct horse".into()));
         let err = service.export_ufvk("w1", "wrong").await.unwrap_err();
         assert!(err.to_string().contains("passphrase does not match"));
 
@@ -3335,7 +3339,7 @@ mod tests {
         );
         let client = LightClient::new(config, true, None).await.unwrap();
         *wallet.client.lock().await = Some(client);
-        *service.session_passphrase.lock().await = Some("correct horse".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("correct horse".into()));
 
         assert_eq!(
             service.export_ufvk("w1", "correct horse").await.unwrap(),
@@ -3380,7 +3384,7 @@ mod tests {
         let (service, _) = service_with_spy("remove-one", Arc::new(SpyNotifier::new()), 100).await;
         register(&service, "w2", meta_with_target(100)).await;
         register(&service, "w3", meta_with_target(100)).await;
-        *service.session_passphrase.lock().await = Some("pw".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
 
         // Removing the Selected Wallet hands selection to the GUI's most recently
         // used other Wallet, and its directory is gone.
@@ -3416,7 +3420,7 @@ mod tests {
     async fn start_over_wipes_every_wallet_and_drops_the_passphrase() {
         let (service, _) = service_with_spy("start-over", Arc::new(SpyNotifier::new()), 100).await;
         register(&service, "w2", meta_with_target(100)).await;
-        *service.session_passphrase.lock().await = Some("pw".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
         service.session_locked.store(true, Ordering::SeqCst);
 
         service.start_over().await.unwrap();
@@ -3552,7 +3556,7 @@ mod tests {
         let service = WalletService::load(test_paths("lock-session"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        *service.session_passphrase.lock().await = Some("pw".into());
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
         service.session_locked.store(false, Ordering::SeqCst);
 
         service.lock_session();

@@ -54,6 +54,8 @@ reqwest = { version = "0.12", default-features = false, features = [
     "json",
 ] }
 fs2 = "0.4"
+# Wipes the session passphrase and every request line that could carry it.
+zeroize = "1"
 thiserror = "1"
 # Status codes off GrpcIndexer's GetBlock errors (the "no such block" whitelist in
 # fetch_block_hash), and Status construction in the classifier tests. Same version

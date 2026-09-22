@@ -14,6 +14,7 @@ use tokio::io::{
     WriteHalf,
 };
 use tokio::sync::broadcast::error::RecvError;
+use zeroize::Zeroizing;
 
 use crate::wallet_service::WalletService;
 use crate::paths::Paths;
@@ -60,6 +61,8 @@ where
     let mut buf = Vec::new();
 
     while let Some(line) = read_frame(&mut reader, &mut buf).await? {
+        // A line may carry the passphrase, so it is wiped once handled.
+        let line = Zeroizing::new(line);
         if line.trim().is_empty() {
             continue;
         }
@@ -136,6 +139,7 @@ where
         tokio::select! {
             frame = read_frame(&mut reader, &mut buf) => {
                 let Some(line) = frame? else { break };
+                let line = Zeroizing::new(line);
                 if line.trim().is_empty() {
                     continue;
                 }
