@@ -20,12 +20,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
-    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ExportUfvkArgs,
-    ImportType, ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool,
-    PoolBalance, PricePoint, PriceSpot, RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs,
-    SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent,
-    SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
-    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
+    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, Call, CommitBreakdown,
+    ExportUfvkArgs, GetTransactionArgs, ImportType, ImportUfvkArgs, Network, Note, NoteDirection,
+    NoteStatus, ParseUfvkArgs, ParseUfvkResult, Pool, PoolBalance, PricePoint, PriceSpot,
+    RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
+    SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx,
+    TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
+    WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -653,23 +654,6 @@ async fn observe_chain(uri: &http::Uri, anchor_height: Option<u32>) -> Result<Ch
 /// Methods the daemon answers while the GUI session is locked: lifecycle, auth, and
 /// the event subscription. Everything else (wallet reads, indexer changes) is refused
 /// until `unlock`. An allowlist, so a newly added method defaults to gated.
-fn allowed_while_locked(method: &str) -> bool {
-    matches!(
-        method,
-        "getWalletState"
-            | "getSyncStatus"
-            | "parseUfvk"
-            | "importUfvk"
-            | "unlock"
-            | "lock"
-            | "verifyPassphrase"
-            | "startOver"
-            | "subscribeEvents"
-            | "listWallets"
-            | "shutdown"
-    )
-}
-
 impl WalletService {
     /// Arm the one-shot sender that wakes the host when `shutdown` is received.
     pub fn arm_shutdown(&self, tx: std::sync::mpsc::Sender<()>) {
@@ -841,74 +825,62 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
-    pub async fn handle(
-        self: &Arc<Self>,
-        method: &str,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value> {
+    pub async fn handle(self: &Arc<Self>, call: Call) -> Result<serde_json::Value> {
         use serde_json::to_value;
         // While the GUI session is locked the daemon answers only lifecycle and auth
         // methods. Wallet reads are refused, so a locked screen (or any other peer on
         // the socket) can't see balances or history while the session key is still
         // held for background sync.
-        if self.session_locked.load(Ordering::SeqCst) && !allowed_while_locked(method) {
+        if self.session_locked.load(Ordering::SeqCst) && !call.allowed_while_locked() {
             return Err(anyhow!("wallet is locked"));
         }
-        match method {
-            "getWalletState" => Ok(to_value(self.wallet_state().await)?),
-            "getSyncStatus" => {
+        match call {
+            Call::GetWalletState => Ok(to_value(self.wallet_state().await)?),
+            Call::GetSyncStatus => {
                 let status = match self.selected().await {
                     Some(w) => w.sync.read().await.clone(),
                     None => SyncStatus::default(),
                 };
                 Ok(to_value(status)?)
             }
-            "setWalletLabel" => {
-                let args: SetWalletLabelArgs = serde_json::from_value(params)?;
-                Ok(to_value(
-                    self.set_wallet_label(&args.id, &args.label).await?,
-                )?)
+            Call::SetWalletLabel(SetWalletLabelArgs { id, label }) => {
+                Ok(to_value(self.set_wallet_label(&id, &label).await?)?)
             }
-            "listWallets" => Ok(to_value(self.list_wallets().await?)?),
-            "selectWallet" => {
-                let args: SelectWalletArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.select_wallet(&args.id).await?)?)
+            Call::ListWallets => Ok(to_value(self.list_wallets().await?)?),
+            Call::SelectWallet(SelectWalletArgs { id }) => {
+                Ok(to_value(self.select_wallet(&id).await?)?)
             }
             // Wallet reads are served from the Selected Wallet's snapshot cache,
             // never its `client` lock, so they don't queue behind the sync loop.
-            "getBalance" => {
+            Call::GetBalance => {
                 let balance = match self.selected().await {
                     Some(w) => w.balance.read().await.clone().unwrap_or_default(),
                     None => Balance::default(),
                 };
                 Ok(to_value(balance)?)
             }
-            "getTransactions" => {
+            Call::GetTransactions => {
                 let txs = match self.selected().await {
                     Some(w) => w.txs.read().await.clone(),
                     None => Vec::new(),
                 };
                 Ok(to_value(txs)?)
             }
-            "getNotes" => {
+            Call::GetNotes => {
                 let notes = match self.selected().await {
                     Some(w) => self.collect_notes(&w).await,
                     None => Vec::new(),
                 };
                 Ok(to_value(notes)?)
             }
-            "getAddresses" => {
+            Call::GetAddresses => {
                 let addresses = match self.selected().await {
                     Some(w) => w.addresses.read().await.clone(),
                     None => Vec::new(),
                 };
                 Ok(to_value(addresses)?)
             }
-            "getTransaction" => {
-                let txid = params
-                    .get("txid")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("getTransaction needs a txid"))?;
+            Call::GetTransaction(GetTransactionArgs { txid }) => {
                 let found = match self.selected().await {
                     Some(w) => w
                         .txs
@@ -921,73 +893,46 @@ impl WalletService {
                 };
                 Ok(to_value(found)?)
             }
-            "parseUfvk" => {
-                let ufvk = params
-                    .get("ufvk")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow!("parseUfvk needs a ufvk"))?;
-                Ok(to_value(parse_ufvk_result(ufvk))?)
+            Call::ParseUfvk(ParseUfvkArgs { ufvk }) => Ok(to_value(parse_ufvk_result(&ufvk))?),
+            Call::ImportUfvk(args) => Ok(to_value(self.import_ufvk(args).await?)?),
+            Call::SetIndexer(SetIndexerArgs { indexer_uri }) => {
+                Ok(to_value(self.set_indexer(indexer_uri).await?)?)
             }
-            "importUfvk" => {
-                let args: ImportUfvkArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.import_ufvk(args).await?)?)
+            Call::SetNotifications(SetNotificationsArgs { enabled, id }) => Ok(to_value(
+                self.set_notifications(enabled, id.as_deref()).await?,
+            )?),
+            Call::ExportUfvk(ExportUfvkArgs { id, passphrase }) => {
+                Ok(to_value(self.export_ufvk(&id, &passphrase).await?)?)
             }
-            "setIndexer" => {
-                let args: SetIndexerArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.set_indexer(args.indexer_uri).await?)?)
+            Call::RescanWallet(RescanArgs { id }) => Ok(to_value(self.rescan(&id).await?)?),
+            Call::SetFiatEnabled(SetFiatEnabledArgs { enabled }) => {
+                Ok(to_value(self.set_fiat_enabled(enabled).await?)?)
             }
-            "setNotifications" => {
-                let args: SetNotificationsArgs = serde_json::from_value(params)?;
-                Ok(to_value(
-                    self.set_notifications(args.enabled, args.id.as_deref())
-                        .await?,
-                )?)
+            Call::SetDiscreet(SetDiscreetArgs { enabled }) => {
+                Ok(to_value(self.set_discreet(enabled).await?)?)
             }
-            "exportUfvk" => {
-                let args: ExportUfvkArgs = serde_json::from_value(params)?;
-                Ok(to_value(
-                    self.export_ufvk(&args.id, &args.passphrase).await?,
-                )?)
+            Call::GetSpotPrice => Ok(to_value(self.spot_price().await)?),
+            Call::GetPriceHistory => Ok(to_value(self.price_history().await)?),
+            Call::Unlock(UnlockArgs { passphrase }) => {
+                Ok(to_value(self.unlock(passphrase).await?)?)
             }
-            "rescanWallet" => {
-                let args: RescanArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.rescan(&args.id).await?)?)
-            }
-            "setFiatEnabled" => {
-                let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.set_fiat_enabled(args.enabled).await?)?)
-            }
-            "setDiscreet" => {
-                let args: SetDiscreetArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.set_discreet(args.enabled).await?)?)
-            }
-            "getSpotPrice" => Ok(to_value(self.spot_price().await)?),
-            "getPriceHistory" => Ok(to_value(self.price_history().await)?),
-            "unlock" => {
-                let args: UnlockArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.unlock(args.passphrase).await?)?)
-            }
-            "lock" => {
+            Call::Lock => {
                 self.lock_session();
                 Ok(serde_json::Value::Null)
             }
-            "verifyPassphrase" => {
-                let args: VerifyPassphraseArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.verify_passphrase(&args.passphrase).await)?)
+            Call::VerifyPassphrase(VerifyPassphraseArgs { passphrase }) => {
+                Ok(to_value(self.verify_passphrase(&passphrase).await)?)
             }
-            "removeWallet" => {
-                let args: RemoveArgs = serde_json::from_value(params)?;
-                Ok(to_value(
-                    self.remove(&args.id, args.select.as_deref()).await?,
-                )?)
+            Call::RemoveWallet(RemoveArgs { id, select }) => {
+                Ok(to_value(self.remove(&id, select.as_deref()).await?)?)
             }
-            "startOver" => {
+            Call::StartOver => {
                 self.start_over().await?;
                 Ok(serde_json::Value::Null)
             }
             // The push stream is wired up by the IPC layer, so the service just acks.
-            "subscribeEvents" => Ok(serde_json::Value::Null),
-            "shutdown" => {
+            Call::SubscribeEvents => Ok(serde_json::Value::Null),
+            Call::Shutdown => {
                 if let Ok(mut guard) = self.shutdown_tx.lock() {
                     if let Some(tx) = guard.take() {
                         let _ = tx.send(());
@@ -995,7 +940,6 @@ impl WalletService {
                 }
                 Ok(serde_json::Value::Null)
             }
-            other => Err(anyhow!("unknown method: {other}")),
         }
     }
 
@@ -2817,7 +2761,6 @@ fn map_balance(bal: &AccountBalance) -> Balance {
 mod tests {
     use super::*;
     use crate::notify::NullNotifier;
-    use serde_json::Value;
 
     // An isolated data root under the temp dir, wiped first so a rerun starts clean.
     fn test_paths(name: &str) -> Paths {
@@ -3428,7 +3371,7 @@ mod tests {
         let service = WalletService::load(test_paths("notes-fresh"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        let result = service.handle("getNotes", Value::Null).await.unwrap();
+        let result = service.handle(Call::GetNotes).await.unwrap();
         assert_eq!(result, serde_json::json!([]));
     }
 
@@ -3604,40 +3547,6 @@ mod tests {
         assert!(service.session_locked());
     }
 
-    #[test]
-    fn allowlist_permits_lifecycle_and_denies_wallet_reads() {
-        for m in [
-            "getWalletState",
-            "getSyncStatus",
-            "parseUfvk",
-            "importUfvk",
-            "unlock",
-            "lock",
-            "verifyPassphrase",
-            "startOver",
-            "subscribeEvents",
-            "listWallets",
-            "shutdown",
-        ] {
-            assert!(
-                allowed_while_locked(m),
-                "{m} should be allowed while locked"
-            );
-        }
-        for m in [
-            "getBalance",
-            "getTransactions",
-            "getAddresses",
-            "getTransaction",
-            "setIndexer",
-            "removeWallet",
-            "selectWallet",
-            "exportUfvk",
-        ] {
-            assert!(!allowed_while_locked(m), "{m} should be gated while locked");
-        }
-    }
-
     #[tokio::test]
     async fn lock_session_arms_gate_but_keeps_the_session_key() {
         let service = WalletService::load(test_paths("lock-session"), Arc::new(NullNotifier))
@@ -3661,16 +3570,13 @@ mod tests {
         service.session_locked.store(true, Ordering::SeqCst);
 
         // Lifecycle and auth stay available so the GUI can route and re-authenticate.
-        assert!(service.handle("getWalletState", Value::Null).await.is_ok());
-        assert!(service.handle("lock", Value::Null).await.is_ok());
+        assert!(service.handle(Call::GetWalletState).await.is_ok());
+        assert!(service.handle(Call::Lock).await.is_ok());
 
         // Wallet reads are refused while the session is locked.
-        assert!(service.handle("getBalance", Value::Null).await.is_err());
-        assert!(service
-            .handle("getTransactions", Value::Null)
-            .await
-            .is_err());
-        assert!(service.handle("getAddresses", Value::Null).await.is_err());
+        assert!(service.handle(Call::GetBalance).await.is_err());
+        assert!(service.handle(Call::GetTransactions).await.is_err());
+        assert!(service.handle(Call::GetAddresses).await.is_err());
     }
 
     #[tokio::test]

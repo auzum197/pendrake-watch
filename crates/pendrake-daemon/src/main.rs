@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use pendrake_core::{transport, Config, Paths};
+use pendrake_ipc::{Call, Request};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use crate::notify::DesktopNotifier;
@@ -57,18 +58,25 @@ async fn run_client(paths: &Paths, args: &[String]) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("usage: pendraked call <method> [json-params]"))?;
     let params: serde_json::Value = match args.get(1) {
         Some(p) => serde_json::from_str(p)?,
-        None => serde_json::json!({}),
+        None => serde_json::Value::Null,
     };
+    // Parse locally first, so a mistyped method or a missing parameter is reported
+    // here instead of as a bare "bad request" from the daemon.
+    let call: Call = serde_json::from_value(serde_json::json!({
+        "method": method,
+        "params": params,
+    }))?;
+    let stream_events = matches!(call, Call::SubscribeEvents);
 
     let stream = transport::connect(&paths.endpoint()).await?;
     let (read_half, mut write_half) = tokio::io::split(stream);
 
-    let req = serde_json::json!({ "id": 1, "method": method, "params": params });
+    let req = serde_json::to_string(&Request { id: 1, call })?;
     write_half.write_all(format!("{req}\n").as_bytes()).await?;
 
     // `subscribeEvents` turns the connection into a live feed, so keep printing
     // pushed lines; every other method has a single reply.
-    let stream = method == "subscribeEvents";
+    let stream = stream_events;
     let mut lines = BufReader::new(read_half).lines();
     while let Some(line) = lines.next_line().await? {
         println!("{line}");

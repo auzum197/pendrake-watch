@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use pendrake_ipc::{Request, Response, SyncEvent};
+use pendrake_ipc::{Call, Request, Response, SyncEvent};
 use tokio::io::{
     AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf,
 };
@@ -58,8 +58,8 @@ where
         }
         let (resp, subscribe) = match serde_json::from_str::<Request>(&line) {
             Ok(req) => {
-                let subscribe = req.method == "subscribeEvents";
-                let resp = match service.handle(&req.method, req.params).await {
+                let subscribe = matches!(req.call, Call::SubscribeEvents);
+                let resp = match service.handle(req.call).await {
                     Ok(result) => Response::ok(req.id, result),
                     Err(e) => Response::err(req.id, e.to_string()),
                 };
@@ -102,7 +102,7 @@ where
                     continue;
                 }
                 let resp = match serde_json::from_str::<Request>(&line) {
-                    Ok(req) => match service.handle(&req.method, req.params).await {
+                    Ok(req) => match service.handle(req.call).await {
                         Ok(result) => Response::ok(req.id, result),
                         Err(e) => Response::err(req.id, e.to_string()),
                     },

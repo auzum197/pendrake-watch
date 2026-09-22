@@ -11,6 +11,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
+use pendrake_ipc::{
+    BirthdayInput, Call, ExportUfvkArgs, GetTransactionArgs, ImportUfvkArgs, Network,
+    ParseUfvkArgs, RemoveArgs, Request, RescanArgs, SelectWalletArgs, SetDiscreetArgs,
+    SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, UnlockArgs,
+    VerifyPassphraseArgs,
+};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Mutex;
@@ -245,31 +251,6 @@ async fn connect_daemon() -> Result<Conn, String> {
     connect().await.map_err(|e| e.to_string())
 }
 
-/// Methods that justify starting the daemon (user intent: import, unlock, …).
-fn method_may_spawn(method: &str) -> bool {
-    matches!(
-        method,
-        // Reads that must see on-disk wallets after a stop-on-close quit.
-        "getWalletState"
-            | "listWallets"
-            | "getSyncStatus"
-            // Onboarding / lifecycle that needs the engine.
-            | "parseUfvk"
-            | "importUfvk"
-            | "unlock"
-            | "selectWallet"
-            | "removeWallet"
-            | "startOver"
-            | "setIndexer"
-            | "setNotifications"
-            | "setFiatEnabled"
-            | "setDiscreet"
-            | "setWalletLabel"
-            | "rescanWallet"
-            | "shutdown"
-    )
-}
-
 /// Connect to the daemon, spawning it and waiting for the socket if nothing answers.
 async fn ensure_daemon() -> Result<Conn, String> {
     if let Ok(stream) = connect().await {
@@ -322,7 +303,10 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     let stream = connect_daemon().await?;
     let (read_half, mut write_half) = tokio::io::split(stream);
 
-    let req = serde_json::json!({ "id": 1, "method": "subscribeEvents", "params": null });
+    let req = Request {
+        id: 1,
+        call: Call::SubscribeEvents,
+    };
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     line.push(b'\n');
     write_half
@@ -350,15 +334,15 @@ async fn subscribe_once(app: &tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-async fn request(method: &str, params: Value) -> Result<Value, String> {
-    let stream = if method_may_spawn(method) {
+async fn request(call: Call) -> Result<Value, String> {
+    let stream = if call.may_spawn() {
         ensure_daemon().await?
     } else {
         connect_daemon().await?
     };
     let (read_half, mut write_half) = tokio::io::split(stream);
 
-    let req = serde_json::json!({ "id": 1, "method": method, "params": params });
+    let req = Request { id: 1, call };
     let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     line.push(b'\n');
     write_half
@@ -386,84 +370,66 @@ async fn import_ufvk(
     ufvk: String,
     // The user's raw Birthday choice (a tagged height/date/default). The daemon's
     // resolver settles it into a height, so the bridge just forwards it (AUZ-95).
-    birthday: Value,
+    birthday: BirthdayInput,
     indexer_uri: String,
-    network: String,
+    network: Network,
+    // A post-Replace import omits the passphrase: the daemon reuses the one it held
+    // across the wipe (docs/adr/0004).
     passphrase: Option<String>,
 ) -> Result<Value, String> {
-    // A post-Replace import omits the passphrase: the daemon reuses the one it held
-    // across the wipe (docs/adr/0004), so leave the field out rather than send null.
-    let mut params = serde_json::json!({
-        "ufvk": ufvk,
-        "birthday": birthday,
-        "indexerUri": indexer_uri,
-        "network": network,
-    });
-    if let Some(passphrase) = passphrase {
-        params["passphrase"] = Value::String(passphrase);
-    }
-    request("importUfvk", params).await
+    request(Call::ImportUfvk(ImportUfvkArgs {
+        ufvk,
+        birthday,
+        indexer_uri,
+        network,
+        passphrase,
+    }))
+    .await
 }
 
 #[tauri::command]
 async fn parse_ufvk(ufvk: String) -> Result<Value, String> {
-    request("parseUfvk", serde_json::json!({ "ufvk": ufvk })).await
+    request(Call::ParseUfvk(ParseUfvkArgs { ufvk })).await
 }
 
 #[tauri::command]
 async fn unlock(passphrase: String) -> Result<Value, String> {
-    request("unlock", serde_json::json!({ "passphrase": passphrase })).await
+    request(Call::Unlock(UnlockArgs { passphrase })).await
 }
 
 /// Lock the GUI session. The daemon keeps every Wallet open and syncing, but the
 /// next session must re-enter the passphrase. Sign Out calls this.
 #[tauri::command]
 async fn lock() -> Result<Value, String> {
-    request("lock", Value::Null).await
+    request(Call::Lock).await
 }
 
 /// Retarget the running Wallet at a different Indexer. The daemon connects to the
 /// new server before persisting, so a rejected URI surfaces here as an error.
 #[tauri::command]
 async fn set_indexer(indexer_uri: String) -> Result<Value, String> {
-    request(
-        "setIndexer",
-        serde_json::json!({ "indexerUri": indexer_uri }),
-    )
-    .await
+    request(Call::SetIndexer(SetIndexerArgs { indexer_uri })).await
 }
 
 /// Toggle whether transaction and scan-complete notifications fire, for the named
 /// Wallet or the Selected one when `id` is absent.
 #[tauri::command]
 async fn set_notifications(enabled: bool, id: Option<String>) -> Result<Value, String> {
-    let mut params = serde_json::json!({ "enabled": enabled });
-    if let Some(id) = id {
-        params["id"] = Value::String(id);
-    }
-    request("setNotifications", params).await
+    request(Call::SetNotifications(SetNotificationsArgs { enabled, id })).await
 }
 
 /// The UFVK a Wallet was imported from, released only against the session
 /// passphrase. Comes back as a bare JSON string the GUI shows once.
 #[tauri::command]
 async fn export_ufvk(id: String, passphrase: String) -> Result<Value, String> {
-    request(
-        "exportUfvk",
-        serde_json::json!({ "id": id, "passphrase": passphrase }),
-    )
-    .await
+    request(Call::ExportUfvk(ExportUfvkArgs { id, passphrase })).await
 }
 
 /// Re-authenticate against the daemon's held session passphrase. Returns a bare
 /// bool; the Remove dialog gates the wipe on it.
 #[tauri::command]
 async fn verify_passphrase(passphrase: String) -> Result<Value, String> {
-    request(
-        "verifyPassphrase",
-        serde_json::json!({ "passphrase": passphrase }),
-    )
-    .await
+    request(Call::VerifyPassphrase(VerifyPassphraseArgs { passphrase })).await
 }
 
 fn empty_wallet_state() -> Value {
@@ -485,7 +451,7 @@ fn empty_wallet_state() -> Value {
 
 #[tauri::command]
 async fn get_wallet_state() -> Result<Value, String> {
-    match request("getWalletState", Value::Null).await {
+    match request(Call::GetWalletState).await {
         Ok(v) => Ok(v),
         Err(_) => Ok(empty_wallet_state()),
     }
@@ -493,12 +459,12 @@ async fn get_wallet_state() -> Result<Value, String> {
 
 #[tauri::command]
 async fn get_addresses() -> Result<Value, String> {
-    request("getAddresses", Value::Null).await
+    request(Call::GetAddresses).await
 }
 
 #[tauri::command]
 async fn get_sync_status() -> Result<Value, String> {
-    match request("getSyncStatus", Value::Null).await {
+    match request(Call::GetSyncStatus).await {
         Ok(v) => Ok(v),
         Err(_) => Ok(serde_json::json!({
             "state": "idle",
@@ -511,29 +477,29 @@ async fn get_sync_status() -> Result<Value, String> {
 
 #[tauri::command]
 async fn get_balance() -> Result<Value, String> {
-    request("getBalance", Value::Null).await
+    request(Call::GetBalance).await
 }
 
 #[tauri::command]
 async fn get_transactions() -> Result<Value, String> {
-    request("getTransactions", Value::Null).await
+    request(Call::GetTransactions).await
 }
 
 #[tauri::command]
 async fn get_transaction(txid: String) -> Result<Value, String> {
-    request("getTransaction", serde_json::json!({ "txid": txid })).await
+    request(Call::GetTransaction(GetTransactionArgs { txid })).await
 }
 
 #[tauri::command]
 async fn get_notes() -> Result<Value, String> {
-    request("getNotes", Value::Null).await
+    request(Call::GetNotes).await
 }
 
 /// Toggle fiat (USD) price display. Enabling records the user's consent to the price
 /// egress (docs/adr/0008) and starts the daemon's price refresh.
 #[tauri::command]
 async fn set_fiat_enabled(enabled: bool) -> Result<Value, String> {
-    request("setFiatEnabled", serde_json::json!({ "enabled": enabled })).await
+    request(Call::SetFiatEnabled(SetFiatEnabledArgs { enabled })).await
 }
 
 /// Toggle Discreet mode. The daemon persists the flag and redacts new-transaction
@@ -541,48 +507,44 @@ async fn set_fiat_enabled(enabled: bool) -> Result<Value, String> {
 /// returned wallet state.
 #[tauri::command]
 async fn set_discreet(enabled: bool) -> Result<Value, String> {
-    request("setDiscreet", serde_json::json!({ "enabled": enabled })).await
+    request(Call::SetDiscreet(SetDiscreetArgs { enabled })).await
 }
 
 /// The current reconciled ZEC/USD spot, or null if nothing has been fetched yet.
 #[tauri::command]
 async fn get_spot_price() -> Result<Value, String> {
-    request("getSpotPrice", Value::Null).await
+    request(Call::GetSpotPrice).await
 }
 
 /// The reconciled daily ZEC/USD series the chart marks the balance against.
 #[tauri::command]
 async fn get_price_history() -> Result<Value, String> {
-    request("getPriceHistory", Value::Null).await
+    request(Call::GetPriceHistory).await
 }
 
 /// Remove one Wallet. `select` names the Wallet to show next when the removed one
 /// was Selected; the daemon falls back to the first remaining one.
 #[tauri::command]
 async fn remove_wallet(id: String, select: Option<String>) -> Result<Value, String> {
-    request(
-        "removeWallet",
-        serde_json::json!({ "id": id, "select": select }),
-    )
-    .await
+    request(Call::RemoveWallet(RemoveArgs { id, select })).await
 }
 
 /// Drop one Wallet's scanned history and scan again from its Birthday. Returns the
 /// Selected Wallet's state; progress arrives on the sync-event stream.
 #[tauri::command]
 async fn rescan_wallet(id: String) -> Result<Value, String> {
-    request("rescanWallet", serde_json::json!({ "id": id })).await
+    request(Call::RescanWallet(RescanArgs { id })).await
 }
 
 /// Wipe every Wallet and forget the passphrase: the way out of a forgotten one.
 #[tauri::command]
 async fn start_over() -> Result<Value, String> {
-    request("startOver", Value::Null).await
+    request(Call::StartOver).await
 }
 
 #[tauri::command]
 async fn list_wallets() -> Result<Value, String> {
-    match request("listWallets", Value::Null).await {
+    match request(Call::ListWallets).await {
         Ok(v) => Ok(v),
         Err(_) => Ok(Value::Array(vec![])),
     }
@@ -590,19 +552,14 @@ async fn list_wallets() -> Result<Value, String> {
 
 #[tauri::command]
 async fn select_wallet(id: String) -> Result<Value, String> {
-    request("selectWallet", serde_json::json!({ "id": id })).await
+    request(Call::SelectWallet(SelectWalletArgs { id })).await
 }
 
 /// Set or clear a user-facing wallet name. Empty label clears (short fingerprint).
 #[tauri::command]
 async fn set_wallet_label(id: String, label: String) -> Result<Value, String> {
-    request(
-        "setWalletLabel",
-        serde_json::json!({ "id": id, "label": label }),
-    )
-    .await
+    request(Call::SetWalletLabel(SetWalletLabelArgs { id, label })).await
 }
-
 
 #[tauri::command]
 fn set_keep_running_in_background(enabled: bool) {
@@ -633,7 +590,7 @@ fn kill_daemon_by_name() {
 }
 
 async fn try_shutdown_daemon() {
-    let _ = request("shutdown", Value::Null).await;
+    let _ = request(Call::Shutdown).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
     kill_daemon_by_name();
 }

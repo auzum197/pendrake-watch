@@ -25,12 +25,122 @@ fn enabled() -> bool {
     true
 }
 
-#[derive(Debug, Deserialize)]
+/// One line from a client: an `id` the reply echoes, and the call itself, spread
+/// into `method` and `params` beside it.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
     pub id: u64,
-    pub method: String,
-    #[serde(default)]
-    pub params: Value,
+    #[serde(flatten)]
+    pub call: Call,
+}
+
+/// Every method the daemon answers, with its typed parameters. Adding a variant
+/// forces a decision in [`Call::may_spawn`] and [`Call::allowed_while_locked`],
+/// and the daemon's dispatcher, all exhaustive. On the wire a unit variant sends
+/// `"params": null` or omits it.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "method", content = "params", rename_all = "camelCase")]
+pub enum Call {
+    GetWalletState,
+    GetSyncStatus,
+    ListWallets,
+    SelectWallet(SelectWalletArgs),
+    SetWalletLabel(SetWalletLabelArgs),
+    GetBalance,
+    GetTransactions,
+    GetTransaction(GetTransactionArgs),
+    GetNotes,
+    GetAddresses,
+    ParseUfvk(ParseUfvkArgs),
+    ImportUfvk(ImportUfvkArgs),
+    SetIndexer(SetIndexerArgs),
+    SetNotifications(SetNotificationsArgs),
+    ExportUfvk(ExportUfvkArgs),
+    RescanWallet(RescanArgs),
+    SetFiatEnabled(SetFiatEnabledArgs),
+    SetDiscreet(SetDiscreetArgs),
+    GetSpotPrice,
+    GetPriceHistory,
+    Unlock(UnlockArgs),
+    Lock,
+    VerifyPassphrase(VerifyPassphraseArgs),
+    RemoveWallet(RemoveArgs),
+    StartOver,
+    SubscribeEvents,
+    Shutdown,
+}
+
+impl Call {
+    /// Whether a GUI client should start the daemon to make this call. Reads that
+    /// must see on-disk wallets after a stop-on-close quit, and every lifecycle
+    /// method, qualify. Wallet reads do not: the GUI opening is not a reason to
+    /// begin background work.
+    pub fn may_spawn(&self) -> bool {
+        match self {
+            Call::GetWalletState
+            | Call::ListWallets
+            | Call::GetSyncStatus
+            | Call::ParseUfvk(_)
+            | Call::ImportUfvk(_)
+            | Call::Unlock(_)
+            | Call::SelectWallet(_)
+            | Call::RemoveWallet(_)
+            | Call::StartOver
+            | Call::SetIndexer(_)
+            | Call::SetNotifications(_)
+            | Call::SetFiatEnabled(_)
+            | Call::SetDiscreet(_)
+            | Call::SetWalletLabel(_)
+            | Call::RescanWallet(_)
+            | Call::Shutdown => true,
+            Call::GetBalance
+            | Call::GetTransactions
+            | Call::GetTransaction(_)
+            | Call::GetNotes
+            | Call::GetAddresses
+            | Call::ExportUfvk(_)
+            | Call::GetSpotPrice
+            | Call::GetPriceHistory
+            | Call::Lock
+            | Call::VerifyPassphrase(_)
+            | Call::SubscribeEvents => false,
+        }
+    }
+
+    /// Whether the daemon answers this while the GUI session is locked. Only
+    /// lifecycle and authentication go through; anything that would reveal a
+    /// balance, a key, or history waits for `unlock`.
+    pub fn allowed_while_locked(&self) -> bool {
+        match self {
+            Call::GetWalletState
+            | Call::GetSyncStatus
+            | Call::ParseUfvk(_)
+            | Call::ImportUfvk(_)
+            | Call::Unlock(_)
+            | Call::Lock
+            | Call::VerifyPassphrase(_)
+            | Call::StartOver
+            | Call::SubscribeEvents
+            | Call::ListWallets
+            | Call::Shutdown => true,
+            Call::SelectWallet(_)
+            | Call::SetWalletLabel(_)
+            | Call::GetBalance
+            | Call::GetTransactions
+            | Call::GetTransaction(_)
+            | Call::GetNotes
+            | Call::GetAddresses
+            | Call::SetIndexer(_)
+            | Call::SetNotifications(_)
+            | Call::ExportUfvk(_)
+            | Call::RescanWallet(_)
+            | Call::SetFiatEnabled(_)
+            | Call::SetDiscreet(_)
+            | Call::GetSpotPrice
+            | Call::GetPriceHistory
+            | Call::RemoveWallet(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -164,18 +274,30 @@ pub struct WalletSummary {
     pub indexer_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectWalletArgs {
     pub id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetWalletLabelArgs {
     pub id: String,
     /// Empty string clears the custom name (back to short fingerprint).
     pub label: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransactionArgs {
+    pub txid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParseUfvkArgs {
+    pub ufvk: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -240,7 +362,7 @@ pub enum BirthdayInput {
     Default,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportUfvkArgs {
     pub ufvk: String,
@@ -251,29 +373,29 @@ pub struct ImportUfvkArgs {
     /// never persisted, the Argon2 verifier lives in the wallet file's header.
     /// Omitted on a post-Replace import, where the daemon reuses the session
     /// passphrase it held across the wipe (docs/adr/0004).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passphrase: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetIndexerArgs {
     pub indexer_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetNotificationsArgs {
     pub enabled: bool,
     /// Which Wallet to toggle. Absent addresses the Selected Wallet, so Settings can
     /// flip any Wallet without switching to it first.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
 }
 
 /// Drop one Wallet's scanned history and scan again from its Birthday. Settings
 /// addresses any Wallet by id, so the Selected one need not change.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RescanArgs {
     pub id: String,
@@ -281,19 +403,19 @@ pub struct RescanArgs {
 
 /// Release a Wallet's UFVK, gated on the session Passphrase. The GUI shows it once
 /// and never stores it, so there is no matching read method.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportUfvkArgs {
     pub id: String,
     pub passphrase: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetFiatEnabledArgs {
     pub enabled: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetDiscreetArgs {
     pub enabled: bool,
 }
@@ -335,12 +457,12 @@ pub struct PriceSpot {
     pub diverged: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UnlockArgs {
     pub passphrase: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyPassphraseArgs {
     pub passphrase: String,
 }
@@ -349,11 +471,11 @@ pub struct VerifyPassphraseArgs {
 /// Set Password (docs/adr/0004). `select` names the Wallet to show next when the
 /// removed one was Selected: the GUI passes its most recently used other Wallet,
 /// and the daemon falls back to the first remaining one.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveArgs {
     pub id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub select: Option<String>,
 }
 
@@ -676,6 +798,104 @@ mod tests {
         for (value, json) in cases {
             assert_eq!(serde_json::to_string(&value).unwrap(), json);
             assert_eq!(serde_json::from_str::<BirthdayInput>(json).unwrap(), value);
+        }
+    }
+
+    // The request line the GUI host and the debug client write. A unit method may
+    // send `params: null` or leave it out; a typo is refused at parse time.
+    #[test]
+    fn request_wire_shape() {
+        let req: Request =
+            serde_json::from_str(r#"{"id":7,"method":"getWalletState","params":null}"#).unwrap();
+        assert_eq!(req.id, 7);
+        assert!(matches!(req.call, Call::GetWalletState));
+
+        let req: Request = serde_json::from_str(r#"{"id":1,"method":"lock"}"#).unwrap();
+        assert!(matches!(req.call, Call::Lock));
+
+        let req: Request = serde_json::from_str(
+            r#"{"id":2,"method":"exportUfvk","params":{"id":"w1","passphrase":"pw"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(req.call, Call::ExportUfvk(ExportUfvkArgs { ref id, .. }) if id == "w1"));
+
+        assert!(serde_json::from_str::<Request>(r#"{"id":3,"method":"getBalanec"}"#).is_err());
+
+        let line = serde_json::to_string(&Request {
+            id: 4,
+            call: Call::RemoveWallet(RemoveArgs {
+                id: "w1".into(),
+                select: None,
+            }),
+        })
+        .unwrap();
+        assert_eq!(
+            line,
+            r#"{"id":4,"method":"removeWallet","params":{"id":"w1"}}"#
+        );
+
+        let line = serde_json::to_string(&Request {
+            id: 5,
+            call: Call::SubscribeEvents,
+        })
+        .unwrap();
+        assert_eq!(line, r#"{"id":5,"method":"subscribeEvents"}"#);
+    }
+
+    fn call(method: &str) -> Call {
+        let params = match method {
+            "parseUfvk" => serde_json::json!({ "ufvk": "uview1..." }),
+            "importUfvk" => serde_json::json!({
+                "ufvk": "uview1...",
+                "birthday": { "kind": "default" },
+                "indexerUri": "https://zec.rocks:443",
+                "network": "mainnet",
+            }),
+            "unlock" | "verifyPassphrase" => serde_json::json!({ "passphrase": "pw" }),
+            "getTransaction" => serde_json::json!({ "txid": "ab" }),
+            "setIndexer" => serde_json::json!({ "indexerUri": "https://zec.rocks:443" }),
+            "removeWallet" | "selectWallet" | "rescanWallet" => serde_json::json!({ "id": "w1" }),
+            "exportUfvk" => serde_json::json!({ "id": "w1", "passphrase": "pw" }),
+            _ => Value::Null,
+        };
+        serde_json::from_value(serde_json::json!({ "method": method, "params": params })).unwrap()
+    }
+
+    #[test]
+    fn allowlist_permits_lifecycle_and_denies_wallet_reads() {
+        for m in [
+            "getWalletState",
+            "getSyncStatus",
+            "parseUfvk",
+            "importUfvk",
+            "unlock",
+            "lock",
+            "verifyPassphrase",
+            "startOver",
+            "subscribeEvents",
+            "listWallets",
+            "shutdown",
+        ] {
+            assert!(
+                call(m).allowed_while_locked(),
+                "{m} should be allowed while locked"
+            );
+        }
+        for m in [
+            "getBalance",
+            "getTransactions",
+            "getAddresses",
+            "getTransaction",
+            "setIndexer",
+            "removeWallet",
+            "selectWallet",
+            "exportUfvk",
+            "rescanWallet",
+        ] {
+            assert!(
+                !call(m).allowed_while_locked(),
+                "{m} should be gated while locked"
+            );
         }
     }
 

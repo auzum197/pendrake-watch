@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 pendrake-core = { path = "../pendrake-core" }
+pendrake-ipc = { path = "../pendrake-ipc" }
 
 # Runtime only for the `call` debug client; the engine owns its own in run().
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util"] }

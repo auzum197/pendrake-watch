@@ -2574,6 +2574,7 @@ dependencies = [
  "anyhow",
  "notify-rust",
  "pendrake-core",
+ "pendrake-ipc",
  "serde_json",
  "tokio",
  "tracing",
