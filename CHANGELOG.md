@@ -1,5 +1,22 @@
 # Pendrake Watch — Update log
 
+## 2026-09-22: a typed daemon protocol, generated GUI types, and a hardened socket
+
+The daemon's method names were strings matched in three places by hand. They are now one `Call` enum in `pendrake-ipc`, with the spawn and locked-session policies as exhaustive matches on it, so a new method is a compile error until both are decided. The Tauri host builds the same enum instead of JSON, and `pendraked call` validates a request before sending it.
+
+The GUI's wire types are generated from that crate by `just bindings` into `src/lib/generated/wire.ts`. `src/lib/ipc.ts` re-exports them, so nothing else changed its imports. Three fields now leave the wire when empty rather than sending null (a transaction's block height, a wallet state's fiat and discreet flags, and a balance's pools), which is what the hand-written types had always claimed.
+
+`SyncStatus` in Rust is now a state enum: idle, syncing with its phase and estimate, or an error with its message and a single fault. The flat shape the GUI reads is unchanged.
+
+Four fixes on the daemon's local boundary:
+
+- The socket is created owner-only and the data dir is 0700, so no other local user can reach the wallet.
+- A request line is capped at 64 KiB, so a peer that never sends a newline cannot exhaust the daemon's memory.
+- The session passphrase, and every request line that might carry it, lives in zeroizing memory.
+- A wrong passphrase costs a delay that doubles per consecutive miss up to five seconds, and checks run one at a time, so the constant-time compare is no longer an oracle at socket speed.
+
+---
+
 ## 2026-09-22: rescan from the Wallet plate
 
 Each Wallet's plate in Settings gains a Rescan button beside Use and Alerts. It opens a short confirmation naming the Birthday block, then queues a rescan on the daemon. The engine drops the scanned history and starts again from the Birthday, and the plate's sync ring falls to zero and refills as the scan runs.
