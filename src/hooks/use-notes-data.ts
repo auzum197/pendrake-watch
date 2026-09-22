@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getNotes, onSyncEvent, type WalletNote } from "@/lib/ipc";
+import { onWalletReload, onWalletSwitchStart } from "@/hooks/use-wallet-data";
 
 export type NotesData = {
   notes: WalletNote[];
@@ -47,12 +48,24 @@ export function useNotesData(): NotesData {
       if (ev.event === "transaction" || ev.event === "finished") refetch();
     });
 
+    const stopSwitch = onWalletSwitchStart(() => {
+      if (!active) return;
+      cache = null;
+      setNotes([]);
+      setLoaded(false);
+    });
+    const stopReload = onWalletReload(() => {
+      if (active) refetch();
+    });
+
     const timer = setInterval(refetch, 20000);
 
     return () => {
       active = false;
       clearInterval(timer);
       unlisten.then((fn) => fn()).catch(() => {});
+      stopSwitch();
+      stopReload();
     };
   }, []);
 

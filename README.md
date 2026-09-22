@@ -41,7 +41,7 @@ Install dependencies and start dev:
 
 ```bash
 just install
-just dev
+just stage-daemon && just dev
 ```
 
 `just dev` builds the release daemon and runs the GUI with hot reload. The daemon is built release because it does the heavy scanning.

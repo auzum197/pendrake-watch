@@ -47,6 +47,7 @@ function tx(part: Partial<Tx>): Tx {
 		datetime: 0,
 		kind: "received",
 		valueZat: "0",
+		netZat: "0",
 		status: "confirmed",
 		notes: [],
 		...part,

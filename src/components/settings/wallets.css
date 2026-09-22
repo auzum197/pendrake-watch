@@ -1,0 +1,496 @@
+/* Settings > Wallets: the master list, the identity plate and the UFVK hold. */
+
+.wallets-panel {
+	display: flex;
+	gap: 1.5rem;
+	align-items: flex-start;
+	margin-top: -0.5rem;
+}
+
+.wallets-list {
+	width: 13.5rem;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	position: sticky;
+	top: 0;
+}
+
+.wallets-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	width: 100%;
+	padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+	border-radius: 0.625rem;
+	text-align: left;
+	outline: none;
+	transition:
+		background-color 120ms ease,
+		transform 100ms ease-out;
+}
+
+.wallets-item::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.625rem;
+	bottom: 0.625rem;
+	width: 2px;
+	border-radius: 0 2px 2px 0;
+	background: var(--accent);
+	opacity: 0;
+	transform: scaleY(0.4);
+	transition:
+		opacity 140ms ease,
+		transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.wallets-item:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.wallets-item[aria-selected="true"] {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.wallets-item[aria-selected="true"]::before {
+	opacity: 1;
+	transform: scaleY(1);
+}
+
+.wallets-item:active {
+	transform: scale(0.985);
+}
+
+.wallets-item:focus-visible {
+	box-shadow: 0 0 0 2px var(--color-brand);
+}
+
+/* The plate. No card around it: it is a region of the dialog, separated by
+   hairlines and the accent glow at the top. */
+
+.plate {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 1.25rem 0.25rem 0.5rem;
+	background: radial-gradient(
+		90% 55% at 50% 0%,
+		color-mix(in oklab, var(--accent) 14%, transparent),
+		transparent 70%
+	);
+	transition:
+		opacity 190ms var(--ease-out-soft),
+		transform 190ms var(--ease-out-soft),
+		filter 190ms var(--ease-out-soft);
+
+	@starting-style {
+		opacity: 0;
+		transform: translateY(4px) scale(0.995);
+		filter: blur(2px);
+	}
+}
+
+.plate-hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+
+.plate-ring {
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 6.25rem;
+	height: 6.25rem;
+}
+
+.plate-ring svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	transform: rotate(-90deg);
+}
+
+.plate-ring circle {
+	fill: none;
+	stroke-width: 3;
+}
+
+.plate-ring-track {
+	stroke: rgba(255, 255, 255, 0.08);
+}
+
+.plate-ring-arc {
+	stroke: var(--accent);
+	stroke-linecap: round;
+	stroke-dasharray: 289;
+	stroke-dashoffset: calc(289 - 289 * var(--pct) / 100);
+	transition: stroke-dashoffset 600ms cubic-bezier(0.22, 1, 0.36, 1);
+
+	@starting-style {
+		stroke-dashoffset: 289;
+	}
+}
+
+.plate-ring[data-tone="warn"] .plate-ring-arc {
+	stroke: #fbbf24;
+}
+
+.plate-ring[data-tone="bad"] .plate-ring-track {
+	stroke: rgba(248, 113, 113, 0.5);
+	stroke-dasharray: 4 6;
+}
+
+.plate-name-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	margin-top: 1rem;
+	max-width: 100%;
+	border-radius: 0.5rem;
+	padding: 0.125rem 0.5rem;
+	outline: none;
+	transition: background-color 120ms ease;
+}
+
+/* The pencil hangs off the right edge, out of the flow, so the name itself is
+   what gets centred on the plate. */
+.plate-name-pencil {
+	position: absolute;
+	left: 100%;
+	top: 50%;
+	margin-left: 0.125rem;
+	transform: translateY(-50%);
+}
+
+.plate-name-btn:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.plate-name-btn:focus-visible {
+	box-shadow: 0 0 0 2px var(--color-brand);
+}
+
+.plate-name {
+	font-family: var(--font-heading);
+	font-size: 24px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.plate-name-input {
+	display: block;
+	margin-top: 1rem;
+	width: auto;
+	min-width: 12rem;
+	max-width: 100%;
+	padding: 0.125rem 0.5rem;
+	border: none;
+	border-radius: 0.5rem;
+	outline: none;
+	text-align: center;
+	background: rgba(0, 0, 0, 0.3);
+	box-shadow: 0 0 0 2px var(--color-brand);
+	color: #fff;
+	caret-color: var(--accent);
+}
+
+.plate-name-input::placeholder {
+	color: rgba(255, 255, 255, 0.35);
+}
+
+.plate-strip {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0 0.55rem;
+	margin-top: 0.5rem;
+	font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	color: var(--color-muted-foreground);
+}
+
+.plate-meta {
+	margin-top: 0.75rem;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-muted-foreground);
+}
+
+.plate-band {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1.4fr;
+	margin-top: 1.5rem;
+	border-top: 1px solid var(--color-border);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.plate-band > div {
+	padding: 0.875rem 1rem;
+}
+
+.plate-band > div + div {
+	border-left: 1px solid var(--color-border);
+}
+
+.plate-band dt {
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--color-muted-foreground);
+}
+
+.plate-band dd {
+	margin-top: 2px;
+	font-size: 13px;
+	color: var(--color-foreground);
+	overflow-wrap: anywhere;
+}
+
+.plate-actions {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin-top: 1.25rem;
+	padding: 0 0.25rem;
+}
+
+/* UFVK */
+
+.ufvk {
+	padding: 1rem 0.25rem;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.ufvk-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.ufvk-title {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.ufvk-tools {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	flex-shrink: 0;
+}
+
+.ufvk-tool {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	height: 1.75rem;
+	padding: 0 0.6rem;
+	border-radius: 0.5rem;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-muted-foreground);
+	flex-shrink: 0;
+	transition:
+		color 120ms ease,
+		background-color 120ms ease,
+		transform 100ms ease-out;
+}
+
+.ufvk-tool:hover {
+	color: var(--color-foreground);
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.ufvk-tool:active {
+	transform: scale(0.96);
+}
+
+.ufvk-body {
+	position: relative;
+	margin-top: 0.75rem;
+}
+
+.ufvk-text {
+	font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	font-size: 11px;
+	line-height: 1.6;
+	letter-spacing: 0.02em;
+	overflow-wrap: anywhere;
+	color: var(--color-foreground);
+	transition:
+		filter 420ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 300ms ease;
+}
+
+.ufvk-text.is-blurred {
+	filter: blur(6px);
+	opacity: 0.55;
+	user-select: none;
+	pointer-events: none;
+}
+
+/* The prefix is tinted and set off by margin, not by a space character, so
+   selecting or copying the key yields the exact string. */
+.ufvk-prefix {
+	margin-right: 0.45em;
+	color: var(--accent);
+	font-weight: 600;
+}
+
+/* macOS-style capsule sitting in the centre of the blur. It asks for the
+   passphrase and goes away once the key is legible. */
+.ufvk-capsule {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	height: 1.75rem;
+	padding: 0 0.85rem;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	background: rgba(60, 60, 66, 0.72);
+	-webkit-backdrop-filter: blur(12px) saturate(140%);
+	backdrop-filter: blur(12px) saturate(140%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		0 4px 14px rgba(0, 0, 0, 0.4);
+	font-family: -apple-system, system-ui, sans-serif;
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: -0.005em;
+	color: rgba(255, 255, 255, 0.92);
+	white-space: nowrap;
+	user-select: none;
+	touch-action: none;
+	outline: none;
+	transform: translate(-50%, -50%);
+	transition:
+		background-color 100ms ease,
+		opacity 160ms ease,
+		transform 120ms ease-out;
+}
+
+.ufvk-capsule:hover {
+	background: rgba(72, 72, 78, 0.8);
+}
+
+.ufvk-capsule:active {
+	transform: translate(-50%, -50%) scale(0.97);
+	background: rgba(84, 84, 90, 0.85);
+}
+
+.ufvk-capsule:focus-visible {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		0 0 0 3px color-mix(in oklab, var(--color-brand) 55%, transparent);
+}
+
+.ufvk-ask {
+	position: absolute;
+	inset: 50% 0 auto;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0 2rem;
+	transform: translateY(-50%);
+	transition:
+		opacity 160ms var(--ease-out-soft),
+		transform 200ms var(--ease-out-soft);
+
+	@starting-style {
+		opacity: 0;
+		transform: translateY(calc(-50% + 4px));
+	}
+}
+
+.ufvk-ask > div {
+	flex: 0 1 16rem;
+}
+
+.ufvk-ask-input {
+	height: 2rem;
+	width: 100%;
+	padding: 0 2rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--color-input);
+	background: rgba(22, 22, 25, 0.96);
+	font-size: 13px;
+	color: var(--color-foreground);
+	outline: none;
+	transition:
+		border-color 120ms ease,
+		box-shadow 120ms ease;
+}
+
+.ufvk-ask-input:focus-visible {
+	border-color: var(--color-ring);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 40%, transparent);
+}
+
+.ufvk-ask-input[aria-invalid] {
+	border-color: var(--color-destructive);
+	animation: ufvk-shake 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes ufvk-shake {
+	20%,
+	60% {
+		transform: translateX(-3px);
+	}
+	40%,
+	80% {
+		transform: translateX(3px);
+	}
+}
+
+.ufvk-ask-error {
+	flex-basis: 100%;
+	text-align: center;
+	font-size: 11px;
+	color: var(--color-destructive);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.plate {
+		transition: opacity 190ms ease;
+		transform: none;
+		filter: none;
+
+		@starting-style {
+			transform: none;
+			filter: none;
+		}
+	}
+	.wallets-item::before {
+		transition: opacity 140ms ease;
+		transform: none;
+	}
+	.plate-ring-arc {
+		transition: none;
+	}
+	.ufvk-text {
+		transition: opacity 200ms ease;
+	}
+	.ufvk-ask-input[aria-invalid] {
+		animation: none;
+	}
+}

@@ -109,8 +109,8 @@ fn ensure_start_menu_shortcut() {
     let Ok(appdata) = std::env::var("APPDATA") else {
         return;
     };
-    let lnk = std::path::Path::new(&appdata)
-        .join(r"Microsoft\Windows\Start Menu\Programs\Pendrake.lnk");
+    let lnk =
+        std::path::Path::new(&appdata).join(r"Microsoft\Windows\Start Menu\Programs\Pendrake.lnk");
     if lnk.exists() {
         return;
     }
@@ -126,7 +126,10 @@ fn ensure_start_menu_shortcut() {
 /// only has to be a valid executable for the shell to keep the link, the click that
 /// opens a transaction still rides the toast's protocol activation, not this target.
 #[cfg(target_os = "windows")]
-fn write_aumid_shortcut(lnk: &std::path::Path, target: &std::path::Path) -> windows::core::Result<()> {
+fn write_aumid_shortcut(
+    lnk: &std::path::Path,
+    target: &std::path::Path,
+) -> windows::core::Result<()> {
     use core::mem::ManuallyDrop;
     use windows::core::{Error, Interface, GUID, HSTRING, PWSTR};
     use windows::Win32::Foundation::{E_OUTOFMEMORY, PROPERTYKEY};
@@ -141,7 +144,10 @@ fn write_aumid_shortcut(lnk: &std::path::Path, target: &std::path::Path) -> wind
     use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 
-    let aumid: Vec<u16> = APP_AUMID.encode_utf16().chain(core::iter::once(0)).collect();
+    let aumid: Vec<u16> = APP_AUMID
+        .encode_utf16()
+        .chain(core::iter::once(0))
+        .collect();
 
     unsafe {
         // Best-effort: a non-success code here (already initialized on this thread) is
@@ -174,7 +180,9 @@ fn write_aumid_shortcut(lnk: &std::path::Path, target: &std::path::Path) -> wind
                 wReserved1: 0,
                 wReserved2: 0,
                 wReserved3: 0,
-                Anonymous: PROPVARIANT_0_0_0 { pwszVal: PWSTR(buf) },
+                Anonymous: PROPVARIANT_0_0_0 {
+                    pwszVal: PWSTR(buf),
+                },
             });
 
             let store: IPropertyStore = link.cast()?;
@@ -224,8 +232,7 @@ fn show_toast(title: &str, body: &str, deep_link: &str) -> windows::core::Result
     // carries the txid), so two receipts of the same amount both surface, and a repeat
     // of the same one updates in place instead of vanishing.
     toast.SetTag(&HSTRING::from(toast_tag(deep_link)))?;
-    ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))?
-        .Show(&toast)
+    ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_AUMID))?.Show(&toast)
 }
 
 /// A short, stable tag for a toast, derived from its deep link with the same FNV-1a

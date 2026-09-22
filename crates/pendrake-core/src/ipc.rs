@@ -7,16 +7,23 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
-use pendrake_ipc::{Request, Response, SyncEvent};
+use anyhow::{bail, Context, Result};
+use pendrake_ipc::{Call, Request, Response, SyncEvent};
 use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines, ReadHalf, WriteHalf,
+    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf,
+    WriteHalf,
 };
 use tokio::sync::broadcast::error::RecvError;
+use zeroize::Zeroizing;
 
-use crate::wallet_service::WalletService;
 use crate::paths::Paths;
 use crate::transport::Listener;
+use crate::wallet_service::WalletService;
+
+/// The longest request line accepted. An import carries a UFVK of a few hundred
+/// bytes, so this is generous; it exists so a peer that never sends a newline
+/// cannot grow the read buffer until the daemon dies.
+const MAX_LINE_BYTES: usize = 64 * 1024;
 
 pub async fn serve(service: Arc<WalletService>, paths: Paths) -> Result<()> {
     let endpoint = paths.endpoint();
@@ -50,16 +57,19 @@ where
     S: AsyncRead + AsyncWrite + Send + 'static,
 {
     let (read_half, mut write_half) = tokio::io::split(stream);
-    let mut lines = BufReader::new(read_half).lines();
+    let mut reader = BufReader::new(read_half);
+    let mut buf = Vec::new();
 
-    while let Some(line) = lines.next_line().await? {
+    while let Some(line) = read_frame(&mut reader, &mut buf).await? {
+        // A line may carry the passphrase, so it is wiped once handled.
+        let line = Zeroizing::new(line);
         if line.trim().is_empty() {
             continue;
         }
         let (resp, subscribe) = match serde_json::from_str::<Request>(&line) {
             Ok(req) => {
-                let subscribe = req.method == "subscribeEvents";
-                let resp = match service.handle(&req.method, req.params).await {
+                let subscribe = matches!(req.call, Call::SubscribeEvents);
+                let resp = match service.handle(req.call).await {
                     Ok(result) => Response::ok(req.id, result),
                     Err(e) => Response::err(req.id, e.to_string()),
                 };
@@ -71,22 +81,53 @@ where
 
         // The ack is the last reply before this connection becomes an event feed.
         if subscribe {
-            return stream_events(lines, write_half, service).await;
+            return stream_events(reader, write_half, service).await;
         }
     }
     Ok(())
 }
 
+/// One newline-delimited frame, or `None` once the peer has closed. A final line
+/// without a newline still counts. A line past [`MAX_LINE_BYTES`] is a protocol
+/// violation and ends the connection.
+///
+/// Safe to cancel inside a `select!`: bytes already read stay in `buf`, and the
+/// next call continues from them, so the cap holds across cancellations too.
+async fn read_frame<R>(reader: &mut BufReader<R>, buf: &mut Vec<u8>) -> Result<Option<String>>
+where
+    R: AsyncRead + Unpin,
+{
+    loop {
+        let remaining = (MAX_LINE_BYTES + 1).saturating_sub(buf.len()) as u64;
+        let n = reader.take(remaining).read_until(b'\n', buf).await?;
+        let complete = buf.last() == Some(&b'\n');
+        if complete || n == 0 {
+            if buf.is_empty() {
+                return Ok(None);
+            }
+            if complete {
+                buf.pop();
+            }
+            let line = String::from_utf8(std::mem::take(buf)).context("request is not UTF-8")?;
+            return Ok(Some(line));
+        }
+        if buf.len() > MAX_LINE_BYTES {
+            bail!("request line exceeds {MAX_LINE_BYTES} bytes");
+        }
+    }
+}
+
 /// Drain the service's event stream onto a subscribed connection, still answering
 /// any requests the client sends alongside the push feed.
 async fn stream_events<S>(
-    mut lines: Lines<BufReader<ReadHalf<S>>>,
+    mut reader: BufReader<ReadHalf<S>>,
     mut write_half: WriteHalf<S>,
     service: Arc<WalletService>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite,
 {
+    let mut buf = Vec::new();
     // Track this subscriber so the service relocks when the last GUI feed drops: a
     // Sign Out is explicit, this catches a plain quit. The guard decrements on every
     // exit path.
@@ -96,13 +137,14 @@ where
     let mut events = service.subscribe();
     loop {
         tokio::select! {
-            line = lines.next_line() => {
-                let Some(line) = line? else { break };
+            frame = read_frame(&mut reader, &mut buf) => {
+                let Some(line) = frame? else { break };
+                let line = Zeroizing::new(line);
                 if line.trim().is_empty() {
                     continue;
                 }
                 let resp = match serde_json::from_str::<Request>(&line) {
-                    Ok(req) => match service.handle(&req.method, req.params).await {
+                    Ok(req) => match service.handle(req.call).await {
                         Ok(result) => Response::ok(req.id, result),
                         Err(e) => Response::err(req.id, e.to_string()),
                     },
@@ -147,4 +189,73 @@ where
     encoded.push(b'\n');
     write_half.write_all(&encoded).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncWriteExt, BufReader};
+
+    use super::{read_frame, MAX_LINE_BYTES};
+
+    #[tokio::test]
+    async fn frames_split_on_newlines_and_a_bare_tail_still_counts() {
+        let (mut client, server) = tokio::io::duplex(1024);
+        let mut reader = BufReader::new(server);
+        let mut buf = Vec::new();
+
+        client.write_all(b"one\ntwo\ntail").await.unwrap();
+        drop(client);
+
+        assert_eq!(
+            read_frame(&mut reader, &mut buf).await.unwrap().as_deref(),
+            Some("one")
+        );
+        assert_eq!(
+            read_frame(&mut reader, &mut buf).await.unwrap().as_deref(),
+            Some("two")
+        );
+        assert_eq!(
+            read_frame(&mut reader, &mut buf).await.unwrap().as_deref(),
+            Some("tail")
+        );
+        assert!(read_frame(&mut reader, &mut buf).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn a_line_past_the_cap_is_refused_before_a_newline_arrives() {
+        let (mut client, server) = tokio::io::duplex(4096);
+        let mut reader = BufReader::new(server);
+        let mut buf = Vec::new();
+
+        let writer = tokio::spawn(async move {
+            let chunk = vec![b'x'; 4096];
+            for _ in 0..(MAX_LINE_BYTES / 4096 + 2) {
+                if client.write_all(&chunk).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let err = read_frame(&mut reader, &mut buf).await.unwrap_err();
+        assert!(err.to_string().contains("exceeds"));
+        drop(reader);
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_line_at_the_cap_is_still_accepted() {
+        let (mut client, server) = tokio::io::duplex(4096);
+        let mut reader = BufReader::new(server);
+        let mut buf = Vec::new();
+
+        let writer = tokio::spawn(async move {
+            let mut line = vec![b'y'; MAX_LINE_BYTES];
+            line.push(b'\n');
+            client.write_all(&line).await.unwrap();
+        });
+
+        let line = read_frame(&mut reader, &mut buf).await.unwrap().unwrap();
+        assert_eq!(line.len(), MAX_LINE_BYTES);
+        writer.await.unwrap();
+    }
 }

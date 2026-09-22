@@ -37,7 +37,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The Tauri crate needs these system libraries to compile on Linux.
+      # The Tauri crate needs these system libraries to compile on Linux, and the
+      # pinned lightwallet-protocol regenerates its gRPC stubs at build time, which
+      # needs protoc.
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -48,7 +50,8 @@ jobs:
             librsvg2-dev \
             libxdo-dev \
             libssl-dev \
-            build-essential
+            build-essential \
+            protobuf-compiler
 
       - uses: dtolnay/rust-toolchain@stable
         with:

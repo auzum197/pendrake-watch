@@ -17,15 +17,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CRATES="$ROOT/crates"
 SWIFT="$ROOT/platform/macos/PendrakeSync"
 GEN="$SWIFT/Generated"
+FFI_SWIFT="$SWIFT/Sources/PendrakeFFI"
+FFI_C="$SWIFT/Sources/pendrake_ffiFFI"
 APP="$SWIFT/build/PendrakeSync.app"
 
 PROFILE="${PENDRAKE_HELPER_PROFILE:-release}"
 if [ "$PROFILE" = "release" ]; then
     CARGO_PROFILE_FLAG="--release"
-    SWIFT_OPT="-O"
 else
     CARGO_PROFILE_FLAG=""
-    SWIFT_OPT=""
 fi
 TARGET_DIR="$CRATES/target/$PROFILE"
 DYLIB="$TARGET_DIR/libpendrake_ffi.dylib"
@@ -36,22 +36,24 @@ echo "==> building engine cdylib ($PROFILE)"
 echo "==> generating swift bindings"
 ( cd "$CRATES" && cargo run --quiet $CARGO_PROFILE_FLAG -p pendrake-ffi --bin uniffi-bindgen -- \
     generate --library "$DYLIB" --language swift --out-dir "$GEN" )
-# Swift's clang importer looks for `module.modulemap` on the include path.
-cp "$GEN/pendrake_ffiFFI.modulemap" "$GEN/module.modulemap"
 
-echo "==> compiling PendrakeSync.app ($PROFILE)"
+install_if_changed() {
+    cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"
+}
+mkdir -p "$FFI_SWIFT" "$FFI_C"
+install_if_changed "$GEN/pendrake_ffi.swift" "$FFI_SWIFT/pendrake_ffi.swift"
+install_if_changed "$GEN/pendrake_ffiFFI.h" "$FFI_C/pendrake_ffiFFI.h"
+install_if_changed "$GEN/pendrake_ffiFFI.modulemap" "$FFI_C/module.modulemap"
+
+echo "==> compiling PendrakeSync ($PROFILE)"
+export PENDRAKE_HELPER_PROFILE="$PROFILE"
+( cd "$SWIFT" && swift build -c "$PROFILE" --product PendrakeSync )
+BIN="$(cd "$SWIFT" && swift build -c "$PROFILE" --show-bin-path)/PendrakeSync"
+
+echo "==> bundling PendrakeSync.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-
-swiftc $SWIFT_OPT \
-    -parse-as-library \
-    -o "$APP/Contents/MacOS/PendrakeSync" \
-    -I "$GEN" \
-    "$GEN/pendrake_ffi.swift" "$SWIFT"/Sources/*.swift \
-    -L "$TARGET_DIR" -lpendrake_ffi \
-    -framework AppKit -framework UserNotifications \
-    -Xlinker -rpath -Xlinker "$TARGET_DIR"
-
+cp "$BIN" "$APP/Contents/MacOS/PendrakeSync"
 cp "$SWIFT/Info.plist" "$APP/Contents/Info.plist"
 
 echo "==> ad-hoc signing"

@@ -191,11 +191,11 @@ export function MerkleTree({
       </svg>
       <figcaption className="text-[11px] text-muted-foreground tabular-nums">
         {synced ? (
-          "Note-commitment tree · complete"
+          "Note-commitment tree complete"
         ) : (
           <>
             Appending commitments to the note tree
-            {total ? ` · ${(scanned ?? 0).toLocaleString()}/${total.toLocaleString()}` : ""}
+            {total ? ` (${(scanned ?? 0).toLocaleString()}/${total.toLocaleString()})` : ""}
           </>
         )}
       </figcaption>

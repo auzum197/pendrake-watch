@@ -63,9 +63,15 @@ package: stage-daemon
 dev: daemon
     PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
 
-# Typecheck the frontend and build the Rust workspaces.
+# Regenerate the GUI's wire types (src/lib/generated/wire.ts) from pendrake-ipc.
+# Run after changing any type the daemon serializes.
+[group('build')]
+bindings:
+    cd crates && cargo test -p pendrake-ipc --features bindings
+
+# Typecheck the frontend against fresh bindings and build the Rust workspaces.
 [group('qa')]
-check:
+check: bindings
     npx tsc --noEmit
     cd crates && cargo build
     cd src-tauri && cargo build

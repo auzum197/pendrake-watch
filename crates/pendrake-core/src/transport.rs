@@ -40,6 +40,7 @@ pub fn endpoint(root: &Path) -> String {
 #[cfg(unix)]
 mod imp {
     use std::io;
+    use std::os::unix::fs::PermissionsExt;
 
     use tokio::net::{UnixListener, UnixStream};
 
@@ -56,7 +57,12 @@ mod imp {
         pub fn bind(endpoint: &str) -> io::Result<Self> {
             // A stale socket file blocks bind; the service is single-instance.
             let _ = std::fs::remove_file(endpoint);
-            Ok(Self(UnixListener::bind(endpoint)?))
+            let listener = UnixListener::bind(endpoint)?;
+            // Owner-only, so no other local user can reach the wallet. The data dir
+            // is 0700 as well (`Paths::ensure_dirs`), which covers the instant
+            // between bind and this chmod.
+            std::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(0o600))?;
+            Ok(Self(listener))
         }
 
         pub async fn accept(&mut self) -> io::Result<ServerConn> {
@@ -107,5 +113,23 @@ mod imp {
                 std::mem::replace(&mut self.next, ServerOptions::new().create(&self.endpoint)?);
             Ok(server)
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::Listener;
+
+    #[tokio::test]
+    async fn the_socket_is_owner_only() {
+        let dir = std::env::temp_dir().join("pendrake-test-socket-mode");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let endpoint = dir.join("daemon.sock");
+        let _listener = Listener::bind(endpoint.to_str().unwrap()).unwrap();
+        let mode = std::fs::metadata(&endpoint).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }

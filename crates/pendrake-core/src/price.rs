@@ -227,7 +227,14 @@ impl PriceFetcher {
 
     async fn coingecko_spot(&self) -> Result<f64> {
         let url = "https://api.coingecko.com/api/v3/simple/price?ids=zcash&vs_currencies=usd";
-        let body: serde_json::Value = self.http.get(url).send().await?.error_for_status()?.json().await?;
+        let body: serde_json::Value = self
+            .http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
         body["zcash"]["usd"]
             .as_f64()
             .context("coingecko spot: missing zcash.usd")
@@ -235,7 +242,14 @@ impl PriceFetcher {
 
     async fn coinbase_spot(&self) -> Result<f64> {
         let url = "https://api.exchange.coinbase.com/products/ZEC-USD/ticker";
-        let body: serde_json::Value = self.http.get(url).send().await?.error_for_status()?.json().await?;
+        let body: serde_json::Value = self
+            .http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
         body["price"]
             .as_str()
             .and_then(|s| s.parse().ok())
@@ -244,7 +258,14 @@ impl PriceFetcher {
 
     async fn kraken_spot(&self) -> Result<f64> {
         let url = "https://api.kraken.com/0/public/Ticker?pair=ZECUSD";
-        let body: serde_json::Value = self.http.get(url).send().await?.error_for_status()?.json().await?;
+        let body: serde_json::Value = self
+            .http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
         // Kraken nests results under the canonical pair name (e.g. XZECZUSD); take the first.
         let result = body["result"]
             .as_object()
@@ -263,8 +284,7 @@ impl PriceFetcher {
     async fn coinbase_daily(&self, since: Option<&str>) -> Result<Vec<DailySample>> {
         let mut out = Vec::new();
         let mut end = now_secs();
-        let floor =
-            day_start_secs(COINBASE_FLOOR).max(since.map(day_start_secs).unwrap_or(0));
+        let floor = day_start_secs(COINBASE_FLOOR).max(since.map(day_start_secs).unwrap_or(0));
         loop {
             let start = end.saturating_sub(300 * 86_400).max(floor);
             let url = format!(
@@ -303,7 +323,14 @@ impl PriceFetcher {
     async fn coingecko_daily(&self) -> Result<Vec<DailySample>> {
         let url = "https://api.coingecko.com/api/v3/coins/zcash/market_chart\
                    ?vs_currency=usd&days=365&interval=daily";
-        let body: serde_json::Value = self.http.get(url).send().await?.error_for_status()?.json().await?;
+        let body: serde_json::Value = self
+            .http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
         let prices = body["prices"]
             .as_array()
             .context("coingecko daily: missing prices")?;
@@ -418,9 +445,18 @@ mod tests {
     #[test]
     fn single_source_day_is_low_confidence() {
         let series = reconcile_daily(vec![
-            DailySample { date: "2019-01-01".into(), usd: 50.0 },
-            DailySample { date: "2022-01-01".into(), usd: 120.0 },
-            DailySample { date: "2022-01-01".into(), usd: 121.0 },
+            DailySample {
+                date: "2019-01-01".into(),
+                usd: 50.0,
+            },
+            DailySample {
+                date: "2022-01-01".into(),
+                usd: 120.0,
+            },
+            DailySample {
+                date: "2022-01-01".into(),
+                usd: 121.0,
+            },
         ]);
         assert_eq!(series["2019-01-01"].confidence, Confidence::Low);
         assert_eq!(series["2022-01-01"].confidence, Confidence::High);
@@ -432,11 +468,15 @@ mod tests {
         cache.seed_tail();
         // The tail spans ZEC's launch day to the day before Coinbase's candle floor, so the
         // ALL span waves all the way back instead of holding flat before 2020-12.
-        assert!(cache.daily.len() > 1400, "tail is thin: {}", cache.daily.len());
+        assert!(
+            cache.daily.len() > 1400,
+            "tail is thin: {}",
+            cache.daily.len()
+        );
         assert!(cache.daily.contains_key("2016-10-29"));
         assert!(cache.daily.contains_key("2020-12-07"));
         assert!(!cache.daily.contains_key("2020-12-08")); // Coinbase's territory
-        // Every seeded day is single-source, so it reads as low confidence.
+                                                          // Every seeded day is single-source, so it reads as low confidence.
         assert!(cache
             .daily
             .values()

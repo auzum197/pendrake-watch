@@ -1,0 +1,61 @@
+.mirage {
+	flex-shrink: 0;
+	display: inline-block;
+	overflow: visible;
+	color: inherit;
+}
+
+.mirage-dot {
+	fill: currentColor;
+	transform-origin: center;
+	transform-box: fill-box;
+	animation: mirage-stream var(--uib-speed) linear infinite both;
+}
+
+.mirage-dot:nth-child(2) {
+	animation-delay: calc(var(--uib-speed) * -0.2);
+}
+.mirage-dot:nth-child(3) {
+	animation-delay: calc(var(--uib-speed) * -0.4);
+}
+.mirage-dot:nth-child(4) {
+	animation-delay: calc(var(--uib-speed) * -0.6);
+}
+.mirage-dot:nth-child(5) {
+	animation-delay: calc(var(--uib-speed) * -0.8);
+}
+
+@keyframes mirage-stream {
+	0%,
+	100% {
+		transform: translateX(0) scale(0);
+	}
+	50% {
+		transform: translateX(calc(var(--uib-size) * 0.5)) scale(1);
+	}
+	99.999% {
+		transform: translateX(var(--uib-size)) scale(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mirage-dot {
+		animation: none;
+		opacity: 0.6;
+	}
+	.mirage-dot:nth-child(1) {
+		transform: translateX(calc(var(--uib-size) * 0));
+	}
+	.mirage-dot:nth-child(2) {
+		transform: translateX(calc(var(--uib-size) * 0.25));
+	}
+	.mirage-dot:nth-child(3) {
+		transform: translateX(calc(var(--uib-size) * 0.5));
+	}
+	.mirage-dot:nth-child(4) {
+		transform: translateX(calc(var(--uib-size) * 0.75));
+	}
+	.mirage-dot:nth-child(5) {
+		transform: translateX(calc(var(--uib-size) * 1));
+	}
+}

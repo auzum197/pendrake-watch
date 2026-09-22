@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletState } from "./ipc";
-import {
-  hydrateDiscreet,
-  isMasked,
-  setPeeking,
-  toggleDiscreet,
-} from "./discreet";
+import { hydrateDiscreet, isMasked, toggleDiscreet } from "./discreet";
 import { setDiscreet } from "./ipc";
 
 vi.mock("./ipc", () => ({ setDiscreet: vi.fn() }));
@@ -29,26 +24,15 @@ function state(discreet: boolean): WalletState {
 beforeEach(() => {
   vi.mocked(setDiscreet).mockReset();
   hydrateDiscreet(false);
-  setPeeking(false);
 });
 
 describe("isMasked", () => {
-  it("derives from hidden and peeking", () => {
+  it("mirrors the hidden flag", () => {
     expect(isMasked()).toBe(false);
     hydrateDiscreet(true);
     expect(isMasked()).toBe(true);
-    setPeeking(true);
+    hydrateDiscreet(false);
     expect(isMasked()).toBe(false);
-    setPeeking(false);
-    expect(isMasked()).toBe(true);
-  });
-
-  it("peek never flips the persisted flag", async () => {
-    hydrateDiscreet(true);
-    setPeeking(true);
-    setPeeking(false);
-    expect(isMasked()).toBe(true);
-    expect(setDiscreet).not.toHaveBeenCalled();
   });
 });
 
@@ -78,7 +62,6 @@ describe("toggleDiscreet", () => {
     );
     const done = toggleDiscreet();
     expect(isMasked()).toBe(true);
-    // A stale wallet-state load lands mid-flight; the optimistic flip holds.
     hydrateDiscreet(false);
     expect(isMasked()).toBe(true);
     settle(state(true));

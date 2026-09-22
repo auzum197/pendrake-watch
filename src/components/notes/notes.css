@@ -15,6 +15,10 @@
   white-space: nowrap;
 }
 
+.note-badge--ironwood {
+  background: #fcebe7;
+  color: #9b2c1a;
+}
 .note-badge--orchard {
   background: #e1f5ee;
   color: #0f6e56;
@@ -45,6 +49,10 @@
   color: #534ab7;
 }
 
+.dark .note-badge--ironwood {
+  background: color-mix(in srgb, #c45c2a 28%, transparent);
+  color: #f0a57a;
+}
 .dark .note-badge--orchard {
   background: color-mix(in srgb, #1d9e75 22%, transparent);
   color: #6fd9b6;
@@ -219,6 +227,9 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+.pool-dot--ironwood {
+  background: #c45c2a;
 }
 .pool-dot--orchard {
   background: #1d9e75;

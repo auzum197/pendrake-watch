@@ -6,14 +6,15 @@
 
 use std::fs::File;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::Arc;
 
 use anyhow::Result;
 
 use crate::ipc;
-use crate::wallet_service::WalletService;
 use crate::notify::Notifier;
 use crate::paths::Paths;
+use crate::wallet_service::WalletService;
 
 #[derive(Default)]
 pub struct Config {
@@ -38,6 +39,16 @@ pub struct ServiceHandle {
     // Held for the service's lifetime so a second instance can't serve the same
     // wallet. Released when the handle drops.
     _lock: File,
+    /// Completes when the service receives a `shutdown` IPC request.
+    shutdown_rx: mpsc::Receiver<()>,
+}
+
+impl ServiceHandle {
+    /// Block until `shutdown` is requested over IPC. Dropping the handle then
+    /// tears down the runtime, socket, and lock.
+    pub fn wait_for_shutdown(self) {
+        let _ = self.shutdown_rx.recv();
+    }
 }
 
 impl Drop for ServiceHandle {
@@ -75,7 +86,11 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
         .build()
         .map_err(anyhow::Error::from)?;
 
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+
     let service = runtime.block_on(WalletService::load(paths.clone(), notifier))?;
+    service.arm_shutdown(shutdown_tx);
+
     let serve_paths = paths.clone();
     runtime.spawn(async move {
         // A service nobody can reach is worse than a dead one: it holds the
@@ -96,6 +111,7 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
         runtime: Some(runtime),
         socket: paths.socket,
         _lock: lock,
+        shutdown_rx,
     })
 }
 
@@ -114,8 +130,8 @@ mod tests {
     #[test]
     fn second_instance_is_rejected_as_already_running() {
         let dir = tempfile::tempdir().unwrap();
-        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the first instance starts");
+        let first =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the first instance starts");
         match run(config_at(dir.path()), Arc::new(NullNotifier)) {
             Err(StartError::AlreadyRunning) => {}
             Err(_) => panic!("a second instance was refused, but not as AlreadyRunning"),
@@ -127,8 +143,8 @@ mod tests {
     #[test]
     fn dropping_the_handle_frees_the_data_dir_for_a_new_instance() {
         let dir = tempfile::tempdir().unwrap();
-        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the first instance starts");
+        let first =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the first instance starts");
         drop(first);
         run(config_at(dir.path()), Arc::new(NullNotifier))
             .expect("a fresh instance starts once the lock is released");
@@ -153,8 +169,8 @@ mod tests {
         use std::io::{BufRead, BufReader, Write};
 
         let dir = tempfile::tempdir().unwrap();
-        let handle = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the instance starts");
+        let handle =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the instance starts");
         let socket = dir.path().join("daemon.sock");
 
         // A client that sends half a request and vanishes mid-line.

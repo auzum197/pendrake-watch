@@ -1,0 +1,5 @@
+# Where `cargo test -p pendrake-ipc --features bindings` writes the GUI's wire
+# types. Relative to this directory's parent (the crates/ workspace root).
+[env]
+TS_RS_EXPORT_DIR = { value = "../src/lib/generated", relative = true }
+TS_RS_LARGE_INT = "number"

@@ -5,7 +5,7 @@ A watch-only Zcash wallet that syncs in the background and posts a desktop notif
 ## Language
 
 **Wallet**:
-One imported UFVK and all the state derived from it: addresses, balance, transactions, and analytics. The user-facing unit, backed by its own zingolib wallet file. A user holds one Wallet in v0 and several once multi-key lands.
+One imported UFVK and all the state derived from it: addresses, balance, transactions, and analytics. The user-facing unit, backed by its own zingolib wallet file. A user holds one or more Wallets. Every Wallet syncs and notifies at all times, whether or not it is the Selected Wallet, and sync is never started by hand.
 _Avoid_: account, key, viewing key (as a name for the unit)
 
 **UFVK**:
@@ -24,8 +24,16 @@ The Zcash chain a Wallet is bound to, either mainnet or regtest. It is encoded i
 _Avoid_: chain, env
 
 **Initial scan**:
-The first full sync of a Wallet, from its UFVK's Birthday to the chain tip pinned at import, a fixed height rather than the moving tip. Transactions found during it are recorded silently. It ends with a single "scanned successfully" notification when that height is reached, after which the Wallet notifies on each newly detected transaction. A restart before that height resumes the Initial scan.
+The first full sync of a Wallet, from its UFVK's Birthday to the chain tip pinned at import, a fixed height rather than the moving tip. Transactions found during it are recorded silently. It ends with a single "scanned successfully" notification when that height is reached, after which the Wallet notifies on each newly detected transaction. A restart before that height resumes the Initial scan. It starts on its own the moment a Wallet is imported, and Tip-follow takes over when it ends.
 _Avoid_: backfill, catch-up, priming
+
+**Tip-follow**:
+The steady state after the Initial scan: a Wallet keeps pace with the chain tip round after round and notifies on each newly detected transaction. Every Wallet is in Tip-follow whenever the app runs, Selected or not, locked or not. It is never started by hand, and it recovers from an unreachable Indexer on its own, so the sync indicator shows state and offers no action.
+_Avoid_: background sync, auto-sync, polling, manual sync
+
+**Unavailable**:
+The state of a Wallet whose file could not be opened at startup. It stays in the switcher with its LifeHash, last known balance and a red mark, while every other Wallet syncs as normal. Selecting it explains the failure and offers Remove.
+_Avoid_: broken, corrupt, failed wallet
 
 **Received / Sent**:
 The direction of a transaction relative to the Wallet. The same two words are used everywhere, in the transaction list and in notification text ("Received 1.5 ZEC", "Sent 0.2 ZEC").
@@ -56,7 +64,7 @@ The optional text carried by a shielded Note. UTXOs carry none, and one transact
 _Avoid_: message, comment
 
 **Indexer**:
-The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one. Mainnet uses a default the user can change later; regtest requires the user to supply it during onboarding.
+The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one, chosen during onboarding and changeable later from Settings. Mainnet offers a curated region list, opening on an auto-routed default, with a custom URL alongside it; regtest has no public default, so the user must supply one. An unreachable Indexer is reported once per outage, however many Wallets use it.
 _Avoid_: server, endpoint, node
 
 **Anchor**:
@@ -68,23 +76,31 @@ The single secret set during onboarding. It encrypts every Wallet file at rest, 
 _Avoid_: password, PIN
 
 **Session lock**:
-The gate that holds the app on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether the Wallet is syncing: background sync and notifications keep running while locked, so a Sign Out or a closed window still catches new transactions. It arms at startup, on Sign Out, and when the app's window goes away, and is cleared only by entering the Passphrase.
+The gate that holds the app on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether Wallets are syncing: every Wallet keeps syncing and notifying while locked, so a Sign Out or a closed window still catches new transactions. It arms at startup, on Sign Out, and when the app's window goes away, and is cleared only by entering the Passphrase.
 _Avoid_: logout, timeout, screen lock
 
 **Sign Out**:
-Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while the Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
+Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while every Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
 _Avoid_: log out, lock
 
+**Switch Wallet**:
+Selecting another Wallet from the switcher. It changes the Selected Wallet without touching the Session lock and without starting or stopping any sync: every Wallet is already open under the one held Passphrase, so no unlock screen appears and nothing is loaded or dropped. One Passphrase unlocks the whole app, not each Wallet in turn. Distinct from Replace, which imports and wipes, and from Sign Out, which arms the lock.
+_Avoid_: change wallet, log in again, re-unlock
+
+**Selected Wallet**:
+The one Wallet the screen shows. Its balance, transactions, analytics, and Settings fill the window, and the sidebar card and notification deep links name it. Selection is only about what is on screen: every other Wallet keeps syncing and notifying behind it, and a Received notification from another Wallet carries that Wallet's label. Changed by Switch Wallet.
+_Avoid_: active wallet, current wallet, open wallet, focused wallet
+
 **Remove**:
-The wipe of a single Wallet and its state. Not a v0 user action: v0 exposes only Replace (swap the Wallet, in Settings) and Start over (wipe after a lost Passphrase, on the unlock screen), both named for what the user ends with rather than for the deletion, and both sharing this wipe underneath. Remove surfaces as its own action with multi-key, where a Wallet list takes one Wallet out and the others remain.
-_Avoid_: delete, forget
+The wipe of a single Wallet and its state, from Settings, behind a confirmation. The other Wallets remain and keep syncing. When the removed one was the Selected Wallet, the most recently used other Wallet becomes Selected. When none remain, the app returns to onboarding. Import is additive, so Remove and Add wallet are the two list operations, and there is no swap.
+_Avoid_: delete, forget, replace
 
 **Replace**:
-The v0 path to a different Wallet. Importing a new UFVK removes the current Wallet and creates one in its place, behind a confirmation, so a synced Wallet is never wiped by accident. It is a single destructive action, not a switch: v0 holds one Wallet, so there is nothing to switch between. Once multi-key lands a new import becomes additive and Replace stops being how import behaves.
+Retired. The v0 path to a different Wallet, when the app held only one: importing a new UFVK removed the current Wallet and created one in its place. With several Wallets a new import is additive, so Replace is now Remove followed by Add wallet.
 _Avoid_: switch, change, swap
 
 **Start over**:
-The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered. Distinct from Remove, which takes one Wallet out with the Passphrase known.
+The destructive path out of a forgotten Passphrase, offered on the unlock screen. It deletes every Wallet and returns to onboarding, because encrypted Wallets cannot be recovered and one Passphrase guards them all. Distinct from Remove, which takes one Wallet out with the Passphrase known.
 _Avoid_: reset, wipe
 
 **Span**:
@@ -104,5 +120,9 @@ How much a Fiat value can be trusted. High when several Price sources agreed on 
 _Avoid_: accuracy, quality, trust score
 
 **Discreet mode**:
-The toggle that obscures a Wallet's sensitive data from onlookers: amounts (ZEC and Fiat value), transaction dates, transaction block heights, txids and explorer links (a txid resolves to everything else on a block explorer), Memo text, and addresses. Direction, status, sync progress, the ATH standing, and the balance chart's curve remain visible. It applies everywhere the data appears, including desktop notifications, which drop amount and direction while it is on, and it persists across restarts. A shield against shoulder surfing and screen shares rather than a cryptographic protection, and unrelated to the Session lock.
+The toggle that obscures sensitive data from onlookers: amounts (ZEC and Fiat value), transaction dates, transaction block heights, txids and explorer links (a txid resolves to everything else on a block explorer), Memo text, and addresses. Direction, status, sync progress, the ATH standing, and the balance chart's curve remain visible. It applies everywhere the data appears, including desktop notifications, which drop amount and direction while it is on. It is app-wide, not per-wallet: the choice belongs to whoever is at the screen, so it holds across wallet switches and persists across restarts. A shield against shoulder surfing and screen shares rather than a cryptographic protection, and unrelated to the Session lock.
 _Avoid_: privacy mode, hidden balances, incognito
+
+**Peek**:
+A per-value feature while Discreet mode is on: holding a hidden value reveals just that value for as long as it is held, then it hides again on release. Discreet mode itself stays on. Every hidden value supports it except those in the wallet switcher. While a value is hidden, copying that value is disabled; the bulk CSV export is the one exception. Peek is a pointer gesture, with no keyboard path and no setting.
+_Avoid_: reveal mode, unhide, show temporarily, global peek

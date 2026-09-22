@@ -9,21 +9,12 @@ import {
 } from "./onboarding";
 
 describe("onboardingSteps", () => {
-	it("skips the Indexer step on mainnet", () => {
-		expect(onboardingSteps("mainnet")).toEqual(["identity", "passphrase"]);
-	});
-
-	it("keeps the Indexer step on regtest, between identity and passphrase", () => {
-		expect(onboardingSteps("regtest")).toEqual([
-			"identity",
-			"indexer",
-			"passphrase",
-		]);
+	it("puts the Indexer step between identity and passphrase", () => {
+		expect(onboardingSteps()).toEqual(["identity", "indexer", "passphrase"]);
 	});
 
 	it("drops the Passphrase step when the session passphrase is held", () => {
-		expect(onboardingSteps("mainnet", true)).toEqual(["identity"]);
-		expect(onboardingSteps("regtest", true)).toEqual(["identity", "indexer"]);
+		expect(onboardingSteps(true)).toEqual(["identity", "indexer"]);
 	});
 });
 
