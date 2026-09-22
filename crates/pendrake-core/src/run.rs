@@ -12,9 +12,9 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::ipc;
-use crate::wallet_service::WalletService;
 use crate::notify::Notifier;
 use crate::paths::Paths;
+use crate::wallet_service::WalletService;
 
 #[derive(Default)]
 pub struct Config {
@@ -130,8 +130,8 @@ mod tests {
     #[test]
     fn second_instance_is_rejected_as_already_running() {
         let dir = tempfile::tempdir().unwrap();
-        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the first instance starts");
+        let first =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the first instance starts");
         match run(config_at(dir.path()), Arc::new(NullNotifier)) {
             Err(StartError::AlreadyRunning) => {}
             Err(_) => panic!("a second instance was refused, but not as AlreadyRunning"),
@@ -143,8 +143,8 @@ mod tests {
     #[test]
     fn dropping_the_handle_frees_the_data_dir_for_a_new_instance() {
         let dir = tempfile::tempdir().unwrap();
-        let first = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the first instance starts");
+        let first =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the first instance starts");
         drop(first);
         run(config_at(dir.path()), Arc::new(NullNotifier))
             .expect("a fresh instance starts once the lock is released");
@@ -169,8 +169,8 @@ mod tests {
         use std::io::{BufRead, BufReader, Write};
 
         let dir = tempfile::tempdir().unwrap();
-        let handle = run(config_at(dir.path()), Arc::new(NullNotifier))
-            .expect("the instance starts");
+        let handle =
+            run(config_at(dir.path()), Arc::new(NullNotifier)).expect("the instance starts");
         let socket = dir.path().join("daemon.sock");
 
         // A client that sends half a request and vanishes mid-line.

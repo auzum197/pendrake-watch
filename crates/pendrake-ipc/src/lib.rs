@@ -804,7 +804,11 @@ pub struct BatchSummary {
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event"
+)]
 pub enum SyncEvent {
     /// A fresh snapshot: the overall bar/phase/counts/ETA plus the active batches.
     Progress {

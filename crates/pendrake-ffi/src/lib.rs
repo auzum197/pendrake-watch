@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use pendrake_core::{Config as CoreConfig, ServiceHandle as CoreHandle, Notifier};
+use pendrake_core::{Config as CoreConfig, Notifier, ServiceHandle as CoreHandle};
 
 uniffi::setup_scaffolding!();
 

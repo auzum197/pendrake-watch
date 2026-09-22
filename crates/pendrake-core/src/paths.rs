@@ -91,9 +91,8 @@ impl Paths {
     }
 
     pub fn ensure_dirs(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.wallets_dir).with_context(|| {
-            format!("creating wallets dir {}", self.wallets_dir.display())
-        })?;
+        std::fs::create_dir_all(&self.wallets_dir)
+            .with_context(|| format!("creating wallets dir {}", self.wallets_dir.display()))?;
         // Wallet files, the notified-txid sets and the IPC socket all live under
         // the root, so owner-only here keeps every one of them from other users.
         #[cfg(unix)]
@@ -103,9 +102,8 @@ impl Paths {
                 .with_context(|| format!("restricting data dir {}", self.root.display()))?;
         }
         if self.wallet_id.is_some() {
-            std::fs::create_dir_all(&self.wallet_dir).with_context(|| {
-                format!("creating wallet dir {}", self.wallet_dir.display())
-            })?;
+            std::fs::create_dir_all(&self.wallet_dir)
+                .with_context(|| format!("creating wallet dir {}", self.wallet_dir.display()))?;
         }
         Ok(())
     }

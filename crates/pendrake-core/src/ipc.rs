@@ -16,9 +16,9 @@ use tokio::io::{
 use tokio::sync::broadcast::error::RecvError;
 use zeroize::Zeroizing;
 
-use crate::wallet_service::WalletService;
 use crate::paths::Paths;
 use crate::transport::Listener;
+use crate::wallet_service::WalletService;
 
 /// The longest request line accepted. An import carries a UFVK of a few hundred
 /// bytes, so this is generous; it exists so a peer that never sends a newline

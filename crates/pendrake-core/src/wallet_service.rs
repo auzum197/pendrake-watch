@@ -3341,7 +3341,8 @@ mod tests {
         use zcash_client_backend::keys::UnifiedSpendingKey;
         let usk = UnifiedSpendingKey::from_seed(&ChainType::Mainnet, &[7u8; 32], AccountId::ZERO)
             .expect("derivable seed");
-        usk.to_unified_full_viewing_key().encode(&ChainType::Mainnet)
+        usk.to_unified_full_viewing_key()
+            .encode(&ChainType::Mainnet)
     }
 
     #[tokio::test]
@@ -3358,7 +3359,10 @@ mod tests {
 
         // The right passphrase gets past the gate and fails on the closed wallet
         // instead, so the refusal above was the passphrase check and not the engine.
-        let err = service.export_ufvk("w1", "correct horse").await.unwrap_err();
+        let err = service
+            .export_ufvk("w1", "correct horse")
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("not open"));
     }
 
@@ -3655,8 +3659,8 @@ mod tests {
         assert!(!service.session_locked());
     }
 
-    use zingolib_status::confirmation_status::ConfirmationStatus;
     use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
+    use zingolib_status::confirmation_status::ConfirmationStatus;
 
     fn txid(byte: u8) -> TxId {
         TxId::from_bytes([byte; 32])
