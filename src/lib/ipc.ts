@@ -153,6 +153,10 @@ export type WalletSummary = {
   lastBalance: string | null;
   sync?: SyncStatus;
   unavailable?: string;
+  // Per-Wallet settings surfaced in Settings > Wallets. A daemon predating them
+  // omits both; the UI reads absent as "alerts on" and an empty Indexer.
+  notificationsEnabled?: boolean;
+  indexerUri?: string;
 };
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.
@@ -198,10 +202,21 @@ export function setIndexer(indexerUri: string): Promise<WalletState> {
   return invoke("set_indexer", { indexerUri });
 }
 
-// Toggle transaction and scan-complete notifications. The daemon persists the
-// choice and returns the updated state.
-export function setNotifications(enabled: boolean): Promise<WalletState> {
-  return invoke("set_notifications", { enabled });
+// Toggle transaction and scan-complete notifications for one Wallet (the Selected
+// Wallet when `id` is omitted). The daemon persists the choice and returns the
+// Selected Wallet's state.
+export function setNotifications(
+  enabled: boolean,
+  id?: string,
+): Promise<WalletState> {
+  return invoke("set_notifications", { enabled, id });
+}
+
+// The UFVK a Wallet was imported from, released only against the session
+// passphrase. Rejects when the passphrase is wrong or no session is held. The
+// caller shows it briefly and never stores it.
+export function exportUfvk(id: string, passphrase: string): Promise<string> {
+  return invoke("export_ufvk", { id, passphrase });
 }
 
 // Re-authenticate against the held session passphrase without touching the wallet.

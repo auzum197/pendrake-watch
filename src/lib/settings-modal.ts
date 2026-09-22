@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from "react";
 
+// What the dialog opens onto: the Indexer row (deep link), or a Wallet's plate in
+// the Wallets category (switcher menus). Both clear when the dialog closes.
+type State = { open: boolean; focusIndexer: boolean; focusWallet: string | null };
 
-type State = { open: boolean; focusIndexer: boolean };
-
-let state: State = { open: false, focusIndexer: false };
+let state: State = { open: false, focusIndexer: false, focusWallet: null };
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -17,14 +18,18 @@ function subscribe(notify: () => void): () => void {
   };
 }
 
-export function openSettings(opts?: { indexer?: boolean }): void {
-  state = { open: true, focusIndexer: opts?.indexer ?? false };
+export function openSettings(opts?: { indexer?: boolean; wallet?: string }): void {
+  state = {
+    open: true,
+    focusIndexer: opts?.indexer ?? false,
+    focusWallet: opts?.wallet ?? null,
+  };
   emit();
 }
 
 export function closeSettings(): void {
   if (!state.open) return;
-  state = { open: false, focusIndexer: false };
+  state = { open: false, focusIndexer: false, focusWallet: null };
   emit();
 }
 

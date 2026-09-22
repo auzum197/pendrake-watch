@@ -1,4 +1,9 @@
-import { type ComponentType, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type ComponentType,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconArrowLeft,
@@ -6,8 +11,10 @@ import {
   IconPlant,
   IconTrees,
 } from "@tabler/icons-react";
+import { HeartwoodIcon } from "@/components/pools/heartwood-icon";
 import { RingsIcon } from "@/components/pools/rings-icon";
 import { Sparkline } from "@/components/pools/sparkline";
+import "@/components/pools/pool-tile.css";
 import { useNotesData } from "@/hooks/use-notes-data";
 import { useWalletData } from "@/hooks/use-wallet-data";
 import { formatNoteAmount, formatZec } from "@/lib/format";
@@ -36,29 +43,38 @@ const POOL_META: Record<
 > = {
   ironwood: {
     title: "Ironwood",
-    Icon: IconTrees,
-    tile: "bg-brand/15 text-brand",
+    Icon: HeartwoodIcon,
+    tile: "pool-tile",
     iconClass: "size-8",
   },
   orchard: {
     title: "Orchard",
     Icon: IconTrees,
-    tile: "bg-brand/15 text-brand",
+    tile: "pool-tile",
     iconClass: "size-8",
   },
   sapling: {
     title: "Sapling",
     Icon: IconPlant,
-    tile: "bg-brand/15 text-brand",
+    tile: "pool-tile",
     iconClass: "size-8",
   },
   transparent: {
     title: "Transparent",
     Icon: RingsIcon,
-    tile: "bg-[#4a2913]",
+    tile: "pool-tile pool-tile--transparent",
     iconClass: "size-8",
   },
 };
+
+// Each tile samples its own patch of the ceramic texture, offset by a stable
+// hash of the pool name, so the four tiles do not read as one stamp and the
+// patch does not change between renders.
+function texturePhase(pool: Pool): CSSProperties {
+  let h = 7;
+  for (const c of pool) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return { "--tile-phase": `${h % 100}% ${(h >>> 8) % 100}%` } as CSSProperties;
+}
 
 export function PoolsPage() {
   const navigate = useNavigate();
@@ -109,7 +125,8 @@ function PoolCard({ stat }: { stat: PoolStat }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-4">
             <span
-              className={`flex size-14 shrink-0 items-center justify-center rounded-lg ${meta.tile}`}
+              className={`size-14 ${meta.tile}`}
+              style={texturePhase(stat.pool)}
             >
               <meta.Icon className={meta.iconClass} />
             </span>

@@ -1,0 +1,69 @@
+/* The Pools page tile: an iOS-style squircle with a vertical gradient, a deeper
+   tone at the top into a lighter one at the bottom, a lit top edge, and a
+   ceramic surface. Shielded pools share one blue, Transparent is the single
+   warm exception. The glyph is white on both.
+
+   The squircle is the iOS icon Bézier as a clip-path, drawn for the 56px tile
+   (size-14) the page uses. A path renders the same in every engine, with no
+   dependency on corner-shape.
+
+   The lit edge is built from two squircles rather than an inset shadow, since a
+   shadow is a straight line that a clip-path cuts flat. The element is the
+   gradient with white over it, and a ::before face with the same path sits on
+   it shifted down 1px, so the light shows only along the top curve and thins
+   to nothing down the corners.
+
+   The surface is a ::after layer over the face: a grayscale photo of clay
+   plaster (Poly Haven "clay_plaster", CC0), blended with overlay so the tile
+   keeps its hue and only its light changes. Brightness and contrast pull the
+   photo toward mid-grey, where overlay is neutral. Each tile samples a
+   different patch through --tile-phase, set inline by the page, so the four
+   tiles do not read as one stamp. The glyph sits above both layers. */
+.pool-tile {
+  --tile-from: #2343d8;
+  --tile-to: #3272e8;
+  --tile-path: path("M0 28C0 5.264 5.264 0 28 0S56 5.264 56 28S50.736 56 28 56S0 50.736 0 28Z");
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border-radius: var(--radius);
+  clip-path: var(--tile-path);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
+    linear-gradient(180deg, var(--tile-from), var(--tile-to));
+}
+
+.pool-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: var(--tile-path);
+  background: linear-gradient(180deg, var(--tile-from), var(--tile-to));
+  transform: translateY(1px);
+}
+
+.pool-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url(../../assets/ceramic.jpg);
+  background-size: 160px;
+  background-repeat: repeat;
+  background-position: var(--tile-phase, 50% 50%);
+  filter: brightness(1.45) contrast(4.5);
+  opacity: 0.58;
+  mix-blend-mode: overlay;
+}
+
+.pool-tile > * {
+  position: relative;
+}
+
+.pool-tile--transparent {
+  --tile-from: #e65c0f;
+  --tile-to: #d8801c;
+}

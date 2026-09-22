@@ -42,8 +42,6 @@ tokio = { version = "1", features = [
 ] }
 serde.workspace = true
 serde_json.workspace = true
-# zingolib's address accessors return the json-rust crate's JsonValue.
-json = "0.12"
 http = "1"
 anyhow.workspace = true
 dirs = "5"
@@ -67,4 +65,4 @@ tonic = "0.14"
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
 
-zingo-status = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }
+zingolib-status = { git = "https://github.com/auzum197/zingolib", branch = "chore/add-ironwood" }

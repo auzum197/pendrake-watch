@@ -20,18 +20,19 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
-    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ImportType,
-    ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool, PoolBalance,
-    PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs,
-    SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncPhase, SyncState,
-    SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode,
-    WalletAddress, WalletNote, WalletState, WalletSummary,
+    Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, CommitBreakdown, ExportUfvkArgs,
+    ImportType, ImportUfvkArgs, Network, Note, NoteDirection, NoteStatus, ParseUfvkResult, Pool,
+    PoolBalance, PricePoint, PriceSpot, RemoveArgs, SelectWalletArgs, SetDiscreetArgs,
+    SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent,
+    SyncPhase, SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs,
+    VerifyPassphraseArgs, ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use pepper_sync::config::{PerformanceLevel, SyncConfig, TransparentAddressDiscovery};
 use pepper_sync::events::{ScanTiming, SequencedSyncEvent, SyncEvent as LibSyncEvent};
+use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_primitives::transaction::TxId;
 use zcash_protocol::consensus::BlockHeight;
 use zcash_protocol::value::Zatoshis;
@@ -820,6 +821,8 @@ impl WalletService {
                 last_balance: meta.last_balance.map(|b| b.to_string()),
                 sync,
                 unavailable: wallet.unavailable.read().await.clone(),
+                notifications_enabled: meta.notifications_enabled,
+                indexer_uri: meta.indexer_uri.clone(),
             });
         }
         Ok(out)
@@ -931,7 +934,16 @@ impl WalletService {
             }
             "setNotifications" => {
                 let args: SetNotificationsArgs = serde_json::from_value(params)?;
-                Ok(to_value(self.set_notifications(args.enabled).await?)?)
+                Ok(to_value(
+                    self.set_notifications(args.enabled, args.id.as_deref())
+                        .await?,
+                )?)
+            }
+            "exportUfvk" => {
+                let args: ExportUfvkArgs = serde_json::from_value(params)?;
+                Ok(to_value(
+                    self.export_ufvk(&args.id, &args.passphrase).await?,
+                )?)
             }
             "setFiatEnabled" => {
                 let args: SetFiatEnabledArgs = serde_json::from_value(params)?;
@@ -1150,19 +1162,16 @@ impl WalletService {
             *w.balance.write().await = Some(map_balance(&bal));
         }
 
-        let unified = client.unified_addresses_json().await;
-        let transparent = client.transparent_addresses_json().await;
-        let first_t = transparent[0]["encoded_address"]
-            .as_str()
-            .map(str::to_string);
-        let addrs = unified
-            .members()
+        let chain = client.chain_type();
+        let first_t = client.transparent_addresses().await.into_values().next();
+        let addrs = client
+            .unified_addresses()
+            .await
+            .values()
             .enumerate()
-            .filter_map(|(i, entry)| {
-                entry["encoded_address"].as_str().map(|ua| WalletAddress {
-                    ua: ua.to_string(),
-                    transparent: if i == 0 { first_t.clone() } else { None },
-                })
+            .map(|(i, ua)| WalletAddress {
+                ua: ua.encode(&chain),
+                transparent: if i == 0 { first_t.clone() } else { None },
             })
             .collect();
         *w.addresses.write().await = addrs;
@@ -1490,12 +1499,16 @@ impl WalletService {
         Ok(self.wallet_state().await)
     }
 
-    /// Toggle whether the Selected Wallet's transaction and scan-complete toasts
-    /// fire. The in-memory atomic gates the hot notify path; the meta flag persists
-    /// the choice. The "Indexer unreachable" alert is independent and keeps firing
-    /// either way.
-    async fn set_notifications(&self, enabled: bool) -> Result<WalletState> {
-        let w = self.selected_or_err().await?;
+    /// Toggle whether a Wallet's transaction and scan-complete toasts fire, the
+    /// Selected one when `id` is `None`. The in-memory atomic gates the hot notify
+    /// path; the meta flag persists the choice. The "Indexer unreachable" alert is
+    /// independent and keeps firing either way. The returned state is always the
+    /// Selected Wallet's, whichever Wallet was toggled.
+    async fn set_notifications(&self, enabled: bool, id: Option<&str>) -> Result<WalletState> {
+        let w = match id {
+            Some(id) => self.wallet(id).await?,
+            None => self.selected_or_err().await?,
+        };
         let mut meta = w.meta.write().await;
         meta.notifications_enabled = enabled;
         meta.save(&w.paths.meta_file)?;
@@ -1607,6 +1620,37 @@ impl WalletService {
             Some(held) => ct_eq(held.as_bytes(), passphrase.as_bytes()),
             None => false,
         }
+    }
+
+    /// The UFVK a Wallet was imported from, re-encoded off its open engine so it comes
+    /// back in the same form the user pasted (mainnet `uview1...`, or the regtest HRP).
+    /// Gated on the held session Passphrase, the check Remove makes, so a left-open
+    /// window cannot release key material. An Unavailable Wallet, or one still waiting
+    /// for the Passphrase, has no engine to read and says so.
+    async fn export_ufvk(&self, id: &str, passphrase: &str) -> Result<String> {
+        if !self.verify_passphrase(passphrase).await {
+            return Err(anyhow!("passphrase does not match"));
+        }
+        let w = self.wallet(id).await?;
+        // Clone the wallet handle out from under the client Mutex before awaiting the
+        // wallet lock: the sync loop takes the same Mutex every second (see
+        // `collect_notes`). The wait itself is unbounded, since export is a one-shot
+        // the user asked for and a stale answer is not an option.
+        let (wallet, chain) = {
+            let guard = w.client.lock().await;
+            let client = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("wallet {id} is not open"))?;
+            (Arc::clone(client.wallet()), client.chain_type())
+        };
+        let store = wallet.read().await;
+        let key_store = store
+            .unified_key_store
+            .get(&AccountId::ZERO)
+            .ok_or_else(|| anyhow!("wallet {id} has no account 0"))?;
+        let ufvk = UnifiedFullViewingKey::try_from(key_store)
+            .map_err(|e| anyhow!("wallet {id} holds no viewing key: {e}"))?;
+        Ok(ufvk.encode(&chain))
     }
 
     /// Arm the GUI session lock without disturbing the open Wallets. Sign Out calls
@@ -2158,6 +2202,8 @@ impl WalletService {
             LibSyncEvent::TipMoved { to } => {
                 view.chain_tip = view.chain_tip.max(u32::from(to));
             }
+            // Advisory scheduler snapshot. The round view tracks batches, not ranges.
+            LibSyncEvent::ScanPlanUpdated { .. } => {}
         }
     }
 
@@ -3248,6 +3294,59 @@ mod tests {
         assert!(!service.verify_passphrase("wrong").await);
     }
 
+    // A real mainnet UFVK, derived from fixed entropy so the encoding is one
+    // zingolib will load rather than a structurally-valid dummy.
+    fn sample_ufvk() -> String {
+        use zcash_client_backend::keys::UnifiedSpendingKey;
+        let usk = UnifiedSpendingKey::from_seed(&ChainType::Mainnet, &[7u8; 32], AccountId::ZERO)
+            .expect("derivable seed");
+        usk.to_unified_full_viewing_key().encode(&ChainType::Mainnet)
+    }
+
+    #[tokio::test]
+    async fn export_ufvk_refuses_a_wrong_or_unheld_passphrase() {
+        let (service, _) = service_with_spy("export-auth", Arc::new(SpyNotifier::new()), 100).await;
+
+        // Cold daemon: nothing is held, so no guess can release the key.
+        let err = service.export_ufvk("w1", "anything").await.unwrap_err();
+        assert!(err.to_string().contains("passphrase does not match"));
+
+        *service.session_passphrase.lock().await = Some("correct horse".into());
+        let err = service.export_ufvk("w1", "wrong").await.unwrap_err();
+        assert!(err.to_string().contains("passphrase does not match"));
+
+        // The right passphrase gets past the gate and fails on the closed wallet
+        // instead, so the refusal above was the passphrase check and not the engine.
+        let err = service.export_ufvk("w1", "correct horse").await.unwrap_err();
+        assert!(err.to_string().contains("not open"));
+    }
+
+    #[tokio::test]
+    async fn export_ufvk_returns_the_key_the_wallet_was_built_from() {
+        let (service, wallet) =
+            service_with_spy("export-roundtrip", Arc::new(SpyNotifier::new()), 100).await;
+        let ufvk = sample_ufvk();
+        let config = client_config(
+            ChainType::Mainnet,
+            "https://zec.rocks:443",
+            wallet.paths.wallet_dir.clone(),
+            WalletConfig::Ufvk {
+                ufvk: ufvk.clone(),
+                birthday: 419_200,
+                wallet_settings: wallet_settings(),
+            },
+        );
+        let client = LightClient::new(config, true, None).await.unwrap();
+        *wallet.client.lock().await = Some(client);
+        *service.session_passphrase.lock().await = Some("correct horse".into());
+
+        assert_eq!(
+            service.export_ufvk("w1", "correct horse").await.unwrap(),
+            ufvk
+        );
+        assert!(ufvk.starts_with("uview1"));
+    }
+
     fn cached_note() -> WalletNote {
         WalletNote {
             idx: 0,
@@ -3371,6 +3470,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_notifications_addresses_a_named_wallet_without_selecting_it() {
+        let (service, w1) = service_with_spy("notif-id", Arc::new(SpyNotifier::new()), 100).await;
+        let w2 = register(&service, "w2", meta_with_target(100)).await;
+
+        let state = service.set_notifications(false, Some("w2")).await.unwrap();
+        // The toggled Wallet is off; the Selected one is untouched and still the
+        // Wallet the returned state describes.
+        assert!(!w2.notifications_enabled.load(Ordering::SeqCst));
+        assert!(w1.notifications_enabled.load(Ordering::SeqCst));
+        assert_eq!(state.wallet_id.as_deref(), Some("w1"));
+        assert!(state.notifications_enabled);
+
+        // Omitting the id keeps the Selected-Wallet behaviour.
+        service.set_notifications(false, None).await.unwrap();
+        assert!(!w1.notifications_enabled.load(Ordering::SeqCst));
+
+        assert!(service.set_notifications(true, Some("nope")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn list_wallets_carries_each_wallets_own_settings() {
+        let (service, _) = service_with_spy("notif-list", Arc::new(SpyNotifier::new()), 100).await;
+        let mut other = meta_with_target(100);
+        other.indexer_uri = "https://eu.zec.rocks:443".into();
+        other.notifications_enabled = false;
+        register(&service, "w2", other).await;
+
+        let list = service.list_wallets().await.unwrap();
+        assert!(list[0].notifications_enabled);
+        assert_eq!(list[0].indexer_uri, "https://zec.rocks:443");
+        assert!(!list[1].notifications_enabled);
+        assert_eq!(list[1].indexer_uri, "https://eu.zec.rocks:443");
+    }
+
+    #[tokio::test]
     async fn a_wallet_whose_file_will_not_open_loads_as_unavailable() {
         // A plaintext meta with no wallet file behind it: the open fails, the entry
         // stays listed, and the daemon comes up regardless.
@@ -3444,6 +3578,7 @@ mod tests {
             "setIndexer",
             "removeWallet",
             "selectWallet",
+            "exportUfvk",
         ] {
             assert!(!allowed_while_locked(m), "{m} should be gated while locked");
         }
@@ -3516,7 +3651,7 @@ mod tests {
         assert!(!service.session_locked());
     }
 
-    use zingo_status::confirmation_status::ConfirmationStatus;
+    use zingolib_status::confirmation_status::ConfirmationStatus;
     use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
 
     fn txid(byte: u8) -> TxId {

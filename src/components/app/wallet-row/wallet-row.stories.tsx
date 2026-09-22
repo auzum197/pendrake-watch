@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { fn } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { SyncStatus, WalletSummary } from "@/lib/ipc";
+import { InlineName } from "../wallet-card/inline-name";
+import { WalletMenu } from "../wallet-menu/wallet-menu";
 import { WalletRow, type WalletRowState } from "./wallet-row";
 
 const FINGERPRINT = "a1b2c3d4e5f6a7b8";
@@ -46,6 +48,8 @@ type Knobs = {
   named: boolean;
   hasBalance: boolean;
   disabled: boolean;
+  menu: boolean;
+  renaming: boolean;
   onPick: (id: string) => void;
 };
 
@@ -64,12 +68,35 @@ function summaryFor({ state, selected, named, hasBalance }: Knobs): WalletSummar
   };
 }
 
+const menuAction = fn();
+
 function Row(knobs: Knobs) {
+  const wallet = summaryFor(knobs);
   return (
     <WalletRow
-      wallet={summaryFor(knobs)}
+      wallet={wallet}
       disabled={knobs.disabled}
       onPick={knobs.onPick}
+      name={
+        knobs.renaming ? (
+          <InlineName
+            value={wallet.label}
+            placeholder={FINGERPRINT.slice(0, 8)}
+            onCommit={menuAction}
+            onCancel={menuAction}
+          />
+        ) : undefined
+      }
+      avatarOverlay={
+        knobs.menu ? (
+          <WalletMenu
+            wallet={wallet}
+            onRename={menuAction}
+            onRemove={menuAction}
+            onClose={menuAction}
+          />
+        ) : undefined
+      }
     />
   );
 }
@@ -98,6 +125,8 @@ const meta = {
     named: true,
     hasBalance: true,
     disabled: false,
+    menu: false,
+    renaming: false,
     onPick: fn(),
   },
 } satisfies Meta<typeof Row>;
@@ -114,6 +143,22 @@ export const WrongChain: Story = { args: { state: "wrongChain" } };
 export const Unavailable: Story = { args: { state: "unavailable" } };
 export const Closed: Story = { args: { state: "closed" } };
 export const Unnamed: Story = { args: { named: false } };
+
+// The ⋯ rides on the LifeHash and only shows while the row is hovered.
+export const WithMenu: Story = {
+  args: { menu: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Cold storage actions" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "Rename…" })).toBeVisible(),
+    );
+  },
+};
+
+export const Renaming: Story = { args: { menu: true, renaming: true } };
 export const NeverSynced: Story = {
   args: { state: "closed", hasBalance: false },
 };

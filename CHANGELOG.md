@@ -1,5 +1,18 @@
 # Pendrake Watch — Update log
 
+## 2026-09-03: wallets get a home in Settings
+
+Settings gains a Wallets category: a list of every Wallet on the left and a plate for the focused one on the right, with the LifeHash inside a sync ring, the name renamed in place, the fingerprint strip, balance, Birthday and Indexer, per-Wallet transaction alerts, Use and Remove.
+
+- The UFVK a Wallet was imported from can be shown again: the plate keeps it blurred behind a capsule, and the Passphrase sharpens it until Hide. New `exportUfvk` daemon method, refused while locked.
+- In the sidebar switcher, hovering a row or the head puts a ⋯ on the LifeHash, and right-click opens the same menu: Use, Rename, Wallet settings, Remove. Rename happens inline in the fold.
+- `listWallets` summaries carry `notificationsEnabled` and `indexerUri`; `setNotifications` takes an optional Wallet id.
+- The alert dialog now layers above the settings dialog, so Remove opened from Settings is visible.
+
+The prototype that settled this design lives on the `prototype/wallet-manager` branch.
+
+---
+
 ## 2026-09-02: the wallet switcher unfolds
 
 The sidebar card unfolds the other Wallets over the nav, most recently used first, and ⌘K opens the same list as a searchable palette.

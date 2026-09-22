@@ -5,12 +5,17 @@ import {
 	IconFlask,
 	IconSearch,
 	IconSettings,
+	IconWallet,
 	IconX,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button/button";
 import { Switch } from "@/components/ui/switch/switch";
 import { IndexerPicker } from "@/components/indexer/indexer-picker";
 import { RemoveDialog } from "@/components/settings/remove-dialog";
+import {
+	useWalletList,
+	WalletsPanel,
+} from "@/components/settings/wallets-panel";
 import type { WalletState } from "@/lib/ipc";
 import { CUSTOM_INDEXER, indexerReady, resolveIndexer } from "@/lib/indexer";
 import {
@@ -30,13 +35,18 @@ import { reduceMotion, setReduceMotion } from "@/lib/motion";
 import { FEATURES, setEnabled, useFeature } from "@/lib/features";
 import { closeSettings, useSettingsModal } from "@/lib/settings-modal";
 
-type Category = "general" | "experimental";
+type Category = "general" | "wallets" | "experimental";
 
 const CATEGORIES: { id: Category; label: string; icon: typeof IconSettings }[] =
 	[
 		{ id: "general", label: "General", icon: IconSettings },
+		{ id: "wallets", label: "Wallets", icon: IconWallet },
 		{ id: "experimental", label: "Experimental", icon: IconFlask },
 	];
+
+// What a search has to hit for the Wallets panel to show, beyond a Wallet's own
+// name and short fingerprint.
+const WALLET_TERMS = ["wallets", "viewing key", "rename", "remove"];
 
 const TEXT = {
 	notifications: {
@@ -107,10 +117,11 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 }
 
 export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
-	const { open, focusIndexer } = useSettingsModal();
+	const { open, focusIndexer, focusWallet } = useSettingsModal();
 	const [category, setCategory] = useState<Category>("general");
 	const [query, setQuery] = useState("");
 	const searchRef = useRef<HTMLInputElement>(null);
+	const { wallets, refresh } = useWalletList(open);
 
 	const q = query.trim().toLowerCase();
 	const searching = q.length > 0;
@@ -141,6 +152,12 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 				generalVisible.discreet ||
 				generalVisible.indexer));
 
+	const hasWallets =
+		WALLET_TERMS.some((term) => hit(term)) ||
+		wallets.some(
+			(w) => hit(w.label) || hit(w.fingerprint?.slice(0, 8) ?? ""),
+		);
+
 	const featureMatches = FEATURES.filter((f) => hit(f.label, f.description));
 	const reduceMotionMatches = hit(
 		TEXT.reduceMotion.title,
@@ -151,6 +168,10 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 	useEffect(() => {
 		if (open && focusIndexer) setCategory("general");
 	}, [open, focusIndexer]);
+
+	useEffect(() => {
+		if (open && focusWallet) setCategory("wallets");
+	}, [open, focusWallet]);
 
 	return (
 		<DialogPrimitive.Root
@@ -167,6 +188,12 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 				<DialogPrimitive.Content
 					aria-describedby={undefined}
 					onEscapeKeyDown={(e) => {
+						// Radix listens on the document in the capture phase, so an inline
+						// field (rename, viewing-key passphrase) claims Escape from here.
+						if (document.activeElement?.closest("[data-escape-local]")) {
+							e.preventDefault();
+							return;
+						}
 						if (query) {
 							e.preventDefault();
 							setQuery("");
@@ -226,7 +253,7 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 						<div className="absolute inset-0 overflow-y-auto px-8 pb-7 pt-16">
 							<div className="flex flex-col divide-y divide-border">
 								{searching ? (
-									hasGeneral || hasExperimental ? (
+									hasGeneral || hasWallets || hasExperimental ? (
 										<>
 											{hasGeneral && (
 												<section className="py-6 first:pt-0 last:pb-0">
@@ -241,6 +268,18 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 															visible={generalVisible}
 														/>
 													</div>
+												</section>
+											)}
+											{hasWallets && (
+												<section className="py-6 first:pt-0 last:pb-0">
+													<p className="pb-4 text-xs font-medium text-muted-foreground">
+														Wallets
+													</p>
+													<WalletsPanel
+														wallets={wallets}
+														focusWallet={focusWallet}
+														refresh={refresh}
+													/>
 												</section>
 											)}
 											{hasExperimental && (
@@ -270,6 +309,12 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
 									)
 								) : category === "general" ? (
 									<GeneralPanel wallet={wallet} focusIndexer={focusIndexer} />
+								) : category === "wallets" ? (
+									<WalletsPanel
+										wallets={wallets}
+										focusWallet={focusWallet}
+										refresh={refresh}
+									/>
 								) : (
 									<ExperimentalPanel />
 								)}

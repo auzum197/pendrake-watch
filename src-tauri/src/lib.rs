@@ -432,12 +432,24 @@ async fn set_indexer(indexer_uri: String) -> Result<Value, String> {
     .await
 }
 
-/// Toggle whether transaction and scan-complete notifications fire
+/// Toggle whether transaction and scan-complete notifications fire, for the named
+/// Wallet or the Selected one when `id` is absent.
 #[tauri::command]
-async fn set_notifications(enabled: bool) -> Result<Value, String> {
+async fn set_notifications(enabled: bool, id: Option<String>) -> Result<Value, String> {
+    let mut params = serde_json::json!({ "enabled": enabled });
+    if let Some(id) = id {
+        params["id"] = Value::String(id);
+    }
+    request("setNotifications", params).await
+}
+
+/// The UFVK a Wallet was imported from, released only against the session
+/// passphrase. Comes back as a bare JSON string the GUI shows once.
+#[tauri::command]
+async fn export_ufvk(id: String, passphrase: String) -> Result<Value, String> {
     request(
-        "setNotifications",
-        serde_json::json!({ "enabled": enabled }),
+        "exportUfvk",
+        serde_json::json!({ "id": id, "passphrase": passphrase }),
     )
     .await
 }
@@ -683,6 +695,7 @@ pub fn run() {
             lock,
             set_indexer,
             set_notifications,
+            export_ufvk,
             verify_passphrase,
             get_wallet_state,
             get_addresses,

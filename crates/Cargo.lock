@@ -1866,7 +1866,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core",
 ]
 
 [[package]]
@@ -2062,12 +2062,6 @@ dependencies = [
  "futures-util",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "json"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jubjub"
@@ -2550,7 +2544,6 @@ dependencies = [
  "dirs 5.0.1",
  "fs2",
  "http",
- "json",
  "pendrake-ipc",
  "pepper-sync",
  "reqwest",
@@ -2569,8 +2562,8 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zingo-netutils",
- "zingo-status",
  "zingolib",
+ "zingolib-status",
  "zip32",
 ]
 
@@ -2610,7 +2603,7 @@ dependencies = [
 [[package]]
 name = "pepper-sync"
 version = "0.6.0"
-source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#5be5421addc11d99befc0f8c1c99d31ff80c8e4f"
+source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#6d977f69d23a3e1397774afac475aa951b04895c"
 dependencies = [
  "bip32",
  "byteorder",
@@ -2618,7 +2611,6 @@ dependencies = [
  "futures",
  "hex",
  "incrementalmerkletree",
- "json",
  "jubjub",
  "lightwallet-protocol",
  "memuse",
@@ -2640,9 +2632,9 @@ dependencies = [
  "zcash_primitives",
  "zcash_protocol",
  "zcash_transparent",
- "zingo-memo",
  "zingo-netutils",
- "zingo-status",
+ "zingolib-memo",
+ "zingolib-status",
  "zip32",
 ]
 
@@ -4769,7 +4761,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4785,7 +4777,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893"
 dependencies = [
  "windows-collections",
- "windows-core 0.61.2",
+ "windows-core",
  "windows-future",
  "windows-link 0.1.3",
  "windows-numerics",
@@ -4797,7 +4789,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
 ]
 
 [[package]]
@@ -4809,21 +4801,8 @@ dependencies = [
  "windows-implement",
  "windows-interface",
  "windows-link 0.1.3",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.62.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
-dependencies = [
- "windows-implement",
- "windows-interface",
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
+ "windows-result",
+ "windows-strings",
 ]
 
 [[package]]
@@ -4832,7 +4811,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
  "windows-threading",
 ]
@@ -4877,7 +4856,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9150af68066c4c5c07ddc0ce30421554771e528bde427614c61038bc2c92c2b1"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
 ]
 
@@ -4891,30 +4870,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-result"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
-dependencies = [
- "windows-link 0.2.1",
-]
-
-[[package]]
 name = "windows-strings"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
  "windows-link 0.1.3",
-]
-
-[[package]]
-name = "windows-strings"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
-dependencies = [
- "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -5627,17 +5588,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zingo-memo"
-version = "0.1.1"
-source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#5be5421addc11d99befc0f8c1c99d31ff80c8e4f"
-dependencies = [
- "zcash_address",
- "zcash_encoding",
- "zcash_keys",
- "zcash_protocol",
-]
-
-[[package]]
 name = "zingo-netutils"
 version = "5.0.1"
 source = "git+https://github.com/auzum197/zingo-common?branch=dev#0cc4060b0ef3e649a1083e2ae37e0addbb194cba"
@@ -5648,29 +5598,6 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tonic",
-]
-
-[[package]]
-name = "zingo-price"
-version = "0.1.0"
-source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#5be5421addc11d99befc0f8c1c99d31ff80c8e4f"
-dependencies = [
- "byteorder",
- "reqwest",
- "rust_decimal",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "zcash_encoding",
-]
-
-[[package]]
-name = "zingo-status"
-version = "0.2.1"
-source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#5be5421addc11d99befc0f8c1c99d31ff80c8e4f"
-dependencies = [
- "byteorder",
- "zcash_protocol",
 ]
 
 [[package]]
@@ -5685,7 +5612,7 @@ dependencies = [
 [[package]]
 name = "zingolib"
 version = "5.0.0"
-source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#5be5421addc11d99befc0f8c1c99d31ff80c8e4f"
+source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#6d977f69d23a3e1397774afac475aa951b04895c"
 dependencies = [
  "append-only-vec",
  "argon2",
@@ -5701,7 +5628,6 @@ dependencies = [
  "hex",
  "http",
  "incrementalmerkletree",
- "json",
  "jubjub",
  "log",
  "nonempty",
@@ -5729,12 +5655,46 @@ dependencies = [
  "zcash_protocol",
  "zcash_transparent",
  "zeroize",
- "zingo-memo",
  "zingo-netutils",
- "zingo-price",
- "zingo-status",
  "zingo_common_components",
+ "zingolib-memo",
+ "zingolib-price",
+ "zingolib-status",
  "zip32",
+]
+
+[[package]]
+name = "zingolib-memo"
+version = "0.1.1"
+source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#6d977f69d23a3e1397774afac475aa951b04895c"
+dependencies = [
+ "zcash_address",
+ "zcash_encoding",
+ "zcash_keys",
+ "zcash_protocol",
+]
+
+[[package]]
+name = "zingolib-price"
+version = "0.1.0"
+source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#6d977f69d23a3e1397774afac475aa951b04895c"
+dependencies = [
+ "byteorder",
+ "reqwest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "zcash_encoding",
+]
+
+[[package]]
+name = "zingolib-status"
+version = "0.2.1"
+source = "git+https://github.com/auzum197/zingolib?branch=chore%2Fadd-ironwood#6d977f69d23a3e1397774afac475aa951b04895c"
+dependencies = [
+ "byteorder",
+ "zcash_protocol",
 ]
 
 [[package]]

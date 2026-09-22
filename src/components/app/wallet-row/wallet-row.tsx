@@ -3,11 +3,14 @@ import {
 	useRef,
 	useState,
 	type CSSProperties,
+	type HTMLAttributes,
 	type ReactNode,
+	type Ref,
 } from "react";
 import { IconAlertCircle, IconAlertTriangle } from "@tabler/icons-react";
 import type { Network, WalletSummary } from "@/lib/ipc";
 import "./wallet-row.css";
+import "../wallet-menu/wallet-menu.css";
 import { formatZecApprox, isActivelySyncing } from "@/lib/format";
 import { LifeHashAvatar } from "@/components/onboarding/lifehash-avatar";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
@@ -145,37 +148,44 @@ export function WalletRow({
 	disabled,
 	onPick,
 	onHover,
+	name,
+	avatarOverlay,
 	className,
 	style,
+	ref,
+	...rest
 }: {
 	wallet: WalletSummary;
 	disabled?: boolean;
 	onPick: (id: string) => void;
 	onHover?: () => void;
+	// Replaces the name text, for renaming in place.
+	name?: ReactNode;
+	// Rides on the LifeHash, revealed while the row is hovered or focused.
+	avatarOverlay?: ReactNode;
 	className?: string;
 	style?: CSSProperties;
-}) {
+	ref?: Ref<HTMLLIElement>;
+} & HTMLAttributes<HTMLLIElement>) {
 	const fp = wallet.fingerprint ? wallet.fingerprint.slice(0, 8) : null;
 	const named = fp ? wallet.label !== fp : wallet.label.length > 0;
-	return (
-		<li className={className} style={style} onPointerMove={onHover}>
-			<button
-				type="button"
-				role="option"
-				aria-selected={wallet.selected}
-				disabled={disabled}
-				onClick={() => onPick(wallet.id)}
-				className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5"
-			>
-				{wallet.fingerprint && (
+	const body = (
+		<>
+			{wallet.fingerprint && (
+				<span className="wallet-avatar shrink-0">
 					<LifeHashAvatar
 						fingerprint={wallet.fingerprint}
-						className="size-9 shrink-0 rounded-full"
+						className="size-9 rounded-full"
 						ringed={wallet.selected}
 					/>
-				)}
-				<div className="min-w-0 flex-1">
-					{named ? (
+					{avatarOverlay && (
+						<span className="wallet-avatar-overlay">{avatarOverlay}</span>
+					)}
+				</span>
+			)}
+			<div className="min-w-0 flex-1">
+				{name ??
+					(named ? (
 						<>
 							<p className="truncate text-xs font-medium text-white">
 								{wallet.label}
@@ -190,10 +200,54 @@ export function WalletRow({
 						<p className="truncate font-mono text-xs font-medium text-white">
 							{fp ?? wallet.label}
 						</p>
-					)}
+					))}
+			</div>
+			<StatusColumn wallet={wallet} />
+		</>
+	);
+	const shape =
+		"flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5";
+
+	return (
+		<li
+			ref={ref}
+			className={`wallet-row ${className ?? ""}`}
+			style={style}
+			onPointerMove={onHover}
+			{...rest}
+		>
+			{/* Neither the rename field nor the menu button can live inside a
+			    button, so a row carrying either is a div. */}
+			{name || avatarOverlay ? (
+				<div
+					role="option"
+					tabIndex={0}
+					aria-selected={wallet.selected}
+					aria-disabled={disabled || undefined}
+					onClick={() => onPick(wallet.id)}
+					onKeyDown={(e) => {
+						if (e.target !== e.currentTarget) return;
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							onPick(wallet.id);
+						}
+					}}
+					className={`${shape} cursor-pointer outline-none focus-visible:bg-white/5`}
+				>
+					{body}
 				</div>
-				<StatusColumn wallet={wallet} />
-			</button>
+			) : (
+				<button
+					type="button"
+					role="option"
+					aria-selected={wallet.selected}
+					disabled={disabled}
+					onClick={() => onPick(wallet.id)}
+					className={shape}
+				>
+					{body}
+				</button>
+			)}
 		</li>
 	);
 }

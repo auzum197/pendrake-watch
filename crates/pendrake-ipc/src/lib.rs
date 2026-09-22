@@ -20,6 +20,11 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
+/// `serde(default)` for flags that are on unless a payload says otherwise.
+fn enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Request {
     pub id: u64,
@@ -149,6 +154,14 @@ pub struct WalletSummary {
     /// Why the wallet file could not be opened, when it could not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unavailable: Option<String>,
+    /// Whether this Wallet's transaction and scan-complete toasts fire, mirroring its
+    /// `Meta`. Per-Wallet, so the switcher's Settings row reads it without selecting
+    /// the Wallet first. A payload predating it reads as on.
+    #[serde(default = "enabled")]
+    pub notifications_enabled: bool,
+    /// The Indexer this Wallet syncs against. Per-Wallet, like the notification flag.
+    #[serde(default)]
+    pub indexer_uri: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -249,8 +262,22 @@ pub struct SetIndexerArgs {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetNotificationsArgs {
     pub enabled: bool,
+    /// Which Wallet to toggle. Absent addresses the Selected Wallet, so Settings can
+    /// flip any Wallet without switching to it first.
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
+/// Release a Wallet's UFVK, gated on the session Passphrase. The GUI shows it once
+/// and never stores it, so there is no matching read method.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportUfvkArgs {
+    pub id: String,
+    pub passphrase: String,
 }
 
 #[derive(Debug, Deserialize)]
