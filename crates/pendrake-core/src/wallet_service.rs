@@ -24,9 +24,9 @@ use pendrake_ipc::{
     ExportUfvkArgs, GetTransactionArgs, ImportType, ImportUfvkArgs, Network, Note, NoteDirection,
     NoteStatus, ParseUfvkArgs, ParseUfvkResult, Pool, PoolBalance, PricePoint, PriceSpot,
     RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
-    SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncPhase, SyncState, SyncStatus, Tx,
-    TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode, WalletAddress,
-    WalletNote, WalletState, WalletSummary,
+    SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncFault, SyncPhase, SyncState,
+    SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode,
+    WalletAddress, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -40,6 +40,7 @@ use zcash_protocol::value::Zatoshis;
 
 use pepper_sync::keys::transparent::TransparentScope;
 use pepper_sync::wallet::{IronwoodNote, OrchardNote, SaplingNote};
+use zeroize::Zeroizing;
 use zingolib::config::{ChainType, ClientConfig, WalletConfig, DEFAULT_INDEXER_URI};
 use zingolib::data::PollReport;
 use zingolib::lightclient::LightClient;
@@ -51,7 +52,6 @@ use zingolib::wallet::summary::data::{
 };
 use zingolib::wallet::WalletSettings;
 use zingolib::ActivationHeights;
-use zeroize::Zeroizing;
 use zip32::AccountId;
 
 use crate::birthday::resolve_birthday;
@@ -422,19 +422,17 @@ impl RoundView {
         (rate > 0.0 && batch.outputs > 0).then(|| batch.outputs as f64 / rate)
     }
 
-    fn status(&self, state: SyncState) -> SyncStatus {
+    fn status(&self) -> SyncStatus {
         SyncStatus {
-            state,
+            state: SyncState::Syncing {
+                phase: self.phase(),
+                eta_seconds: self.eta_seconds(),
+            },
             synced_height: self.synced_height,
             chain_tip: self.chain_tip.max(self.synced_height),
             percent: self.percent(),
-            phase: self.phase(),
             scanned_outputs: Some(self.scanned_outputs),
             total_outputs: Some(self.total_outputs),
-            eta_seconds: self.eta_seconds(),
-            error: None,
-            unreachable: false,
-            wrong_chain: false,
             last_synced_at: None,
         }
     }
@@ -1444,13 +1442,7 @@ impl WalletService {
             meta.save(&w.paths.meta_file)?;
         }
 
-        w.set_sync(|s| {
-            s.state = SyncState::Syncing;
-            s.error = None;
-            s.unreachable = false;
-            s.wrong_chain = false;
-        })
-        .await;
+        w.set_sync(|s| s.state = SyncState::STARTING).await;
         // A switch starts a fresh episode, so a dead or wrong new Indexer notifies too.
         if let Some(host) = indexer_host(&indexer_uri) {
             self.unreachable_notified
@@ -1485,12 +1477,8 @@ impl WalletService {
             let _ = client.stop_sync();
         }
         w.set_sync(|s| {
-            s.state = SyncState::Syncing;
+            s.state = SyncState::STARTING;
             s.percent = 0;
-            s.eta_seconds = None;
-            s.error = None;
-            s.unreachable = false;
-            s.wrong_chain = false;
         })
         .await;
         w.restart.notify_one();
@@ -1857,11 +1845,18 @@ impl WalletService {
             unreachable,
             wrong_chain,
         } = err;
+        let fault = if unreachable {
+            Some(SyncFault::Unreachable)
+        } else if wrong_chain {
+            Some(SyncFault::WrongChain)
+        } else {
+            None
+        };
         w.set_sync(|s| {
-            s.state = SyncState::Error;
-            s.error = Some(message.clone());
-            s.unreachable = unreachable;
-            s.wrong_chain = wrong_chain;
+            s.state = SyncState::Error {
+                message: message.clone(),
+                fault,
+            }
         })
         .await;
         let _ = self.events.send(SyncEvent::Error {
@@ -1987,13 +1982,7 @@ impl WalletService {
     }
 
     async fn sync_round(&self, w: &LoadedWallet, generation: u64) -> Result<(), RoundError> {
-        w.set_sync(|s| {
-            s.state = SyncState::Syncing;
-            s.error = None;
-            s.unreachable = false;
-            s.wrong_chain = false;
-        })
-        .await;
+        w.set_sync(|s| s.state = SyncState::STARTING).await;
 
         // Refuse the round before the wallet is touched if the Indexer is on a
         // different chain (docs/adr/0010). Aborting here never takes the client
@@ -2394,17 +2383,11 @@ impl WalletService {
     async fn publish_progress(&self, w: &LoadedWallet, view: &RoundView) {
         let status = {
             let mut guard = w.sync.write().await;
-            let next = view.status(SyncState::Syncing);
-            guard.state = next.state;
-            guard.synced_height = next.synced_height;
-            guard.chain_tip = next.chain_tip;
-            guard.percent = next.percent;
-            guard.phase = next.phase;
-            guard.scanned_outputs = next.scanned_outputs;
-            guard.total_outputs = next.total_outputs;
-            guard.eta_seconds = next.eta_seconds;
-            guard.error = None;
-            guard.unreachable = false;
+            let last_synced_at = guard.last_synced_at;
+            *guard = SyncStatus {
+                last_synced_at,
+                ..view.status()
+            };
             guard.clone()
         };
         let _ = self.events.send(SyncEvent::Progress {
@@ -2422,10 +2405,6 @@ impl WalletService {
             guard.synced_height = synced_height;
             guard.chain_tip = guard.chain_tip.max(synced_height);
             guard.percent = 100;
-            guard.phase = None;
-            guard.eta_seconds = None;
-            guard.error = None;
-            guard.unreachable = false;
             guard.last_synced_at = Some(now_secs());
             guard.clone()
         };
@@ -3138,9 +3117,13 @@ mod tests {
         assert_eq!(calls[0].2, "pendrake://settings/indexer?wallet=w1");
 
         let sync = w.sync.read().await;
-        assert_eq!(sync.state, SyncState::Error);
-        assert!(sync.wrong_chain);
-        assert!(!sync.unreachable);
+        assert!(matches!(
+            sync.state,
+            SyncState::Error {
+                fault: Some(SyncFault::WrongChain),
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
@@ -3163,8 +3146,13 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "Can't reach your Indexer");
         let sync = w.sync.read().await;
-        assert!(sync.unreachable);
-        assert!(!sync.wrong_chain);
+        assert!(matches!(
+            sync.state,
+            SyncState::Error {
+                fault: Some(SyncFault::Unreachable),
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
@@ -3189,8 +3177,17 @@ mod tests {
         service.note_round_failure(&w3, refused()).await;
         assert_eq!(spy.calls().len(), 2);
         // Each Wallet's own status still records the failure.
-        assert!(w1.sync.read().await.unreachable);
-        assert!(w2.sync.read().await.unreachable);
+        let unreachable = |s: &SyncStatus| {
+            matches!(
+                s.state,
+                SyncState::Error {
+                    fault: Some(SyncFault::Unreachable),
+                    ..
+                }
+            )
+        };
+        assert!(unreachable(&*w1.sync.read().await));
+        assert!(unreachable(&*w2.sync.read().await));
 
         // A round getting through on the shared host ends the episode, so the next
         // failure there notifies again.

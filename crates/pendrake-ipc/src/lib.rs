@@ -273,7 +273,7 @@ pub struct WalletSummary {
     /// This Wallet's own sync status while it is open, `None` while it waits for the
     /// Passphrase or is Unavailable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "bindings", ts(optional))]
+    #[cfg_attr(feature = "bindings", ts(optional, as = "Option<SyncStatusWire>"))]
     pub sync: Option<SyncStatus>,
     /// Why the wallet file could not be opened, when it could not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -516,11 +516,16 @@ pub struct RemoveArgs {
     pub select: Option<String>,
 }
 
+/// The `state` tag on the wire, and what the GUI switches on. The daemon works
+/// with [`SyncState`], which carries each state's own data.
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
-#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
+#[cfg_attr(
+    feature = "bindings",
+    ts(export, export_to = "wire.ts", rename = "SyncState")
+)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum SyncState {
+pub enum SyncStateTag {
     Idle,
     Syncing,
     Error,
@@ -537,31 +542,102 @@ pub enum SyncPhase {
     Committing,
 }
 
-#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
-#[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// Why a round failed, when it is a cause the GUI acts on. `Unreachable` gates
+/// "Change server"; `WrongChain` is the docs/adr/0010 verdict. One or the other:
+/// a verdict exists only when the server answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncFault {
+    Unreachable,
+    WrongChain,
+}
+
+/// Where a Wallet's sync loop is. Each variant carries only what holds in that
+/// state: an idle status cannot carry an error, a phase cannot outlive its
+/// round, and a fault cannot exist without a message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncState {
+    Idle,
+    Syncing {
+        phase: Option<SyncPhase>,
+        eta_seconds: Option<u64>,
+    },
+    Error {
+        message: String,
+        fault: Option<SyncFault>,
+    },
+}
+
+impl SyncState {
+    /// A round that has begun but not yet reported: no phase, no estimate.
+    pub const STARTING: SyncState = SyncState::Syncing {
+        phase: None,
+        eta_seconds: None,
+    };
+}
+
+/// A Wallet's sync status: the state it is in, plus the figures that outlive a
+/// round (heights, percent, output counts, when it last completed). Percent is
+/// kept across the two-second tip-follow rounds so the ring never flickers. On
+/// the wire it flattens to [`SyncStatusWire`], the shape the GUI has always read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "SyncStatusWire", from = "SyncStatusWire")]
 pub struct SyncStatus {
     pub state: SyncState,
     pub synced_height: u32,
     pub chain_tip: u32,
     pub percent: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Shielded notes scanned in the sync window (progress numerator).
+    pub scanned_outputs: Option<u64>,
+    /// Total notes to scan in the window (progress denominator).
+    pub total_outputs: Option<u64>,
+    pub last_synced_at: Option<u64>,
+}
+
+impl Default for SyncStatus {
+    fn default() -> Self {
+        Self {
+            state: SyncState::Idle,
+            synced_height: 0,
+            chain_tip: 0,
+            percent: 0,
+            scanned_outputs: None,
+            total_outputs: None,
+            last_synced_at: None,
+        }
+    }
+}
+
+/// The flat wire form of [`SyncStatus`]: a `state` tag beside every field, with
+/// the fields of the other states absent. Exported to the GUI under the name
+/// `SyncStatus`, since it is the only form that crosses the socket.
+#[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
+#[cfg_attr(
+    feature = "bindings",
+    ts(export, export_to = "wire.ts", rename = "SyncStatus")
+)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusWire {
+    pub state: SyncStateTag,
+    pub synced_height: u32,
+    pub chain_tip: u32,
+    pub percent: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub phase: Option<SyncPhase>,
     /// Shielded notes scanned in the sync window (progress numerator).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub scanned_outputs: Option<u64>,
     /// Total notes to scan in the window (progress denominator).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub total_outputs: Option<u64>,
     /// Estimated seconds to completion from the observed scan rate.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub eta_seconds: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub error: Option<String>,
     /// Set only when the failure was a connectivity failure to the Indexer, so the
@@ -573,26 +649,66 @@ pub struct SyncStatus {
     /// exists only when the server answered.
     #[serde(default, skip_serializing_if = "is_false")]
     pub wrong_chain: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub last_synced_at: Option<u64>,
 }
 
-impl Default for SyncStatus {
-    fn default() -> Self {
+impl From<SyncStatus> for SyncStatusWire {
+    fn from(status: SyncStatus) -> Self {
+        let (state, phase, eta_seconds, error, fault) = match status.state {
+            SyncState::Idle => (SyncStateTag::Idle, None, None, None, None),
+            SyncState::Syncing { phase, eta_seconds } => {
+                (SyncStateTag::Syncing, phase, eta_seconds, None, None)
+            }
+            SyncState::Error { message, fault } => {
+                (SyncStateTag::Error, None, None, Some(message), fault)
+            }
+        };
         Self {
-            state: SyncState::Idle,
-            synced_height: 0,
-            chain_tip: 0,
-            percent: 0,
-            phase: None,
-            scanned_outputs: None,
-            total_outputs: None,
-            eta_seconds: None,
-            error: None,
-            unreachable: false,
-            wrong_chain: false,
-            last_synced_at: None,
+            state,
+            synced_height: status.synced_height,
+            chain_tip: status.chain_tip,
+            percent: status.percent,
+            phase,
+            scanned_outputs: status.scanned_outputs,
+            total_outputs: status.total_outputs,
+            eta_seconds,
+            error,
+            unreachable: fault == Some(SyncFault::Unreachable),
+            wrong_chain: fault == Some(SyncFault::WrongChain),
+            last_synced_at: status.last_synced_at,
+        }
+    }
+}
+
+impl From<SyncStatusWire> for SyncStatus {
+    fn from(wire: SyncStatusWire) -> Self {
+        let state = match wire.state {
+            SyncStateTag::Idle => SyncState::Idle,
+            SyncStateTag::Syncing => SyncState::Syncing {
+                phase: wire.phase,
+                eta_seconds: wire.eta_seconds,
+            },
+            SyncStateTag::Error => SyncState::Error {
+                message: wire.error.unwrap_or_default(),
+                fault: if wire.unreachable {
+                    Some(SyncFault::Unreachable)
+                } else if wire.wrong_chain {
+                    Some(SyncFault::WrongChain)
+                } else {
+                    None
+                },
+            },
+        };
+        Self {
+            state,
+            synced_height: wire.synced_height,
+            chain_tip: wire.chain_tip,
+            percent: wire.percent,
+            scanned_outputs: wire.scanned_outputs,
+            total_outputs: wire.total_outputs,
+            last_synced_at: wire.last_synced_at,
         }
     }
 }
@@ -693,6 +809,7 @@ pub enum SyncEvent {
     /// A fresh snapshot: the overall bar/phase/counts/ETA plus the active batches.
     Progress {
         wallet_id: String,
+        #[cfg_attr(feature = "bindings", ts(as = "SyncStatusWire"))]
         status: SyncStatus,
         batches: Vec<BatchProgress>,
     },
@@ -712,6 +829,7 @@ pub enum SyncEvent {
     /// The round reached the chain tip; `status` is the terminal idle snapshot.
     Finished {
         wallet_id: String,
+        #[cfg_attr(feature = "bindings", ts(as = "SyncStatusWire"))]
         status: SyncStatus,
     },
     /// The round failed; the GUI shows the message and waits for the next round.
@@ -990,6 +1108,55 @@ mod tests {
                 "{m} should be gated while locked"
             );
         }
+    }
+
+    // The flat shape the GUI reads, from each state. An idle status carries no
+    // error keys, an error carries no phase, and the fault maps to one flag.
+    #[test]
+    fn sync_status_flattens_and_round_trips() {
+        let idle = SyncStatus {
+            state: SyncState::Idle,
+            synced_height: 10,
+            chain_tip: 10,
+            percent: 100,
+            scanned_outputs: None,
+            total_outputs: None,
+            last_synced_at: Some(1),
+        };
+        let json = serde_json::to_string(&idle).unwrap();
+        assert_eq!(
+            json,
+            r#"{"state":"idle","syncedHeight":10,"chainTip":10,"percent":100,"lastSyncedAt":1}"#
+        );
+        assert_eq!(serde_json::from_str::<SyncStatus>(&json).unwrap(), idle);
+
+        let failed = SyncStatus {
+            state: SyncState::Error {
+                message: "refused".into(),
+                fault: Some(SyncFault::Unreachable),
+            },
+            ..SyncStatus::default()
+        };
+        let json = serde_json::to_string(&failed).unwrap();
+        assert_eq!(
+            json,
+            r#"{"state":"error","syncedHeight":0,"chainTip":0,"percent":0,"error":"refused","unreachable":true}"#
+        );
+        assert_eq!(serde_json::from_str::<SyncStatus>(&json).unwrap(), failed);
+
+        let scanning = SyncStatus {
+            state: SyncState::Syncing {
+                phase: Some(SyncPhase::Scanning),
+                eta_seconds: Some(7),
+            },
+            percent: 42,
+            ..SyncStatus::default()
+        };
+        let json = serde_json::to_string(&scanning).unwrap();
+        assert!(json.contains(r#""phase":"scanning""#));
+        assert!(json.contains(r#""etaSeconds":7"#));
+        assert!(!json.contains("error"));
+        assert_eq!(serde_json::from_str::<SyncStatus>(&json).unwrap(), scanning);
     }
 
     #[test]

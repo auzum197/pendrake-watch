@@ -142,8 +142,17 @@ wrongChain?: boolean, } | { "event": "priceUpdate", spot: PriceSpot, };
  */
 export type SyncPhase = "scanning" | "committing";
 
+/**
+ * The `state` tag on the wire, and what the GUI switches on. The daemon works
+ * with [`SyncState`], which carries each state's own data.
+ */
 export type SyncState = "idle" | "syncing" | "error";
 
+/**
+ * The flat wire form of [`SyncStatus`]: a `state` tag beside every field, with
+ * the fields of the other states absent. Exported to the GUI under the name
+ * `SyncStatus`, since it is the only form that crosses the socket.
+ */
 export type SyncStatus = { state: SyncState, syncedHeight: number, chainTip: number, percent: number, phase?: SyncPhase, 
 /**
  * Shielded notes scanned in the sync window (progress numerator).
