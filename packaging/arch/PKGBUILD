@@ -11,7 +11,7 @@
 # from the release. Run `updpkgsums` before an AUR submission.
 
 pkgname=pendrake-watch-bin
-pkgver=0.1.0
+pkgver=0.0.2
 pkgrel=1
 pkgdesc="Watch-only Zcash wallet that syncs in the background and posts desktop notifications"
 arch=('x86_64')

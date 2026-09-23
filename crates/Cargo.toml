@@ -3,7 +3,7 @@ resolver = "2"
 members = ["pendrake-ipc", "pendrake-core", "pendrake-daemon", "pendrake-ffi"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.2"
 edition = "2021"
 license = "MIT"
 

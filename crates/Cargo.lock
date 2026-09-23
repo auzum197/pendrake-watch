@@ -2538,7 +2538,7 @@ dependencies = [
 
 [[package]]
 name = "pendrake-core"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -2570,7 +2570,7 @@ dependencies = [
 
 [[package]]
 name = "pendrake-daemon"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "notify-rust",
@@ -2586,7 +2586,7 @@ dependencies = [
 
 [[package]]
 name = "pendrake-ffi"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "pendrake-core",
@@ -2596,7 +2596,7 @@ dependencies = [
 
 [[package]]
 name = "pendrake-ipc"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "serde",
  "serde_json",
