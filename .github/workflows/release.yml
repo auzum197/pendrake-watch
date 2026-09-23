@@ -169,13 +169,13 @@ jobs:
           dmg=$(find "src-tauri/target/${TARGET}/release/bundle" -name '*.dmg' -type f | head -n 1)
           test -n "$dmg"
           scripts/notarize-dmg.sh "$dmg"
-          mkdir -p dist
-          mv "$dmg" "dist/Pendrake-Watch-${VERSION}-${ARCH}.dmg"
+          mkdir -p installers
+          mv "$dmg" "installers/Pendrake-Watch-${VERSION}-${ARCH}.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
-          path: dist/*
+          path: installers/*
           if-no-files-found: error
 
   linux:
@@ -230,15 +230,15 @@ jobs:
       - name: Collect installers
         run: |
           bundle="src-tauri/target/${TARGET}/release/bundle"
-          mkdir -p dist
-          mv "$bundle"/deb/*.deb "dist/Pendrake-Watch-${VERSION}-amd64.deb"
-          mv "$bundle"/rpm/*.rpm "dist/Pendrake-Watch-${VERSION}-x86_64.rpm"
-          mv "$bundle"/appimage/*.AppImage "dist/Pendrake-Watch-${VERSION}-x86_64.AppImage"
+          mkdir -p installers
+          mv "$bundle"/deb/*.deb "installers/Pendrake-Watch-${VERSION}-amd64.deb"
+          mv "$bundle"/rpm/*.rpm "installers/Pendrake-Watch-${VERSION}-x86_64.rpm"
+          mv "$bundle"/appimage/*.AppImage "installers/Pendrake-Watch-${VERSION}-x86_64.AppImage"
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/*
+          path: installers/*
           if-no-files-found: error
 
   arch:
@@ -257,7 +257,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: linux
-          path: dist
+          path: installers
 
       # makepkg refuses to run as root, and it uses a source file that already
       # sits next to the PKGBUILD instead of downloading it, so the .deb built
@@ -266,7 +266,7 @@ jobs:
         working-directory: packaging/arch
         shell: bash
         run: |
-          cp "${GITHUB_WORKSPACE}/dist/Pendrake-Watch-${VERSION}-amd64.deb" .
+          cp "${GITHUB_WORKSPACE}/installers/Pendrake-Watch-${VERSION}-amd64.deb" .
           cp "${GITHUB_WORKSPACE}/LICENSE" "LICENSE-${VERSION}"
           sed -i "s/^pkgver=.*/pkgver=${VERSION//-/_}/" PKGBUILD
           useradd --create-home builder
@@ -327,14 +327,14 @@ jobs:
         shell: bash
         run: |
           bundle="src-tauri/target/${TARGET}/release/bundle"
-          mkdir -p dist
-          mv "$bundle"/msi/*.msi "dist/Pendrake-Watch-${VERSION}-x64.msi"
-          mv "$bundle"/nsis/*.exe "dist/Pendrake-Watch-${VERSION}-x64-setup.exe"
+          mkdir -p installers
+          mv "$bundle"/msi/*.msi "installers/Pendrake-Watch-${VERSION}-x64.msi"
+          mv "$bundle"/nsis/*.exe "installers/Pendrake-Watch-${VERSION}-x64-setup.exe"
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*
+          path: installers/*
           if-no-files-found: error
 
   release:
@@ -345,11 +345,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: installers
           merge-multiple: true
 
       - name: Write SHA256SUMS
-        working-directory: dist
+        working-directory: installers
         run: |
           sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
@@ -361,6 +361,6 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: dist/*
+          files: installers/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
