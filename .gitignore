@@ -34,3 +34,7 @@ platform/macos/PendrakeSync/Sources/PendrakeFFI/
 platform/macos/PendrakeSync/Sources/pendrake_ffiFFI/
 # Tauri sidecar staged from the daemon build
 src-tauri/binaries/
+
+# local credentials
+.env
+.env.*
