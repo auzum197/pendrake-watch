@@ -1,5 +1,17 @@
 # Pendrake Watch — Update log
 
+## 2026-09-23: signed installers from a tag
+
+Pushing a `vX.Y.Z` tag now builds every installer and publishes one GitHub release with all of them attached and a `SHA256SUMS` manifest. Before, each platform job created its own release and raced the others for the release object.
+
+- macOS ships two DMGs, Apple Silicon and Intel, signed with the Developer ID certificate under the hardened runtime and notarized. Tauri signs and notarizes the `.app` and signs the disk image, and `scripts/notarize-dmg.sh` gives the DMG its own ticket and staples it, so Gatekeeper opens it without a warning.
+- Linux ships `.deb`, `.rpm` and `.AppImage`, plus an Arch package built with `makepkg` from `packaging/arch/PKGBUILD`, which repackages the `.deb`.
+- Windows ships the `.msi` and the NSIS `.exe`, still unsigned.
+- A manual run of the workflow builds and uploads everything without publishing, so it can be tried from a branch. On a tag, the run stops early when the tag does not match the version in the files.
+- `just bump <version>` rewrites the version in all six places it is declared, refreshes both lockfiles, checks they agree, and commits. `just stage-daemon-target <triple>` builds and stages the daemon for a cross target, and the macOS matrix uses it.
+
+---
+
 ## 2026-09-22: a typed daemon protocol, generated GUI types, and a hardened socket
 
 The daemon's method names were strings matched in three places by hand. They are now one `Call` enum in `pendrake-ipc`, with the spawn and locked-session policies as exhaustive matches on it, so a new method is a compile error until both are decided. The Tauri host builds the same enum instead of JSON, and `pendraked call` validates a request before sending it.

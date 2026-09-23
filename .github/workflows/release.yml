@@ -1,18 +1,92 @@
 name: Release
 
+# A vX.Y.Z tag builds every installer, signs and notarizes the macOS ones, and
+# publishes one GitHub release with all of them and a SHA256SUMS manifest. A
+# manual run builds and uploads the same artifacts and only publishes when asked
+# to, so the workflow can be exercised from a branch before tagging.
+
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Create the GitHub release (the run must start from a v* tag)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build-macos:
-    name: Build macOS (x86_64 + ARM64)
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Every version field must agree with the others and, on a tag, with the
+      # tag itself. A mismatch stops the run before any build starts.
+      - name: Check the version fields against the tag
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            version=$(node scripts/version.mjs check "${REF_NAME#v}")
+          else
+            version=$(node scripts/version.mjs check)
+          fi
+          publish=false
+          if [ "$EVENT_NAME" = "push" ] || [ "$PUBLISH_INPUT" = "true" ]; then
+            publish=true
+          fi
+          if [ "$publish" = "true" ] && [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::publishing needs a v* tag ref, this run is on $REF_TYPE $REF_NAME"
+            exit 1
+          fi
+          prerelease=false
+          case "$version" in
+            *rc*|*beta*|*alpha*) prerelease=true ;;
+          esac
+          {
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: prepare
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,18 +99,24 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
+          key: ${{ matrix.target }}
           workspaces: |
             crates
             src-tauri
 
+      - uses: extractions/setup-just@v3
+
       - name: Install protoc
         run: brew install protobuf
 
+      # The Swift helper is not part of the Tauri bundle. It builds on one
+      # matrix leg so a release still catches breakage in it.
       - name: Build macOS helper
+        if: matrix.target == 'aarch64-apple-darwin'
         run: scripts/build-macos-helper.sh
         env:
           PENDRAKE_HELPER_PROFILE: release
@@ -44,47 +124,67 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build daemon
-        run: cargo build --locked --manifest-path crates/Cargo.toml -p pendrake-daemon --release
-
-      - name: Stage daemon sidecar
-        run: |
-          mkdir -p src-tauri/binaries
-          cp "crates/target/release/pendraked" "src-tauri/binaries/pendraked-$(rustc -vV | sed -n 's/host: //p')"
-
-      - name: Build
-        run: pnpm tauri build
-
-      - name: Find and rename DMG
-        run: |
-          # Find the DMG (could be in dmg or macos directory)
-          DMG=$(find src-tauri/target/release/bundle -name "*.dmg" -type f | head -1)
-
-          if [ -z "$DMG" ]; then
-            echo "Error: No DMG found"
-            exit 1
-          fi
-
-          # Extract version from git tag
-          VERSION="${{ github.ref }}"
-          VERSION="${VERSION##*/v}"
-
-          # Rename for release
-          mv "$DMG" "Pendrake-Watch-${VERSION}.dmg"
-          echo "DMG_PATH=Pendrake-Watch-${VERSION}.dmg" >> $GITHUB_ENV
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.DMG_PATH }}
-          draft: false
-          prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+      - name: Check the signing secrets are set
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::repository secret $name is not set"
+              missing=1
+            fi
+          done
+          exit "$missing"
 
-  build-linux:
-    name: Build Linux
+      - name: Build and stage the daemon sidecar
+        run: just stage-daemon-target "$TARGET" --locked
+
+      # Tauri imports the certificate into a temporary keychain, signs the app
+      # and the sidecar with the hardened runtime, notarizes and staples the
+      # .app, then builds and signs the DMG.
+      - name: Build, sign and notarize the app
+        run: pnpm tauri build --target "$TARGET"
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # The bundler does not notarize the disk image itself, so it gets its own
+      # ticket here and Gatekeeper is checked on the result.
+      - name: Notarize and staple the DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg=$(find "src-tauri/target/${TARGET}/release/bundle" -name '*.dmg' -type f | head -n 1)
+          test -n "$dmg"
+          scripts/notarize-dmg.sh "$dmg"
+          mkdir -p dist
+          mv "$dmg" "dist/Pendrake-Watch-${VERSION}-${ARCH}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86_64
+    needs: prepare
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET: x86_64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
 
@@ -102,6 +202,8 @@ jobs:
           workspaces: |
             crates
             src-tauri
+
+      - uses: extractions/setup-just@v3
 
       - name: Install Tauri system dependencies
         run: |
@@ -119,32 +221,72 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build daemon
-        run: cargo build --locked --manifest-path crates/Cargo.toml -p pendrake-daemon --release
-
-      - name: Stage daemon sidecar
-        run: |
-          mkdir -p src-tauri/binaries
-          cp "crates/target/release/pendraked" "src-tauri/binaries/pendraked-$(rustc -vV | sed -n 's/host: //p')"
+      - name: Build and stage the daemon sidecar
+        run: just stage-daemon-target "$TARGET" --locked
 
       - name: Build
-        run: pnpm tauri build
+        run: pnpm tauri build --target "$TARGET"
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Collect installers
+        run: |
+          bundle="src-tauri/target/${TARGET}/release/bundle"
+          mkdir -p dist
+          mv "$bundle"/deb/*.deb "dist/Pendrake-Watch-${VERSION}-amd64.deb"
+          mv "$bundle"/rpm/*.rpm "dist/Pendrake-Watch-${VERSION}-x86_64.rpm"
+          mv "$bundle"/appimage/*.AppImage "dist/Pendrake-Watch-${VERSION}-x86_64.AppImage"
+
+      - uses: actions/upload-artifact@v4
         with:
-          files: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/rpm/*.rpm
-            src-tauri/target/release/bundle/appimage/*.AppImage
-          draft: false
-          prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: linux
+          path: dist/*
+          if-no-files-found: error
 
-  build-windows:
-    name: Build Windows
+  arch:
+    name: Arch Linux x86_64
+    needs: [prepare, linux]
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Install build tools and the package's runtime dependencies
+        run: pacman -Syu --noconfirm --needed base-devel git webkit2gtk-4.1 gtk3 hicolor-icon-theme
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist
+
+      # makepkg refuses to run as root, and it uses a source file that already
+      # sits next to the PKGBUILD instead of downloading it, so the .deb built
+      # above is the one repackaged.
+      - name: Build the package
+        working-directory: packaging/arch
+        shell: bash
+        run: |
+          cp "${GITHUB_WORKSPACE}/dist/Pendrake-Watch-${VERSION}-amd64.deb" .
+          cp "${GITHUB_WORKSPACE}/LICENSE" "LICENSE-${VERSION}"
+          sed -i "s/^pkgver=.*/pkgver=${VERSION//-/_}/" PKGBUILD
+          useradd --create-home builder
+          chown -R builder .
+          runuser -u builder -- env HOME=/home/builder makepkg --noconfirm
+          ls -l ./*.pkg.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: packaging/arch/*.pkg.tar.zst
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    needs: prepare
     runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
 
@@ -163,29 +305,62 @@ jobs:
             crates
             src-tauri
 
+      - uses: extractions/setup-just@v3
+
       - name: Install protoc
         run: choco install protoc -y
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build daemon
-        run: cargo build --locked --manifest-path crates/Cargo.toml -p pendrake-daemon --release
-
-      - name: Stage daemon sidecar
-        run: |
-          mkdir -p src-tauri/binaries
-          cp "crates/target/release/pendraked.exe" "src-tauri/binaries/pendraked-$(rustc -vV | sed -n 's/host: //p').exe"
+      - name: Build and stage the daemon sidecar
         shell: bash
+        run: just stage-daemon-target "$TARGET" --locked
 
+      # Windows installers are not signed. SmartScreen warns on first launch
+      # until a code signing certificate is added here.
       - name: Build
-        run: pnpm tauri build
+        shell: bash
+        run: pnpm tauri build --target "$TARGET"
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Collect installers
+        shell: bash
+        run: |
+          bundle="src-tauri/target/${TARGET}/release/bundle"
+          mkdir -p dist
+          mv "$bundle"/msi/*.msi "dist/Pendrake-Watch-${VERSION}-x64.msi"
+          mv "$bundle"/nsis/*.exe "dist/Pendrake-Watch-${VERSION}-x64-setup.exe"
+
+      - uses: actions/upload-artifact@v4
         with:
-          files: src-tauri/target/release/bundle/msi/*.msi
-          draft: false
-          prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish the GitHub release
+    needs: [prepare, macos, linux, arch, windows]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Pendrake Watch ${{ needs.prepare.outputs.version }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

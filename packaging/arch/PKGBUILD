@@ -1,0 +1,36 @@
+# Maintainer: Dario Paz <dorianvp@zingolabs.org>
+#
+# Repackages the .deb from the GitHub release instead of building from source.
+# The daemon links a patched zingolib pulled from git during the Rust build,
+# which an offline makepkg build() cannot fetch, and that build is long enough
+# that a second copy per release is not worth the CI time. The binaries are
+# the same ones every other Linux user runs.
+#
+# CI copies the .deb and the LICENSE next to this file before calling makepkg,
+# so makepkg finds them and skips the download. By hand, makepkg fetches them
+# from the release. Run `updpkgsums` before an AUR submission.
+
+pkgname=pendrake-watch-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Watch-only Zcash wallet that syncs in the background and posts desktop notifications"
+arch=('x86_64')
+url="https://github.com/auzum197/pendrake-watch"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'hicolor-icon-theme')
+provides=('pendrake-watch')
+conflicts=('pendrake-watch')
+options=('!strip')
+# Tags keep the semver hyphen that pkgver cannot carry (0.2.0-rc1 is 0.2.0_rc1 here).
+_version="${pkgver//_/-}"
+_deb="Pendrake-Watch-${_version}-amd64.deb"
+source=("${_deb}::${url}/releases/download/v${_version}/${_deb}"
+        "LICENSE-${_version}::https://raw.githubusercontent.com/auzum197/pendrake-watch/v${_version}/LICENSE")
+noextract=("${_deb}")
+sha256sums=('SKIP'
+            'SKIP')
+
+package() {
+    bsdtar -xOf "${srcdir}/${_deb}" 'data.tar.*' | bsdtar -xf - -C "${pkgdir}"
+    install -Dm644 "${srcdir}/LICENSE-${_version}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
