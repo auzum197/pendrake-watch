@@ -6,6 +6,7 @@ import {
   IconEyeOff,
   IconInfoCircle,
   IconPencil,
+  IconScan,
 } from "@tabler/icons-react";
 import {
   Popover,
@@ -38,6 +39,7 @@ import { indexerReady, resolveIndexer } from "@/lib/indexer";
 import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import { LifeHashAvatar } from "@/components/onboarding/lifehash-avatar";
 import { OnboardingCard } from "@/components/onboarding/onboarding-card";
+import { QrScanner, canScanQr } from "@/components/onboarding/qr-scanner";
 import { IndexerPicker } from "@/components/indexer/indexer-picker";
 import { Segmented } from "@/components/app/segmented/segmented";
 
@@ -310,6 +312,7 @@ function ImportStep({
   useEffect(() => {
     if (editing) field.current?.focus({ preventScroll: true });
   }, [editing]);
+  const [scanning, setScanning] = useState(false);
 
   const folded = valid !== null && !editing;
   const border =
@@ -332,34 +335,55 @@ function ImportStep({
       <StepHeading title={addMode ? "Add Wallet" : "Import Wallet"} />
 
       <div className="flex flex-col gap-2">
-        <span className="flex items-center gap-1.5">
-          <FieldLabel>Unified Full Viewing Key</FieldLabel>
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <span className="cursor-help text-white/40 transition-colors hover:text-white/70">
-                <IconInfoCircle className="size-4" />
-              </span>
-            </HoverCardTrigger>
-            <HoverCardContent className="w-80 border-ink-line bg-[#161618] text-white">
-              <p className="text-sm font-semibold tracking-wide">
-                Unified Full Viewing Key
-              </p>
-              <p className="mt-1.5 text-xs leading-relaxed text-white/55">
-                A UFVK allows you to watch your wallet's balance without holding
-                any spending authority over it.
-              </p>
-            </HoverCardContent>
-          </HoverCard>
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <FieldLabel>Unified Full Viewing Key</FieldLabel>
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <span className="cursor-help text-white/40 transition-colors hover:text-white/70">
+                  <IconInfoCircle className="size-4" />
+                </span>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80 border-ink-line bg-[#161618] text-white">
+                <p className="text-sm font-semibold tracking-wide">
+                  Unified Full Viewing Key
+                </p>
+                <p className="mt-1.5 text-xs leading-relaxed text-white/55">
+                  A UFVK allows you to watch your wallet's balance without
+                  holding any spending authority over it.
+                </p>
+              </HoverCardContent>
+            </HoverCard>
+          </span>
+          {/* A toggle: pressed while the viewfinder is up, and a second press
+              (or Escape) returns to the field or the folded key. */}
+          {canScanQr && (
+            <button
+              type="button"
+              aria-pressed={scanning}
+              onClick={() => setScanning((s) => !s)}
+              className={`-my-1 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                scanning
+                  ? "bg-brand/15 text-brand"
+                  : "text-white/50 hover:bg-white/5 hover:text-white/80"
+              }`}
+            >
+              <IconScan className="size-3.5" />
+              Scan QR code
+            </button>
+          )}
+        </div>
+        {/* The field, the folded key, and the viewfinder share one grid cell, so
+            moving between them cross-fades in place and nothing below shifts. */}
         <div className="grid h-64 grid-cols-[minmax(0,1fr)]">
           <div
             className="relative col-start-1 row-start-1 min-w-0"
-            inert={folded}
-            aria-hidden={folded}
+            inert={folded || scanning}
+            aria-hidden={folded || scanning}
           >
             <div
               className={`absolute inset-x-0 top-0 overflow-hidden rounded-xl border bg-ink-soft transition-colors motion-safe:transition-[height,opacity,border-color] motion-safe:duration-250 ease-out-soft ${border} ${
-                folded ? "pointer-events-none opacity-0" : ""
+                folded || scanning ? "pointer-events-none opacity-0" : ""
               }`}
               style={{ height: folded ? "3.5rem" : "16rem" }}
             >
@@ -386,10 +410,10 @@ function ImportStep({
           </div>
           <div
             className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-4 transition-opacity motion-safe:duration-250 ease-out-soft ${
-              folded ? "" : "pointer-events-none opacity-0"
+              folded && !scanning ? "" : "pointer-events-none opacity-0"
             }`}
-            inert={!folded}
-            aria-hidden={!folded}
+            inert={!folded || scanning}
+            aria-hidden={!folded || scanning}
           >
             {shown.current && (
               <>
@@ -432,6 +456,17 @@ function ImportStep({
               </>
             )}
           </div>
+          {canScanQr && (
+            <QrScanner
+              open={scanning}
+              onScan={(key) => {
+                set("ufvk", key);
+                setScanning(false);
+              }}
+              onClose={() => setScanning(false)}
+              className="col-start-1 row-start-1"
+            />
+          )}
         </div>
         <p
           className={`h-4 truncate text-xs leading-4 transition-opacity duration-200 ease-out-soft ${

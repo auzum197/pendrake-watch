@@ -8,6 +8,10 @@
     "core:webview:allow-create-webview-window",
     "core:window:allow-set-focus",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "x-apple.systempreferences:*" }]
+    },
     "deep-link:default"
   ]
 }

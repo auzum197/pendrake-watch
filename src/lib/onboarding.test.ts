@@ -6,6 +6,7 @@ import {
   networkFromUfvk,
   onboardingSteps,
   parseDateToUnix,
+  ufvkFromQr,
 } from "./onboarding";
 
 describe("onboardingSteps", () => {
@@ -112,5 +113,20 @@ describe("date field <-> calendar", () => {
 
   it("zero-pads day and month when formatting a selection", () => {
     expect(formatDateInput(new Date(2021, 2, 5))).toBe("05/03/2021");
+  });
+});
+
+describe("ufvkFromQr", () => {
+  it("takes a lowercase key as it is, trimmed", () => {
+    expect(ufvkFromQr("  uview1abc\n")).toBe("uview1abc");
+  });
+
+  it("folds an all-caps key from alphanumeric mode", () => {
+    expect(ufvkFromQr("UVIEWREGTEST1ABC")).toBe("uviewregtest1abc");
+  });
+
+  it("rejects a code that holds something else", () => {
+    expect(ufvkFromQr("https://example.com")).toBeNull();
+    expect(ufvkFromQr("u1abc")).toBeNull();
   });
 });

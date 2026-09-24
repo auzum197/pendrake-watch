@@ -13,6 +13,16 @@ export function networkFromUfvk(ufvk: string): Network {
     : "mainnet";
 }
 
+// The UFVK a scanned QR code carries, or null when the code holds something else.
+// A key encoded in QR alphanumeric mode reads back uppercase. Bech32m accepts that
+// as long as the case is uniform, so an all-caps key folds to the lowercase form.
+export function ufvkFromQr(text: string): string | null {
+  const trimmed = text.trim();
+  const key =
+    trimmed === trimmed.toUpperCase() ? trimmed.toLowerCase() : trimmed;
+  return key.startsWith("uview") ? key : null;
+}
+
 // The Indexer step follows the identity on both networks, differing only in what it
 // offers: mainnet picks from the curated list or a custom URL, regtest has no public
 // default and must supply one (CONTEXT.md "Indexer"). The Passphrase step is dropped
