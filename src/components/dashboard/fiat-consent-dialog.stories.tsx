@@ -23,9 +23,7 @@ export const Default: Story = {
         <FiatConsentDialog
           open={open}
           onOpenChange={setOpen}
-          onAccept={() =>
-            new Promise((resolve) => setTimeout(resolve, 800))
-          }
+          onAccept={() => new Promise((resolve) => setTimeout(resolve, 800))}
         />
       </>
     );

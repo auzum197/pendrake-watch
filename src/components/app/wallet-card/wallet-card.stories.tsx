@@ -1,5 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, mocked, screen, userEvent, waitFor, within } from "storybook/test";
+import {
+  expect,
+  mocked,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from "storybook/test";
 import { WalletCard } from "./wallet-card";
 import { withRouter } from "@/stories/with-router";
 import { listWallets, setWalletLabel } from "@/lib/ipc";
@@ -83,9 +90,15 @@ const meta = {
       <div className="flex h-[420px] w-64 flex-col bg-ink px-3 pt-4 text-white">
         <Story />
         <nav className="mt-5 flex flex-col gap-1">
-          <span className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-ink">Home</span>
-          <span className="px-3 py-2 text-sm font-medium text-white/55">Activity</span>
-          <span className="px-3 py-2 text-sm font-medium text-white/55">Notes</span>
+          <span className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-ink">
+            Home
+          </span>
+          <span className="px-3 py-2 text-sm font-medium text-white/55">
+            Activity
+          </span>
+          <span className="px-3 py-2 text-sm font-medium text-white/55">
+            Notes
+          </span>
         </nav>
       </div>
     ),
@@ -109,7 +122,9 @@ export const Collapsed: Story = {};
 export const Unfolded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Switch wallet" }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Switch wallet" }),
+    );
     await waitFor(() => expect(canvas.getByText("Spending")).toBeVisible());
   },
 };
@@ -127,7 +142,9 @@ async function unfold(canvasElement: HTMLElement) {
 export const RowMenu: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await unfold(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Spending actions" }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Spending actions" }),
+    );
     await waitFor(() =>
       expect(screen.getByRole("menuitem", { name: "Rename…" })).toBeVisible(),
     );
@@ -155,8 +172,12 @@ export const HeadMenu: Story = {
 export const RenamingRow: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await unfold(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Spending actions" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Spending actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Rename…" }),
+    );
     const field = await canvas.findByRole("textbox", { name: "Wallet name" });
     await expect(field).toHaveValue("Spending");
     await waitFor(() => expect(field).toHaveFocus());
@@ -167,8 +188,13 @@ export const RenamingRow: Story = {
 export const RenamingRowFromContextMenu: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await unfold(canvasElement);
-    await userEvent.pointer({ keys: "[MouseRight]", target: canvas.getByText("Spending") });
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    await userEvent.pointer({
+      keys: "[MouseRight]",
+      target: canvas.getByText("Spending"),
+    });
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Rename…" }),
+    );
     const field = await canvas.findByRole("textbox", { name: "Wallet name" });
     await expect(field).toHaveValue("Spending");
     await waitFor(() => expect(field).toHaveFocus());
@@ -183,7 +209,9 @@ export const RenamingHeadFromContextMenu: Story = {
       keys: "[MouseRight]",
       target: canvas.getByRole("button", { name: "Switch wallet" }),
     });
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Rename…" }),
+    );
     const field = await canvas.findByRole("textbox", { name: "Wallet name" });
     await expect(field).toHaveValue("Cold storage");
     await waitFor(() => expect(field).toHaveFocus());
@@ -193,8 +221,12 @@ export const RenamingHeadFromContextMenu: Story = {
 export const RenameCommits: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await unfold(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: "Spending actions" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Rename…" }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Spending actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Rename…" }),
+    );
     const field = await canvas.findByRole("textbox", { name: "Wallet name" });
     await userEvent.clear(field);
     await userEvent.type(field, "Everyday{Enter}");

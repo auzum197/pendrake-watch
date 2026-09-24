@@ -56,7 +56,9 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
   const rows = limit ? ordered.slice(0, limit) : ordered;
 
   if (rows.length === 0) {
-    return <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>;
+    return (
+      <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>
+    );
   }
 
   const open = (txid: string) =>
@@ -126,9 +128,7 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     );
   }
 
-  return (
-    <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />
-  );
+  return <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />;
 }
 
 function VirtualTxList({
@@ -285,7 +285,10 @@ function TxType({ tx, received }: { tx: Tx; received: boolean }) {
     <span className="flex items-center gap-1.5">
       {received ? "Received" : "Sent"}
       {txHasMemo(tx) && (
-        <IconMessage2 className="size-3.5 text-muted-foreground" aria-label="Has memo" />
+        <IconMessage2
+          className="size-3.5 text-muted-foreground"
+          aria-label="Has memo"
+        />
       )}
     </span>
   );
@@ -295,7 +298,9 @@ function TxAmount({ tx, received }: { tx: Tx; received: boolean }) {
   return (
     <>
       {received ? "+" : "−"}
-      <DiscreetValue kind="zec">{formatZec(BigInt(tx.valueZat))}</DiscreetValue>{" "}
+      <DiscreetValue kind="zec">
+        {formatZec(BigInt(tx.valueZat))}
+      </DiscreetValue>{" "}
       ZEC
     </>
   );

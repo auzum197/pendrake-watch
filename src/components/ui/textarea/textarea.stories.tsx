@@ -4,7 +4,13 @@ import { Textarea } from "./textarea";
 const meta = {
   component: Textarea,
   args: { placeholder: "Paste your UFVK" },
-  decorators: [(Story) => <div className="w-96"><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div className="w-96">
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof Textarea>;
 
 export default meta;

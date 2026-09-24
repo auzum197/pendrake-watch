@@ -4,7 +4,8 @@ import { LifeHashAvatar } from "./lifehash-avatar";
 
 function randomFingerprint(): string {
   let out = "";
-  for (let i = 0; i < 12; i++) out += Math.floor(Math.random() * 16).toString(16);
+  for (let i = 0; i < 12; i++)
+    out += Math.floor(Math.random() * 16).toString(16);
   return out;
 }
 
@@ -39,7 +40,9 @@ export const Playground: Story = {
           >
             Randomize
           </button>
-          <code className="font-mono text-xs text-white/45">{args.fingerprint}</code>
+          <code className="font-mono text-xs text-white/45">
+            {args.fingerprint}
+          </code>
         </div>
       </div>
     );

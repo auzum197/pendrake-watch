@@ -8,14 +8,15 @@ import { useSyncExternalStore } from "react";
 
 export type FeatureId = "notes";
 
-export const FEATURES: { id: FeatureId; label: string; description: string }[] = [
-  {
-    id: "notes",
-    label: "Notes",
-    description:
-      "Show the Notes view in the sidebar, a per-output inspector for what the wallet can see.",
-  },
-];
+export const FEATURES: { id: FeatureId; label: string; description: string }[] =
+  [
+    {
+      id: "notes",
+      label: "Notes",
+      description:
+        "Show the Notes view in the sidebar, a per-output inspector for what the wallet can see.",
+    },
+  ];
 
 const key = (id: FeatureId) => `pendrake.features.${id}`;
 
@@ -27,7 +28,8 @@ const listeners = new Set<() => void>();
 // Unset means off: an experimental feature is opt-in, so a fresh install shows none.
 export function isEnabled(id: FeatureId): boolean {
   return (
-    typeof localStorage !== "undefined" && localStorage.getItem(key(id)) === "on"
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem(key(id)) === "on"
   );
 }
 

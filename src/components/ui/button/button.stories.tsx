@@ -6,11 +6,27 @@ const meta = {
   argTypes: {
     variant: {
       control: "select",
-      options: ["default", "outline", "secondary", "ghost", "destructive", "link"],
+      options: [
+        "default",
+        "outline",
+        "secondary",
+        "ghost",
+        "destructive",
+        "link",
+      ],
     },
     size: {
       control: "select",
-      options: ["default", "xs", "sm", "lg", "icon", "icon-xs", "icon-sm", "icon-lg"],
+      options: [
+        "default",
+        "xs",
+        "sm",
+        "lg",
+        "icon",
+        "icon-xs",
+        "icon-sm",
+        "icon-lg",
+      ],
     },
   },
   args: { children: "Send" },
@@ -26,6 +42,8 @@ export const Ghost: Story = { args: { variant: "ghost" } };
 export const Destructive: Story = {
   args: { variant: "destructive", children: "Remove wallet" },
 };
-export const Link: Story = { args: { variant: "link", children: "Change Indexer" } };
+export const Link: Story = {
+  args: { variant: "link", children: "Change Indexer" },
+};
 export const Small: Story = { args: { size: "sm" } };
 export const Disabled: Story = { args: { disabled: true } };

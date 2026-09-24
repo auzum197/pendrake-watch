@@ -20,10 +20,7 @@ export const Preview: Story = {
 
 export const Full: Story = {
   render: (args) => (
-    <div
-      data-scroll-restoration-id="app-main"
-      className="h-96 overflow-y-auto"
-    >
+    <div data-scroll-restoration-id="app-main" className="h-96 overflow-y-auto">
       <TxList {...args} />
     </div>
   ),
@@ -52,9 +49,7 @@ function InteractiveDemo() {
         valueZat,
         netZat: kind === "received" ? valueZat : `-${valueZat}`,
         status,
-        notes: [
-          { pool: "orchard", direction: kind, outputIndex: 0, valueZat },
-        ],
+        notes: [{ pool: "orchard", direction: kind, outputIndex: 0, valueZat }],
       },
     ]);
   }
@@ -64,13 +59,25 @@ function InteractiveDemo() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <button type="button" className={button} onClick={() => add("received", "confirmed")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("received", "confirmed")}
+        >
           Receive
         </button>
-        <button type="button" className={button} onClick={() => add("sent", "confirmed")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("sent", "confirmed")}
+        >
           Send
         </button>
-        <button type="button" className={button} onClick={() => add("received", "pending")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("received", "pending")}
+        >
           Pending
         </button>
       </div>
