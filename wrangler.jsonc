@@ -1,5 +1,5 @@
 {
-  "name": "pendrake-watch-storybook",
+  "name": "pendrake-watch",
   "compatibility_date": "2024-11-01",
   // Serve the Storybook build as a static-assets-only Worker (no server script).
   "assets": {
