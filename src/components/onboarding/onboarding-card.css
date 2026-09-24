@@ -1,0 +1,67 @@
+.onboarding-fade-in {
+  animation: onboarding-fade 400ms ease-out both;
+}
+
+.onboarding-rise {
+  animation: onboarding-rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-card-arrive {
+  animation: onboarding-card-arrive 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-step {
+  transition:
+    opacity 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.onboarding-step[data-state="entering"],
+.onboarding-step[data-state="exiting"] {
+  opacity: 0;
+  filter: blur(2px);
+}
+
+@keyframes onboarding-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes onboarding-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes onboarding-card-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-rise,
+  .onboarding-card-arrive {
+    animation: onboarding-fade 150ms ease-out both;
+  }
+  .onboarding-step {
+    transition: opacity 150ms ease-out;
+  }
+  .onboarding-step[data-state="entering"],
+  .onboarding-step[data-state="exiting"] {
+    filter: none;
+  }
+}

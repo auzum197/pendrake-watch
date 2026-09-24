@@ -38,3 +38,7 @@ src-tauri/binaries/
 # local credentials
 .env
 .env.*
+
+# pnpm falls back to a project-local store when the checkout is on a
+# different volume from its global store (BB worktrees under ~/.bb)
+.pnpm-store/
