@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendar,
@@ -297,161 +297,88 @@ function ImportStep({
   addMode?: boolean;
   onCancel?: () => void;
 }) {
-  const ufvk = draft.ufvk.trim();
   const valid = identity?.kind === "valid" ? identity : null;
-  const shown = useRef(valid);
-  if (valid) shown.current = valid;
+  const [shown, setShown] = useState(valid);
+  if (valid && valid !== shown) setShown(valid);
 
-  const [editing, setEditing] = useState(valid === null);
-  const field = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    setEditing(valid === null);
-  }, [valid]);
-  useEffect(() => {
-    if (editing) field.current?.focus({ preventScroll: true });
-  }, [editing]);
-
-  const folded = valid !== null && !editing;
-  const border =
-    identity?.kind === "malformed"
-      ? "border-red-500/60"
-      : identity?.kind === "testnet"
-        ? "border-amber-500/60"
-        : "border-ink-line focus-within:border-brand";
-  const problem =
-    identity?.kind === "malformed"
-      ? "Not a valid UFVK. Check that you pasted the whole key."
-      : identity?.kind === "testnet"
-        ? "Testnet key. Pendrake supports mainnet and regtest only."
-        : null;
-  const settle =
-    "motion-safe:transition-[opacity,transform] motion-safe:duration-250 ease-out-soft";
+  const [reopened, setReopened] = useState(false);
+  const folded = valid !== null && !reopened;
 
   return (
     <>
       <StepHeading title={addMode ? "Add Wallet" : "Import Wallet"} />
 
-      <div className="flex flex-col gap-2">
-        <span className="flex items-center gap-1.5">
-          <FieldLabel>Unified Full Viewing Key</FieldLabel>
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <span className="cursor-help text-white/40 transition-colors hover:text-white/70">
-                <IconInfoCircle className="size-4" />
-              </span>
-            </HoverCardTrigger>
-            <HoverCardContent className="w-80 border-ink-line bg-[#161618] text-white">
-              <p className="text-sm font-semibold tracking-wide">
-                Unified Full Viewing Key
-              </p>
-              <p className="mt-1.5 text-xs leading-relaxed text-white/55">
-                A UFVK allows you to watch your wallet's balance without holding
-                any spending authority over it.
-              </p>
-            </HoverCardContent>
-          </HoverCard>
-        </span>
-        <div className="grid h-64 grid-cols-[minmax(0,1fr)]">
-          <div
-            className="relative col-start-1 row-start-1 min-w-0"
-            inert={folded}
-            aria-hidden={folded}
+      <KeyField
+        value={draft.ufvk}
+        onChange={(next) => {
+          setReopened(false);
+          set("ufvk", next);
+        }}
+        onBlur={() => setReopened(false)}
+        checking={checking}
+        verdict={identity?.kind ?? null}
+        folded={folded}
+        reopened={reopened}
+      >
+        {shown && (
+          <FoldedKey
+            ufvk={draft.ufvk.trim()}
+            identity={shown}
+            settled={folded}
+            onEdit={() => setReopened(true)}
           >
-            <div
-              className={`absolute inset-x-0 top-0 overflow-hidden rounded-xl border bg-ink-soft transition-colors motion-safe:transition-[height,opacity,border-color] motion-safe:duration-250 ease-out-soft ${border} ${
-                folded ? "pointer-events-none opacity-0" : ""
-              }`}
-              style={{ height: folded ? "3.5rem" : "16rem" }}
-            >
-              <textarea
-                ref={field}
-                autoFocus
-                className="absolute inset-x-0 top-0 h-64 w-full resize-none bg-transparent px-4 py-3 pr-12 font-mono text-sm text-white outline-none placeholder:text-white/35"
-                placeholder="your ufvk..."
-                spellCheck={false}
-                autoComplete="off"
-                value={draft.ufvk}
-                onChange={(e) => set("ufvk", e.currentTarget.value)}
-                onBlur={() => {
-                  if (valid) setEditing(false);
-                }}
-              />
-              {checking && (
-                <span
-                  aria-hidden
-                  className="absolute right-3 top-3 size-4 animate-spin rounded-full border-2 border-white/15 border-t-white/55 motion-reduce:hidden"
-                />
-              )}
-            </div>
-          </div>
-          <div
-            className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-4 transition-opacity motion-safe:duration-250 ease-out-soft ${
-              folded ? "" : "pointer-events-none opacity-0"
-            }`}
-            inert={!folded}
-            aria-hidden={!folded}
-          >
-            {shown.current && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="flex h-14 w-full items-center gap-3 rounded-xl border border-ink-line bg-ink-soft px-3 text-left transition-colors hover:border-white/25"
-                >
-                  <LifeHashAvatar
-                    fingerprint={shown.current.fingerprint}
-                    ringed
-                    className="size-9 shrink-0 rounded-full"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-xs text-white/70">
-                      {ufvk}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
-                      <span className="text-brand">
-                        {NETWORK_LABEL[shown.current.network]}
-                      </span>
-                      <span>{poolList(shown.current.pools)}</span>
-                    </span>
-                  </span>
-                  <IconPencil className="size-4 shrink-0 text-white/40" />
-                </button>
-                <div
-                  className={`${settle} ${
-                    folded
-                      ? "motion-safe:delay-100"
-                      : "opacity-0 motion-safe:translate-y-2"
-                  }`}
-                >
-                  <SyncFrom
-                    network={shown.current.network}
-                    draft={draft}
-                    set={set}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <p
-          className={`h-4 truncate text-xs leading-4 transition-opacity duration-200 ease-out-soft ${
-            identity?.kind === "malformed"
-              ? "text-red-300"
-              : identity?.kind === "testnet"
-                ? "text-amber-300"
-                : "opacity-0"
-          }`}
-        >
-          {problem ?? " "}
-        </p>
-      </div>
+            <SyncFrom network={shown.network} draft={draft} set={set} />
+          </FoldedKey>
+        )}
+      </KeyField>
 
-      {isFinal && error && (
+      <StepActions
+        error={isFinal ? error : null}
+        onCancel={onCancel}
+        disabled={valid === null || busy}
+        onNext={onNext}
+        label={primaryLabel({ isFinal, busy, addMode })}
+      />
+    </>
+  );
+}
+
+function primaryLabel({
+  isFinal,
+  busy,
+  addMode = false,
+}: {
+  isFinal: boolean;
+  busy: boolean;
+  addMode?: boolean;
+}) {
+  if (!isFinal) return "Continue";
+  if (busy) return "Importing wallet…";
+  return addMode ? "Add Wallet" : "Import Wallet";
+}
+
+function StepActions({
+  error,
+  onBack,
+  onCancel,
+  disabled,
+  onNext,
+  label,
+}: {
+  error: string | null;
+  onBack?: () => void;
+  onCancel?: () => void;
+  disabled: boolean;
+  onNext: () => void;
+  label: string;
+}) {
+  return (
+    <>
+      {error && (
         <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
           {error}
         </p>
       )}
-
       {onCancel && (
         <button
           type="button"
@@ -461,15 +388,190 @@ function ImportStep({
           Cancel
         </button>
       )}
-      <PrimaryButton disabled={valid === null || busy} onClick={onNext}>
-        {isFinal
-          ? busy
-            ? "Importing wallet…"
-            : addMode
-              ? "Add Wallet"
-              : "Import Wallet"
-          : "Continue"}
-      </PrimaryButton>
+      <div className="flex items-center gap-3">
+        {onBack && <BackButton onClick={onBack} />}
+        <PrimaryButton disabled={disabled} onClick={onNext}>
+          {label}
+        </PrimaryButton>
+      </div>
+    </>
+  );
+}
+
+const VERDICT_TEXT = {
+  malformed: "Not a valid UFVK. Check that you pasted the whole key.",
+  testnet: "Testnet key. Pendrake supports mainnet and regtest only.",
+};
+
+function KeyField({
+  value,
+  onChange,
+  onBlur,
+  checking,
+  verdict,
+  folded,
+  reopened,
+  children,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onBlur: () => void;
+  checking: boolean;
+  verdict: ParseUfvkResult["kind"] | null;
+  folded: boolean;
+  reopened: boolean;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (reopened) field.current?.focus({ preventScroll: true });
+  }, [reopened]);
+
+  const border =
+    verdict === "malformed"
+      ? "border-red-500/60"
+      : verdict === "testnet"
+        ? "border-amber-500/60"
+        : "border-ink-line focus-within:border-brand";
+  const problem =
+    verdict === "malformed" || verdict === "testnet"
+      ? VERDICT_TEXT[verdict]
+      : null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <KeyLabel htmlFor={id} />
+      <div className="grid h-64 grid-cols-[minmax(0,1fr)]">
+        <div
+          className="relative col-start-1 row-start-1 min-w-0"
+          inert={folded}
+          aria-hidden={folded}
+        >
+          <div
+            className={`absolute inset-x-0 top-0 overflow-hidden rounded-xl border bg-ink-soft transition-colors motion-safe:transition-[height,opacity,border-color] motion-safe:duration-250 ease-out-soft ${border} ${
+              folded ? "pointer-events-none opacity-0" : ""
+            }`}
+            style={{ height: folded ? "3.5rem" : "16rem" }}
+          >
+            <textarea
+              id={id}
+              ref={field}
+              autoFocus
+              className="absolute inset-x-0 top-0 h-64 w-full resize-none bg-transparent px-4 py-3 pr-12 font-mono text-sm text-white outline-none placeholder:text-white/35"
+              placeholder="your ufvk..."
+              spellCheck={false}
+              autoComplete="off"
+              value={value}
+              onChange={(e) => onChange(e.currentTarget.value)}
+              onBlur={onBlur}
+            />
+            {checking && (
+              <span
+                aria-hidden
+                className="absolute right-3 top-3 size-4 animate-spin rounded-full border-2 border-white/15 border-t-white/55 motion-reduce:hidden"
+              />
+            )}
+          </div>
+        </div>
+        <div
+          className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-4 transition-opacity motion-safe:duration-250 ease-out-soft ${
+            folded ? "" : "pointer-events-none opacity-0"
+          }`}
+          inert={!folded}
+          aria-hidden={!folded}
+        >
+          {children}
+        </div>
+      </div>
+      <p
+        className={`h-4 truncate text-xs leading-4 transition-opacity duration-200 ease-out-soft ${
+          verdict === "malformed"
+            ? "text-red-300"
+            : verdict === "testnet"
+              ? "text-amber-300"
+              : "opacity-0"
+        }`}
+      >
+        {problem ?? " "}
+      </p>
+    </div>
+  );
+}
+
+function KeyLabel({ htmlFor }: { htmlFor: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <label htmlFor={htmlFor} className="text-sm text-white/60">
+        Unified Full Viewing Key
+      </label>
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <span className="cursor-help text-white/40 transition-colors hover:text-white/70">
+            <IconInfoCircle className="size-4" />
+          </span>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-80 border-ink-line bg-[#161618] text-white">
+          <p className="text-sm font-semibold tracking-wide">
+            Unified Full Viewing Key
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-white/55">
+            A UFVK allows you to watch your wallet's balance without holding any
+            spending authority over it.
+          </p>
+        </HoverCardContent>
+      </HoverCard>
+    </span>
+  );
+}
+
+function FoldedKey({
+  ufvk,
+  identity,
+  settled,
+  onEdit,
+  children,
+}: {
+  ufvk: string;
+  identity: UfvkIdentity;
+  settled: boolean;
+  onEdit: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex h-14 w-full items-center gap-3 rounded-xl border border-ink-line bg-ink-soft px-3 text-left transition-colors hover:border-white/25"
+      >
+        <LifeHashAvatar
+          fingerprint={identity.fingerprint}
+          ringed
+          className="size-9 shrink-0 rounded-full"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-mono text-xs text-white/70">
+            {ufvk}
+          </span>
+          <span className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
+            <span className="text-brand">
+              {NETWORK_LABEL[identity.network]}
+            </span>
+            <span>{poolList(identity.pools)}</span>
+          </span>
+        </span>
+        <IconPencil className="size-4 shrink-0 text-white/40" />
+      </button>
+      <div
+        className={`motion-safe:transition-[opacity,transform] motion-safe:duration-250 ease-out-soft ${
+          settled
+            ? "motion-safe:delay-100"
+            : "opacity-0 motion-safe:translate-y-2"
+        }`}
+      >
+        {children}
+      </div>
     </>
   );
 }
@@ -631,22 +733,13 @@ function IndexerStep({
         />
       </div>
 
-      {isFinal && error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
-          {error}
-        </p>
-      )}
-
-      <div className="flex items-center gap-3">
-        <BackButton onClick={onBack} />
-        <PrimaryButton disabled={busy || !ready} onClick={onNext}>
-          {isFinal
-            ? busy
-              ? "Importing wallet…"
-              : "Import Wallet"
-            : "Continue"}
-        </PrimaryButton>
-      </div>
+      <StepActions
+        error={isFinal ? error : null}
+        onBack={onBack}
+        disabled={busy || !ready}
+        onNext={onNext}
+        label={primaryLabel({ isFinal, busy })}
+      />
     </>
   );
 }
@@ -692,18 +785,13 @@ function PasswordStep({
         />
       </label>
 
-      {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
-          {error}
-        </p>
-      )}
-
-      <div className="flex items-center gap-3">
-        <BackButton onClick={onBack} />
-        <PrimaryButton disabled={!matches || busy} onClick={onSubmit}>
-          {busy ? "Importing wallet…" : "Import Wallet"}
-        </PrimaryButton>
-      </div>
+      <StepActions
+        error={error}
+        onBack={onBack}
+        disabled={!matches || busy}
+        onNext={onSubmit}
+        label={primaryLabel({ isFinal: true, busy })}
+      />
     </>
   );
 }

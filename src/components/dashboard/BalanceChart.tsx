@@ -6,6 +6,7 @@ import {
   ReferenceLine,
   XAxis,
   YAxis,
+  type TooltipContentProps,
 } from "recharts";
 import {
   ChartContainer,
@@ -17,6 +18,7 @@ import { useMasked } from "@/lib/discreet";
 import { maskFor } from "@/components/ui/discreet-value/discreet-value";
 import { type BalancePoint, formatUsd } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
+import { downsampleSeries } from "./downsample";
 import "./balance-chart.css";
 
 export type Denom = "zec" | "usd";
@@ -56,21 +58,6 @@ function niceAxis(peak: number): { max: number; step: number } {
   const step =
     (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
   return { max: Math.ceil(peak / step) * step, step };
-}
-
-export function downsampleSeries(
-  points: BalancePoint[],
-  cap: number,
-): BalancePoint[] {
-  if (points.length <= cap) return points;
-  const last = points.length - 1;
-  let peak = 1;
-  for (let i = 2; i < last; i++)
-    if (points[i].value > points[peak].value) peak = i;
-  const keep = new Set([0, peak, last]);
-  const stride = Math.ceil((points.length - 2) / (cap - 3));
-  for (let i = 1; i < last; i += stride) keep.add(i);
-  return [...keep].sort((a, b) => a - b).map((i) => points[i]);
 }
 
 function fullDate(epoch: number): string {
@@ -145,23 +132,26 @@ function useTweenedData(target: Datum[], enabled: boolean): Datum[] {
   return shown;
 }
 
-function BalanceChartImpl({
-  points,
-  denom = "zec",
-}: {
-  points: BalancePoint[];
-  denom?: Denom;
-}) {
-  const usd = denom === "usd";
-  const masked = useMasked();
-  const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
-  const view = usd ? points : downsampleSeries(points, MAX_POINTS);
+function axisFormatter(usd: boolean, max: number) {
+  const decimals = max < 1 ? 4 : max < 100 ? 2 : 0;
+  return (v: number) => {
+    const n = v.toLocaleString(undefined, { maximumFractionDigits: decimals });
+    return usd ? `$${n}` : n;
+  };
+}
 
+function valueFormatter(usd: boolean) {
+  return (v: number) =>
+    usd
+      ? formatUsd(v)
+      : `${v.toLocaleString(undefined, { maximumFractionDigits: 8 })} ZEC`;
+}
+
+function toData(view: BalancePoint[]): Datum[] {
   const txTimes = view.filter((p) => p.key !== "start").map((p) => p.t);
-  const tMin = view[0]?.t ?? 0;
   const span =
     txTimes.length > 1 ? txTimes[txTimes.length - 1] - txTimes[0] : 0;
-  const target: Datum[] = view.map((p, i) => ({
+  return view.map((p, i) => ({
     key: p.key,
     x: span > 0 ? p.t : i,
     t: p.t,
@@ -173,16 +163,22 @@ function BalanceChartImpl({
     change: p.change,
     jump: p.jump,
   }));
+}
 
+function BalanceChartImpl({
+  points,
+  denom = "zec",
+}: {
+  points: BalancePoint[];
+  denom?: Denom;
+}) {
+  const usd = denom === "usd";
+  const masked = useMasked();
+  const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
+  const view = usd ? points : downsampleSeries(points, MAX_POINTS);
+  const target = toData(view);
   const tweened = useTweenedData(target, !usd);
-  const data = usd
-    ? target
-    : tweened.length === target.length
-      ? tweened
-      : target;
-
-  const denseDots = !usd && view.length > 80;
-  const hideDots = view.length > 200;
+  const data = usd || tweened.length !== target.length ? target : tweened;
 
   if (points.length === 0) return null;
 
@@ -190,17 +186,8 @@ function BalanceChartImpl({
     { length: Math.round(max / step) + 1 },
     (_, i) => i * step,
   );
-  const decimals = max < 1 ? 4 : max < 100 ? 2 : 0;
-  const fmtAxis = (v: number) =>
-    usd
-      ? `$${v.toLocaleString(undefined, { maximumFractionDigits: decimals })}`
-      : v.toLocaleString(undefined, { maximumFractionDigits: decimals });
-  const fmtValue = (v: number) =>
-    usd
-      ? formatUsd(v)
-      : `${v.toLocaleString(undefined, { maximumFractionDigits: 8 })} ZEC`;
+  const fmtAxis = axisFormatter(usd, max);
   const yWidth = usd ? (max >= 10_000 ? 76 : 60) : 48;
-
   const labelEvery = Math.ceil(view.length / MAX_LABELS);
   const labelByX = new Map(
     target
@@ -208,6 +195,12 @@ function BalanceChartImpl({
       .map((d) => [d.x, d.label]),
   );
   const xDomain: [number, number] = [target[0].x, target[target.length - 1].x];
+  const dots: DotStyle = {
+    usd,
+    max,
+    dense: !usd && view.length > 80,
+    hidden: view.length > 200,
+  };
 
   return (
     <ChartContainer config={config} className="aspect-900/240 w-full">
@@ -265,42 +258,7 @@ function BalanceChartImpl({
           <ChartTooltip
             isAnimationActive={false}
             cursor={{ stroke: "var(--color-brand)", strokeOpacity: 0.25 }}
-            content={
-              <ChartTooltipContent
-                hideIndicator
-                labelFormatter={(_, payload) => {
-                  const p = payload?.[0]?.payload as Datum | undefined;
-                  return (
-                    <span className="flex flex-col gap-0.5">
-                      <span>{fullDate(p?.t ?? tMin)}</span>
-                      {p?.height ? (
-                        <span className="text-muted-foreground">
-                          Block {p.height.toLocaleString()}
-                        </span>
-                      ) : null}
-                    </span>
-                  );
-                }}
-                formatter={(value, _name, item) => {
-                  const zec = (item?.payload as Datum | undefined)?.zec;
-                  return (
-                    <span className="flex flex-col gap-0.5">
-                      <span className="font-mono font-medium tabular-nums">
-                        {fmtValue(Number(value))}
-                      </span>
-                      {usd && typeof zec === "number" && (
-                        <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                          {zec.toLocaleString(undefined, {
-                            maximumFractionDigits: 8,
-                          })}{" "}
-                          ZEC
-                        </span>
-                      )}
-                    </span>
-                  );
-                }}
-              />
-            }
+            content={<BalanceTooltip usd={usd} fallbackTime={target[0].t} />}
           />
         )}
         <Area
@@ -315,35 +273,113 @@ function BalanceChartImpl({
             fill: "var(--color-brand)",
             stroke: "var(--card)",
           }}
-          dot={(props) => {
-            const { cx, cy, payload } = props;
-            if (payload.key === "start") return null;
-            const bigChange =
-              Boolean(payload.change) &&
-              (payload.jump ?? 0) >= DOT_MIN_FRACTION * max;
-            const drawDot = usd
-              ? bigChange || payload.last
-              : !hideDots || payload.last;
-            if (!drawDot) return null;
-            const tip = payload.last;
-            const r = tip ? 5 : denseDots ? 2.4 : 3;
-            return (
-              <g key={payload.key}>
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={r}
-                  fill="var(--color-brand)"
-                  fillOpacity={tip ? 1 : denseDots ? 0.9 : 0.55}
-                  stroke="var(--card)"
-                  strokeWidth={tip ? 2 : denseDots ? 1.25 : 1.5}
-                />
-              </g>
-            );
-          }}
+          dot={(props) => (
+            <BalanceDot
+              key={props.payload.key}
+              cx={props.cx}
+              cy={props.cy}
+              payload={props.payload}
+              style={dots}
+            />
+          )}
         />
       </AreaChart>
     </ChartContainer>
+  );
+}
+
+type DotStyle = { usd: boolean; max: number; dense: boolean; hidden: boolean };
+
+const DOT = {
+  tip: { r: 5, opacity: 1, stroke: 2 },
+  dense: { r: 2.4, opacity: 0.9, stroke: 1.25 },
+  plain: { r: 3, opacity: 0.55, stroke: 1.5 },
+};
+
+function BalanceDot({
+  cx,
+  cy,
+  payload,
+  style,
+}: {
+  cx?: number;
+  cy?: number;
+  payload: Datum;
+  style: DotStyle;
+}) {
+  if (payload.key === "start") return null;
+  const bigChange =
+    Boolean(payload.change) &&
+    (payload.jump ?? 0) >= DOT_MIN_FRACTION * style.max;
+  const drawDot = style.usd
+    ? bigChange || payload.last
+    : !style.hidden || payload.last;
+  if (!drawDot) return null;
+  const look = payload.last ? DOT.tip : style.dense ? DOT.dense : DOT.plain;
+  return (
+    <g>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={look.r}
+        fill="var(--color-brand)"
+        fillOpacity={look.opacity}
+        stroke="var(--card)"
+        strokeWidth={look.stroke}
+      />
+    </g>
+  );
+}
+
+function BalanceTooltip({
+  usd,
+  fallbackTime,
+  active,
+  payload,
+  label,
+}: {
+  usd: boolean;
+  fallbackTime: number;
+} & Partial<Pick<TooltipContentProps, "active" | "payload" | "label">>) {
+  const fmtValue = valueFormatter(usd);
+  return (
+    <ChartTooltipContent
+      active={active}
+      payload={payload}
+      label={label}
+      hideIndicator
+      labelFormatter={(_, payload) => {
+        const p = payload?.[0]?.payload as Datum | undefined;
+        return (
+          <span className="flex flex-col gap-0.5">
+            <span>{fullDate(p?.t ?? fallbackTime)}</span>
+            {p?.height ? (
+              <span className="text-muted-foreground">
+                Block {p.height.toLocaleString()}
+              </span>
+            ) : null}
+          </span>
+        );
+      }}
+      formatter={(value, _name, item) => {
+        const zec = (item?.payload as Datum | undefined)?.zec;
+        return (
+          <span className="flex flex-col gap-0.5">
+            <span className="font-mono font-medium tabular-nums">
+              {fmtValue(Number(value))}
+            </span>
+            {usd && typeof zec === "number" && (
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                {zec.toLocaleString(undefined, {
+                  maximumFractionDigits: 8,
+                })}{" "}
+                ZEC
+              </span>
+            )}
+          </span>
+        );
+      }}
+    />
   );
 }
 

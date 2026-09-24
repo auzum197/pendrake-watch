@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import "./inline-name.css";
 
-// An input that sits exactly where the name text was, so entering rename mode
-// never shifts the row. Enter commits, Escape cancels, blur commits.
 export function InlineName({
   value,
   placeholder,
@@ -12,7 +10,7 @@ export function InlineName({
 }: {
   value: string;
   placeholder: string;
-  className?: string;
+  className: string;
   onCommit: (next: string) => void;
   onCancel: () => void;
 }) {
@@ -32,7 +30,6 @@ export function InlineName({
     else onCancel();
   }
 
-  // Keys stop here so Escape cancels the rename without folding the card away.
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     e.stopPropagation();
     if (e.key === "Enter") {
@@ -47,6 +44,7 @@ export function InlineName({
   return (
     <input
       ref={ref}
+      data-escape-local
       value={draft}
       placeholder={placeholder}
       aria-label="Wallet name"
@@ -57,7 +55,7 @@ export function InlineName({
       onBlur={() => finish(true)}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
-      className={`wallet-rename ${className ?? ""}`}
+      className={className}
     />
   );
 }

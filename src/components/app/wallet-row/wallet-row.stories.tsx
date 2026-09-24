@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { SyncStatus, WalletSummary } from "@/lib/ipc";
-import { InlineName } from "../wallet-card/inline-name";
+import { InlineName } from "../inline-name/inline-name";
 import { WalletMenu } from "../wallet-menu/wallet-menu";
 import { WalletRow, type WalletRowState } from "./wallet-row";
 
@@ -93,6 +93,7 @@ function Row(knobs: Knobs) {
           <InlineName
             value={wallet.label}
             placeholder={FINGERPRINT.slice(0, 8)}
+            className="wallet-rename"
             onCommit={menuAction}
             onCancel={menuAction}
           />

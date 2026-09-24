@@ -1,13 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import {
-  IconCircleCheck,
-  IconFlask,
-  IconSearch,
-  IconSettings,
-  IconWallet,
-  IconX,
-} from "@tabler/icons-react";
+import { IconCircleCheck, IconX } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button/button";
 import { Switch } from "@/components/ui/switch/switch";
 import { IndexerPicker } from "@/components/indexer/indexer-picker";
@@ -16,7 +9,7 @@ import {
   useWalletList,
   WalletsPanel,
 } from "@/components/settings/wallets-panel";
-import type { WalletState } from "@/lib/ipc";
+import type { WalletState, WalletSummary } from "@/lib/ipc";
 import { CUSTOM_INDEXER, indexerReady, resolveIndexer } from "@/lib/indexer";
 import {
   MAINNET_INDEXERS,
@@ -34,15 +27,7 @@ import { toggleDiscreet, useDiscreet } from "@/lib/discreet";
 import { reduceMotion, setReduceMotion } from "@/lib/motion";
 import { FEATURES, setEnabled, useFeature } from "@/lib/features";
 import { closeSettings, useSettingsModal } from "@/lib/settings-modal";
-
-type Category = "general" | "wallets" | "experimental";
-
-const CATEGORIES: { id: Category; label: string; icon: typeof IconSettings }[] =
-  [
-    { id: "general", label: "General", icon: IconSettings },
-    { id: "wallets", label: "Wallets", icon: IconWallet },
-    { id: "experimental", label: "Experimental", icon: IconFlask },
-  ];
+import { SettingsNav, type Category } from "./settings-nav";
 
 // What a search has to hit for the Wallets panel to show, beyond a Wallet's own
 // name and short fingerprint.
@@ -116,15 +101,20 @@ function Highlighted({ text, query }: { text: string; query: string }) {
   return <>{parts}</>;
 }
 
-export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
-  const { open, focusIndexer, focusWallet } = useSettingsModal();
-  const [category, setCategory] = useState<Category>("general");
-  const [query, setQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
-  const { wallets, refresh } = useWalletList(open);
+type SearchMatches = {
+  generalVisible: Record<GeneralKey, boolean>;
+  hasGeneral: boolean;
+  hasWallets: boolean;
+  featureMatches: typeof FEATURES;
+  reduceMotionMatches: boolean;
+};
 
+function searchMatches(
+  query: string,
+  wallet: WalletState | null,
+  wallets: WalletSummary[],
+): SearchMatches {
   const q = query.trim().toLowerCase();
-  const searching = q.length > 0;
   const hit = (...texts: string[]) => texts.join(" ").toLowerCase().includes(q);
 
   const generalVisible: Record<GeneralKey, boolean> = {
@@ -151,17 +141,30 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
         generalVisible.fiat ||
         generalVisible.discreet ||
         generalVisible.indexer));
-
   const hasWallets =
     WALLET_TERMS.some((term) => hit(term)) ||
     wallets.some((w) => hit(w.label) || hit(w.fingerprint?.slice(0, 8) ?? ""));
-
   const featureMatches = FEATURES.filter((f) => hit(f.label, f.description));
   const reduceMotionMatches = hit(
     TEXT.reduceMotion.title,
     TEXT.reduceMotion.description,
   );
-  const hasExperimental = featureMatches.length > 0 || reduceMotionMatches;
+  return {
+    generalVisible,
+    hasGeneral,
+    hasWallets,
+    featureMatches,
+    reduceMotionMatches,
+  };
+}
+
+export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
+  const { open, focusIndexer, focusWallet } = useSettingsModal();
+  const [category, setCategory] = useState<Category>("general");
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const { wallets, refresh } = useWalletList(open);
+  const searching = query.trim().length > 0;
 
   useEffect(() => {
     if (open && focusIndexer) setCategory("general");
@@ -186,8 +189,6 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onEscapeKeyDown={(e) => {
-            // Radix listens on the document in the capture phase, so an inline
-            // field (rename, viewing-key passphrase) claims Escape from here.
             if (document.activeElement?.closest("[data-escape-local]")) {
               e.preventDefault();
               return;
@@ -209,112 +210,39 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
             Settings
           </DialogPrimitive.Title>
 
-          <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-border bg-ink p-3">
-            <div className="relative mb-3">
-              <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                ref={searchRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search"
-                className="h-9 w-full rounded-lg border border-border bg-white/5 pl-8 pr-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring"
-              />
-            </div>
-            <p className="px-3 pb-2 pt-2 font-heading text-sm font-semibold text-foreground">
-              Settings
-            </p>
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setCategory(cat.id);
-                }}
-                aria-current={
-                  category === cat.id && !searching ? "true" : undefined
-                }
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  category === cat.id && !searching
-                    ? "bg-brand font-semibold text-brand-foreground"
-                    : "cursor-pointer font-medium text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                }`}
-              >
-                <cat.icon className="size-4" />
-                {cat.label}
-              </button>
-            ))}
-          </nav>
+          <SettingsNav
+            ref={searchRef}
+            query={query}
+            category={category}
+            searching={searching}
+            onQueryChange={setQuery}
+            onSelect={(next) => {
+              setQuery("");
+              setCategory(next);
+            }}
+          />
 
           <div className="relative min-h-0 flex-1">
             <div className="absolute inset-0 overflow-y-auto px-8 pb-7 pt-16">
               <div className="flex flex-col divide-y divide-border">
                 {searching ? (
-                  hasGeneral || hasWallets || hasExperimental ? (
-                    <>
-                      {hasGeneral && (
-                        <section className="py-6 first:pt-0 last:pb-0">
-                          <p className="pb-4 text-xs font-medium text-muted-foreground">
-                            General
-                          </p>
-                          <div className="flex flex-col divide-y divide-border">
-                            <GeneralPanel
-                              wallet={wallet}
-                              focusIndexer={focusIndexer}
-                              query={query}
-                              visible={generalVisible}
-                            />
-                          </div>
-                        </section>
-                      )}
-                      {hasWallets && (
-                        <section className="py-6 first:pt-0 last:pb-0">
-                          <p className="pb-4 text-xs font-medium text-muted-foreground">
-                            Wallets
-                          </p>
-                          <WalletsPanel
-                            wallets={wallets}
-                            focusWallet={focusWallet}
-                            refresh={refresh}
-                          />
-                        </section>
-                      )}
-                      {hasExperimental && (
-                        <section className="py-6 first:pt-0 last:pb-0">
-                          <p className="pb-4 text-xs font-medium text-muted-foreground">
-                            Experimental
-                          </p>
-                          <div className="flex flex-col divide-y divide-border">
-                            {featureMatches.map((feature) => (
-                              <FeatureToggle
-                                key={feature.id}
-                                feature={feature}
-                                query={query}
-                              />
-                            ))}
-                            {reduceMotionMatches && (
-                              <ReduceMotionToggle query={query} />
-                            )}
-                          </div>
-                        </section>
-                      )}
-                    </>
-                  ) : (
-                    <p className="py-16 text-center text-sm text-muted-foreground">
-                      No settings match "{query.trim()}"
-                    </p>
-                  )
-                ) : category === "general" ? (
-                  <GeneralPanel wallet={wallet} focusIndexer={focusIndexer} />
-                ) : category === "wallets" ? (
-                  <WalletsPanel
+                  <SearchResults
+                    query={query}
+                    wallet={wallet}
                     wallets={wallets}
-                    focusWallet={focusWallet}
                     refresh={refresh}
+                    focusIndexer={focusIndexer}
+                    focusWallet={focusWallet}
                   />
                 ) : (
-                  <ExperimentalPanel />
+                  <CategoryPanel
+                    category={category}
+                    wallet={wallet}
+                    wallets={wallets}
+                    refresh={refresh}
+                    focusIndexer={focusIndexer}
+                    focusWallet={focusWallet}
+                  />
                 )}
               </div>
             </div>
@@ -330,6 +258,111 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+type PanelProps = {
+  wallet: WalletState | null;
+  wallets: WalletSummary[];
+  refresh: () => void;
+  focusIndexer: boolean;
+  focusWallet: string | null;
+};
+
+function CategoryPanel({
+  category,
+  wallet,
+  wallets,
+  refresh,
+  focusIndexer,
+  focusWallet,
+}: PanelProps & { category: Category }) {
+  if (category === "general") {
+    return <GeneralPanel wallet={wallet} focusIndexer={focusIndexer} />;
+  }
+  if (category === "wallets") {
+    return (
+      <WalletsPanel
+        wallets={wallets}
+        focusWallet={focusWallet}
+        refresh={refresh}
+      />
+    );
+  }
+  return <ExperimentalPanel />;
+}
+
+function SearchResults({
+  query,
+  wallet,
+  wallets,
+  refresh,
+  focusIndexer,
+  focusWallet,
+}: PanelProps & { query: string }) {
+  const matches = searchMatches(query, wallet, wallets);
+  const hasExperimental =
+    matches.featureMatches.length > 0 || matches.reduceMotionMatches;
+
+  if (!matches.hasGeneral && !matches.hasWallets && !hasExperimental) {
+    return (
+      <p className="py-16 text-center text-sm text-muted-foreground">
+        No settings match "{query.trim()}"
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {matches.hasGeneral && (
+        <SearchGroup title="General">
+          <div className="flex flex-col divide-y divide-border">
+            <GeneralPanel
+              wallet={wallet}
+              focusIndexer={focusIndexer}
+              query={query}
+              visible={matches.generalVisible}
+            />
+          </div>
+        </SearchGroup>
+      )}
+      {matches.hasWallets && (
+        <SearchGroup title="Wallets">
+          <WalletsPanel
+            wallets={wallets}
+            focusWallet={focusWallet}
+            refresh={refresh}
+          />
+        </SearchGroup>
+      )}
+      {hasExperimental && (
+        <SearchGroup title="Experimental">
+          <div className="flex flex-col divide-y divide-border">
+            {matches.featureMatches.map((feature) => (
+              <FeatureToggle key={feature.id} feature={feature} query={query} />
+            ))}
+            {matches.reduceMotionMatches && (
+              <ReduceMotionToggle query={query} />
+            )}
+          </div>
+        </SearchGroup>
+      )}
+    </>
+  );
+}
+
+function SearchGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="py-6 first:pt-0 last:pb-0">
+      <p className="pb-4 text-xs font-medium text-muted-foreground">{title}</p>
+      {children}
+    </section>
   );
 }
 
