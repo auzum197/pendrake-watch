@@ -1,5 +1,0 @@
-import{j as e}from"./iframe-CqJNir_t.js";/* empty css                  */import"./preload-helper-PPVm8Dsz.js";function o({className:s}){return e.jsxs("svg",{viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:"2",strokeLinecap:"round",strokeLinejoin:"round",className:s,"aria-hidden":!0,children:[e.jsx("circle",{cx:"12",cy:"12",r:"1.6",fill:"currentColor",stroke:"none"}),e.jsx("path",{d:"M10.65 6.98A5.2 5.2 0 1 1 6.98 10.65"}),e.jsx("circle",{cx:"12",cy:"12",r:"9"})]})}o.__docgenInfo={description:"",methods:[],displayName:"HeartwoodIcon",props:{className:{required:!1,tsType:{name:"string"},description:""}}};const c={component:o,args:{className:"size-8"}},r={render:s=>e.jsx("span",{className:"pool-tile size-14",children:e.jsx(o,{...s})})};r.parameters={...r.parameters,docs:{...r.parameters?.docs,source:{originalSource:`{
-  render: args => <span className="pool-tile size-14">
-      <HeartwoodIcon {...args} />
-    </span>
-}`,...r.parameters?.docs?.source}}};const i=["Default"];export{r as Default,i as __namedExportsOrder,c as default};
