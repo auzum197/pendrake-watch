@@ -216,15 +216,16 @@ function Viewfinder({
           )}
         </div>
       ) : (
-        // The frame and its caption stack in one centered column, so the caption
-        // keeps the same gap below the frame at any field height.
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+        // The frame sits dead center in the viewfinder, and the caption rides the
+        // bottom edge. In the 16rem box a 9rem frame leaves 1rem between its
+        // bottom and the caption's top.
+        <>
           {(status === "scanning" || found) && (
             // The area outside the frame dims, and on a find the frame closes in
             // on the code and turns brand blue.
             <div
               aria-hidden
-              className={`relative size-40 shrink-0 rounded-2xl shadow-[0_0_0_100vmax_rgb(0_0_0/0.4)] transition-[scale,color] duration-300 ease-out-soft ${
+              className={`absolute left-1/2 top-1/2 size-36 -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-[0_0_0_100vmax_rgb(0_0_0/0.4)] transition-[scale,color] duration-300 ease-out-soft ${
                 found ? "text-brand motion-safe:scale-[0.92]" : "text-white/85"
               }`}
             >
@@ -234,10 +235,10 @@ function Viewfinder({
               <span className="absolute bottom-0 right-0 size-6 rounded-br-2xl border-b-[3px] border-r-[3px] border-current" />
             </div>
           )}
-          {/* Positioned so it paints above the frame's dimming shadow. */}
+          {/* Later in the DOM than the frame, so it paints above the dimming. */}
           <p
             role="status"
-            className={`relative whitespace-nowrap rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors ${
+            className={`absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors ${
               misread && !found ? "text-amber-300" : "text-white/85"
             }`}
           >
@@ -249,7 +250,7 @@ function Viewfinder({
                   ? "That QR code isn't a viewing key"
                   : "Hold the QR code inside the frame"}
           </p>
-        </div>
+        </>
       )}
     </>
   );
