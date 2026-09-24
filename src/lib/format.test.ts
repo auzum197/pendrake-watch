@@ -41,7 +41,11 @@ describe("isSynced", () => {
   it("holds synced through a tip maintenance round at 100%", () => {
     expect(
       isSynced(
-        sync({ syncedHeight: 2_000_000 - 2, chainTip: 2_000_000, percent: 100 }),
+        sync({
+          syncedHeight: 2_000_000 - 2,
+          chainTip: 2_000_000,
+          percent: 100,
+        }),
       ),
     ).toBe(true);
   });
@@ -125,7 +129,8 @@ function tx(part: Partial<Tx>): Tx {
     ...part,
   };
   if (part.netZat === undefined) {
-    base.netZat = base.kind === "received" ? base.valueZat : `-${base.valueZat}`;
+    base.netZat =
+      base.kind === "received" ? base.valueZat : `-${base.valueZat}`;
   }
   return base;
 }
@@ -143,7 +148,9 @@ function note(part: Partial<Note>): Note {
 describe("txHasMemo", () => {
   it("is false with no notes or only empty memos", () => {
     expect(txHasMemo(tx({}))).toBe(false);
-    expect(txHasMemo(tx({ notes: [note({}), note({ memo: "" })] }))).toBe(false);
+    expect(txHasMemo(tx({ notes: [note({}), note({ memo: "" })] }))).toBe(
+      false,
+    );
   });
 
   it("never trips on a transparent-only transaction", () => {
@@ -153,9 +160,9 @@ describe("txHasMemo", () => {
   });
 
   it("is true when any note carries a memo", () => {
-    expect(
-      txHasMemo(tx({ notes: [note({}), note({ memo: "gm" })] })),
-    ).toBe(true);
+    expect(txHasMemo(tx({ notes: [note({}), note({ memo: "gm" })] }))).toBe(
+      true,
+    );
   });
 });
 
@@ -254,7 +261,10 @@ describe("balanceHistory", () => {
     it("returns nothing without confirmed transactions", () => {
       expect(balanceHistory([], orchard(0))).toEqual([]);
       expect(
-        balanceHistory([tx({ status: "pending", valueZat: String(ZEC) })], null),
+        balanceHistory(
+          [tx({ status: "pending", valueZat: String(ZEC) })],
+          null,
+        ),
       ).toEqual([]);
     });
 
@@ -264,9 +274,9 @@ describe("balanceHistory", () => {
         tx({ datetime: 500, status: "pending", valueZat: String(9 * ZEC) }),
         tx({ datetime: 1000, kind: "received", valueZat: String(2 * ZEC) }),
       ];
-      expect(balanceHistory(txs, orchard(1.5 * ZEC)).map((p) => p.value)).toEqual([
-        0, 2, 1.5,
-      ]);
+      expect(
+        balanceHistory(txs, orchard(1.5 * ZEC)).map((p) => p.value),
+      ).toEqual([0, 2, 1.5]);
     });
   });
 
@@ -288,9 +298,9 @@ describe("balanceHistory", () => {
         tx({ datetime: 2000, kind: "received", valueZat: String(2 * ZEC) }),
         tx({ datetime: 3000, kind: "received", valueZat: String(3 * ZEC) }),
       ];
-      expect(balanceHistory(txs, orchard(6 * ZEC)).map((p) => p.value)).toEqual([
-        0, 1, 3, 6,
-      ]);
+      expect(balanceHistory(txs, orchard(6 * ZEC)).map((p) => p.value)).toEqual(
+        [0, 1, 3, 6],
+      );
     });
 
     it("tracks the net change, not a shield's display value", () => {
@@ -301,11 +311,16 @@ describe("balanceHistory", () => {
           valueZat: String(10 * ZEC),
           netZat: String(10 * ZEC),
         }),
-        tx({ datetime: 2000, kind: "sent", valueZat: String(8 * ZEC), netZat: "0" }),
+        tx({
+          datetime: 2000,
+          kind: "sent",
+          valueZat: String(8 * ZEC),
+          netZat: "0",
+        }),
       ];
-      expect(balanceHistory(txs, orchard(10 * ZEC)).map((p) => p.value)).toEqual([
-        0, 10, 10,
-      ]);
+      expect(
+        balanceHistory(txs, orchard(10 * ZEC)).map((p) => p.value),
+      ).toEqual([0, 10, 10]);
     });
 
     it("charges a self-send only its fee, not its display value", () => {
@@ -316,13 +331,17 @@ describe("balanceHistory", () => {
           valueZat: String(5 * ZEC),
           netZat: String(5 * ZEC),
         }),
-        tx({ datetime: 2000, kind: "sent", valueZat: String(3 * ZEC), netZat: "-10000" }),
+        tx({
+          datetime: 2000,
+          kind: "sent",
+          valueZat: String(3 * ZEC),
+          netZat: "-10000",
+        }),
       ];
       expect(
         balanceHistory(txs, orchard(5 * ZEC - 10000)).map((p) => p.value),
       ).toEqual([0, 5, 4.9999]);
     });
-
   });
 
   describe("anchoring on the live balance", () => {
@@ -346,7 +365,9 @@ describe("balanceHistory", () => {
           netZat: String(-5 * ZEC),
         }),
       ];
-      expect(balanceHistory(txs, orchard(2 * ZEC)).map((p) => p.value)).toEqual([7, 2]);
+      expect(balanceHistory(txs, orchard(2 * ZEC)).map((p) => p.value)).toEqual(
+        [7, 2],
+      );
     });
   });
 
@@ -356,7 +377,9 @@ describe("balanceHistory", () => {
         tx({ datetime: 1000, kind: "received", valueZat: String(ZEC) }),
         tx({ datetime: 2000, kind: "received", valueZat: String(3 * ZEC) }),
       ];
-      expect(balanceHistory(txs, orchard(ZEC)).map((p) => p.value)).toEqual([0, 0, 1]);
+      expect(balanceHistory(txs, orchard(ZEC)).map((p) => p.value)).toEqual([
+        0, 0, 1,
+      ]);
     });
   });
 
@@ -389,7 +412,9 @@ describe("balanceHistory", () => {
         tx({ datetime: 1000, kind: "received", valueZat: String(ZEC) }),
       ];
       expect(balanceHistory(txs, orchard(2 * ZEC)).map((p) => p.t)).toEqual([
-        1000 - 86_400, 1000, 1000,
+        1000 - 86_400,
+        1000,
+        1000,
       ]);
     });
 
@@ -409,7 +434,12 @@ describe("balanceHistory", () => {
   describe("point identity and labels", () => {
     it("keys transaction points by txid and the leading point as start", () => {
       const txs = [
-        tx({ txid: "abc", datetime: 1000, kind: "received", valueZat: String(ZEC) }),
+        tx({
+          txid: "abc",
+          datetime: 1000,
+          kind: "received",
+          valueZat: String(ZEC),
+        }),
       ];
       expect(balanceHistory(txs, orchard(ZEC)).map((p) => p.key)).toEqual([
         "start",
@@ -476,17 +506,15 @@ describe("filterRange", () => {
   });
 });
 
-const daySec = (iso: string) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 1000);
+const daySec = (iso: string) =>
+  Math.floor(Date.parse(`${iso}T00:00:00Z`) / 1000);
 
 function price(date: string, usd: number): PricePoint {
   return { date, usdPerZec: usd, confidence: "high" };
 }
 
 describe("priceLookup", () => {
-  const prices = [
-    price("2024-01-01", 30),
-    price("2024-01-03", 50),
-  ];
+  const prices = [price("2024-01-01", 30), price("2024-01-03", 50)];
 
   it("returns null for an empty series", () => {
     expect(priceLookup([])(daySec("2024-01-01"))).toBeNull();
@@ -515,7 +543,9 @@ describe("fiatSeries", () => {
   const nowMs = Date.parse("2024-01-03T12:00:00Z");
 
   it("is empty when either input is empty (falls back to ZEC)", () => {
-    const bal = [{ key: "start", t: daySec("2024-01-01"), value: 2, label: "" }];
+    const bal = [
+      { key: "start", t: daySec("2024-01-01"), value: 2, label: "" },
+    ];
     expect(fiatSeries(bal, [], null, "all", nowMs)).toEqual([]);
     expect(fiatSeries([], prices, null, "all", nowMs)).toEqual([]);
   });

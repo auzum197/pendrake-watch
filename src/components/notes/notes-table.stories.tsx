@@ -25,10 +25,7 @@ function Demo({ notes = walletNotes }: { notes?: typeof walletNotes }) {
   // The table virtualizes against the page's app-main scroller, so the story
   // reproduces that container (same as the Activity list).
   return (
-    <div
-      data-scroll-restoration-id="app-main"
-      className="h-96 overflow-y-auto"
-    >
+    <div data-scroll-restoration-id="app-main" className="h-96 overflow-y-auto">
       <NotesTable notes={sortNotes(notes, sort)} sort={sort} onSort={onSort} />
     </div>
   );

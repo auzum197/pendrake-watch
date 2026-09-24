@@ -6,27 +6,27 @@ import { Toaster as Sonner } from "sonner";
 // the action button takes the brand primary, so a toast reads as part of the same design
 // as cards and popovers.
 export function Toaster(props: ComponentProps<typeof Sonner>) {
-	return (
-		<Sonner
-			theme="dark"
-			className="toaster group"
-			// CSS custom properties aren't part of React's CSSProperties type, so the cast
-			// is the standard way to pass them through style (same as ui/chart.tsx).
-			style={
-				{
-					"--normal-bg": "var(--popover)",
-					"--normal-text": "var(--popover-foreground)",
-					"--normal-border": "var(--border)",
-				} as CSSProperties
-			}
-			toastOptions={{
-				classNames: { title: "select-text", description: "select-text" },
-				actionButtonStyle: {
-					background: "var(--primary)",
-					color: "var(--primary-foreground)",
-				},
-			}}
-			{...props}
-		/>
-	);
+  return (
+    <Sonner
+      theme="dark"
+      className="toaster group"
+      // CSS custom properties aren't part of React's CSSProperties type, so the cast
+      // is the standard way to pass them through style (same as ui/chart.tsx).
+      style={
+        {
+          "--normal-bg": "var(--popover)",
+          "--normal-text": "var(--popover-foreground)",
+          "--normal-border": "var(--border)",
+        } as CSSProperties
+      }
+      toastOptions={{
+        classNames: { title: "select-text", description: "select-text" },
+        actionButtonStyle: {
+          background: "var(--primary)",
+          color: "var(--primary-foreground)",
+        },
+      }}
+      {...props}
+    />
+  );
 }

@@ -180,7 +180,10 @@ export function selectWallet(id: string): Promise<WalletState> {
 }
 
 // Set or clear a user-facing wallet name. Empty string clears (short fingerprint).
-export function setWalletLabel(id: string, label: string): Promise<WalletState> {
+export function setWalletLabel(
+  id: string,
+  label: string,
+): Promise<WalletState> {
   return invoke("set_wallet_label", { id, label });
 }
 
