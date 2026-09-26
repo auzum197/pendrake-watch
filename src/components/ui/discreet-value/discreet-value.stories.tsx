@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { hydrateDiscreet, useDiscreet } from "@/lib/discreet";
 import { DiscreetMask, DiscreetPeek, DiscreetValue } from "./discreet-value";
 

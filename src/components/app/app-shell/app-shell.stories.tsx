@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { AppShell } from "./app-shell";
 import { withRouter } from "@/stories/with-router";
 import type { SyncStatus, WalletState } from "@/lib/ipc";
