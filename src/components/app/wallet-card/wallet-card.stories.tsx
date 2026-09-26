@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { expect, mocked, screen, userEvent, waitFor, within } from "storybook/test";
 import { WalletCard } from "./wallet-card";
 import { withRouter } from "@/stories/with-router";

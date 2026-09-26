@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { Tx, TxKind, TxStatus } from "@/lib/ipc";
 import { TxList } from "./tx-list";
 import { withRouter } from "@/stories/with-router";

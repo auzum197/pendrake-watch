@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { expect, fn, mocked, userEvent, within } from "storybook/test";
 import { RemoveDialog } from "./remove-dialog";
 import { withRouter } from "@/stories/with-router";

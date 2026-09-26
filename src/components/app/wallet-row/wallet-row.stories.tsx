@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { SyncStatus, WalletSummary } from "@/lib/ipc";
 import { InlineName } from "../wallet-card/inline-name";

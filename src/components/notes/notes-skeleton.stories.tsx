@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { NotesContentSkeleton, SummaryBarSkeleton } from "./notes-skeleton";
 
 const meta = {

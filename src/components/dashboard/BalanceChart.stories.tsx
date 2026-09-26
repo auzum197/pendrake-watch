@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { BalanceChart, type Denom } from "./BalanceChart";
 import type { BalancePoint } from "@/lib/format";
 

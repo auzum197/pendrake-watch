@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { expect, mocked, userEvent, waitFor, within } from "storybook/test";
 import { withRouter } from "@/stories/with-router";
 import { txs as fewTxs } from "@/stories/fixtures";
