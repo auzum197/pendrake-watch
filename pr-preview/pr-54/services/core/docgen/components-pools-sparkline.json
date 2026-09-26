@@ -1,0 +1,78 @@
+{
+  "components": {
+    "components-pools-sparkline": {
+      "id": "components-pools-sparkline",
+      "name": "Sparkline",
+      "path": "./src/components/pools/sparkline.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Sparkline",
+        "exportName": "Sparkline",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/pools/sparkline.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "values": {
+            "name": "values",
+            "required": true,
+            "type": {
+              "name": "number[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/pools/sparkline.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/pools/sparkline.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "values": {
+          "name": "values",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "number[]"
+          },
+          "table": {
+            "type": {
+              "summary": "number[]"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

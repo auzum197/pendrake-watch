@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-popover": {
+      "id": "components-ui-popover",
+      "name": "Popover",
+      "path": "./src/components/ui/popover/popover.stories.tsx",
+      "import": "import {\n  Button,\n  Popover,\n  PopoverContent,\n  PopoverDescription,\n  PopoverHeader,\n  PopoverTitle,\n  PopoverTrigger,\n} from 'pendrake-watch';",
+      "stories": {
+        "components-ui-popover--default": {
+          "id": "components-ui-popover--default",
+          "name": "Default",
+          "snippet": "const Default = () => (\n  <Popover>\n    <PopoverTrigger asChild>\n      <Button variant=\"outline\">Wallet details</Button>\n    </PopoverTrigger>\n    <PopoverContent className=\"w-72\">\n      <PopoverHeader>\n        <PopoverTitle>Watch-only</PopoverTitle>\n        <PopoverDescription>\n          This wallet holds no spending key, so funds are never at risk.\n        </PopoverDescription>\n      </PopoverHeader>\n    </PopoverContent>\n  </Popover>\n);"
+        }
+      }
+    }
+  }
+}

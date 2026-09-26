@@ -1,0 +1,182 @@
+{
+  "components": {
+    "components-ui-switch": {
+      "id": "components-ui-switch",
+      "name": "Switch",
+      "path": "./src/components/ui/switch/switch.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Switch",
+        "exportName": "Switch",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/switch/switch.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "checked": {
+            "name": "checked",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SwitchProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SwitchProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultChecked": {
+            "name": "defaultChecked",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SwitchProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SwitchProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+              }
+            ]
+          },
+          "required": {
+            "name": "required",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SwitchProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SwitchProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+              }
+            ]
+          },
+          "onCheckedChange": {
+            "name": "onCheckedChange",
+            "required": false,
+            "type": {
+              "name": "(checked: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SwitchProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SwitchProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-switch@1.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_b3e82f5a48571bff7bccc87d0cd8e053/node_modules/@radix-ui/react-switch/dist/index.d.mts"
+              }
+            ]
+          },
+          "asChild": {
+            "name": "asChild",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PrimitivePropsWithRef",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-primitive@2.1.3_@types+react-dom@19.2.3_@types+react@19.2.16__@types+re_c2ab14b13b7a235b87f6f669fbdaeeab/node_modules/@radix-ui/react-primitive/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-primitive@2.1.3_@types+react-dom@19.2.3_@types+react@19.2.16__@types+re_c2ab14b13b7a235b87f6f669fbdaeeab/node_modules/@radix-ui/react-primitive/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "checked": {
+          "name": "checked",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "defaultChecked": {
+          "name": "defaultChecked",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "required": {
+          "name": "required",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onCheckedChange": {
+          "name": "onCheckedChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(checked: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(checked: boolean) => void"
+            }
+          }
+        },
+        "asChild": {
+          "name": "asChild",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-app-about-card": {
+      "id": "components-app-about-card",
+      "name": "AboutCard",
+      "path": "./src/components/app/about-card/about-card.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "AboutCard",
+        "exportName": "AboutCard",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/about-card/about-card.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}

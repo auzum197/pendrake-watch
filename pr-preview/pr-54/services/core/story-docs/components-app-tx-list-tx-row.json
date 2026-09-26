@@ -1,0 +1,44 @@
+{
+  "components": {
+    "components-app-tx-list-tx-row": {
+      "id": "components-app-tx-list-tx-row",
+      "name": "RowDemo",
+      "path": "./src/components/app/tx-list/tx-row.stories.tsx",
+      "import": "import { TxRow } from 'pendrake-watch';",
+      "stories": {
+        "components-app-tx-list-tx-row--received": {
+          "id": "components-app-tx-list-tx-row--received",
+          "name": "Received",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-tx-list-tx-row--sent": {
+          "id": "components-app-tx-list-tx-row--sent",
+          "name": "Sent",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-tx-list-tx-row--pending": {
+          "id": "components-app-tx-list-tx-row--pending",
+          "name": "Pending",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-tx-list-tx-row--return-flash": {
+          "id": "components-app-tx-list-tx-row--return-flash",
+          "name": "Return Flash",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        }
+      }
+    }
+  }
+}

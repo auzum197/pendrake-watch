@@ -1,0 +1,32 @@
+{
+  "components": {
+    "components-ui-discreet-value": {
+      "id": "components-ui-discreet-value",
+      "name": "DiscreetValue",
+      "path": "./src/components/ui/discreet-value/discreet-value.stories.tsx",
+      "import": "import { DiscreetMask, DiscreetPeek, DiscreetValue } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-discreet-value--all-kinds": {
+          "id": "components-ui-discreet-value--all-kinds",
+          "name": "All Kinds",
+          "snippet": "const AllKinds = () => <AllKindsDemo />;"
+        },
+        "components-ui-discreet-value--hold-to-peek": {
+          "id": "components-ui-discreet-value--hold-to-peek",
+          "name": "Hold To Peek",
+          "snippet": "const HoldToPeek = () => <PeekDemo />;"
+        },
+        "components-ui-discreet-value--peek": {
+          "id": "components-ui-discreet-value--peek",
+          "name": "Peek",
+          "snippet": "const Peek = () => (\n    <span className=\"font-mono text-sm\">\n        Balance: <DiscreetPeek value=\"1,234.5678\" mask=\"█████\" /> ZEC\n    </span>\n);"
+        },
+        "components-ui-discreet-value--mask": {
+          "id": "components-ui-discreet-value--mask",
+          "name": "Mask",
+          "snippet": "const Mask = () => (\n    <span className=\"discreet-peekable font-mono text-sm\">\n        <DiscreetMask text=\"█████\" />\n    </span>\n);"
+        }
+      }
+    }
+  }
+}

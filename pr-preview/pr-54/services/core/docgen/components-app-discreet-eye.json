@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-app-discreet-eye": {
+      "id": "components-app-discreet-eye",
+      "name": "DiscreetEye",
+      "path": "./src/components/app/discreet-eye/discreet-eye.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "DiscreetEye",
+        "exportName": "DiscreetEye",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/discreet-eye/discreet-eye.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}

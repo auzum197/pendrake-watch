@@ -1,0 +1,97 @@
+{
+  "components": {
+    "components-dashboard-balancechart": {
+      "id": "components-dashboard-balancechart",
+      "name": "ChartPlayground",
+      "path": "./src/components/dashboard/BalanceChart.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "BalanceChart",
+        "exportName": "BalanceChart",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/dashboard/BalanceChart.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "points": {
+            "name": "points",
+            "required": true,
+            "type": {
+              "name": "BalancePoint[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/dashboard/BalanceChart.tsx"
+              }
+            ]
+          },
+          "denom": {
+            "name": "denom",
+            "required": false,
+            "type": {
+              "name": "enum",
+              "raw": "\"zec\" | \"usd\"",
+              "value": [
+                {
+                  "value": "\"zec\""
+                },
+                {
+                  "value": "\"usd\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"zec\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/dashboard/BalanceChart.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "points": {
+          "name": "points",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "BalancePoint[]"
+          },
+          "table": {
+            "type": {
+              "summary": "BalancePoint[]"
+            }
+          }
+        },
+        "denom": {
+          "name": "denom",
+          "description": "",
+          "type": {
+            "required": false,
+            "raw": "\"zec\" | \"usd\"",
+            "name": "enum",
+            "value": [
+              "zec",
+              "usd"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"zec\" | \"usd\""
+            },
+            "defaultValue": {
+              "summary": "\"\\\"zec\\\"\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

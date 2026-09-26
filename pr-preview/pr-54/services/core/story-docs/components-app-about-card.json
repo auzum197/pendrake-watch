@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-app-about-card": {
+      "id": "components-app-about-card",
+      "name": "AboutCard",
+      "path": "./src/components/app/about-card/about-card.stories.tsx",
+      "import": "import { AboutCard } from 'pendrake-watch';",
+      "stories": {
+        "components-app-about-card--default": {
+          "id": "components-app-about-card--default",
+          "name": "Default",
+          "snippet": "const Default = () => (\n    <div className=\"mx-auto w-80 rounded-2xl border border-border bg-card py-10\">\n        <AboutCard />\n    </div>\n);"
+        }
+      }
+    }
+  }
+}

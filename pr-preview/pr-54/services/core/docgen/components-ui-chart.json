@@ -1,0 +1,87 @@
+{
+  "components": {
+    "components-ui-chart": {
+      "id": "components-ui-chart",
+      "name": "ChartContainer",
+      "path": "./src/components/ui/chart/chart.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "ChartContainer",
+        "exportName": "ChartContainer",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/chart/chart.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "children": {
+            "name": "children",
+            "required": true,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "DOMAttributes",
+              "fileName": "node_modules/.pnpm/@types+react@19.2.16/node_modules/@types/react/index.d.ts"
+            },
+            "declarations": [
+              {
+                "name": "DOMAttributes",
+                "fileName": "node_modules/.pnpm/@types+react@19.2.16/node_modules/@types/react/index.d.ts"
+              },
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/chart/chart.tsx"
+              }
+            ]
+          },
+          "config": {
+            "name": "config",
+            "required": true,
+            "type": {
+              "name": "ChartConfig"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/chart/chart.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "config": {
+          "name": "config",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "ChartConfig"
+          },
+          "table": {
+            "type": {
+              "summary": "ChartConfig"
+            }
+          }
+        }
+      }
+    }
+  }
+}

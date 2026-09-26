@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-sync-batchscanviz": {
+      "id": "components-sync-batchscanviz",
+      "name": "BatchScanViz",
+      "path": "./src/components/sync/BatchScanViz.stories.tsx",
+      "import": "import { BatchScanViz } from 'pendrake-watch';",
+      "stories": {
+        "components-sync-batchscanviz--active": {
+          "id": "components-sync-batchscanviz--active",
+          "name": "Active",
+          "snippet": "const Active = () => <BatchScanViz active sparkSeq={0} canSpark />;"
+        },
+        "components-sync-batchscanviz--idle": {
+          "id": "components-sync-batchscanviz--idle",
+          "name": "Idle",
+          "snippet": "const Idle = () => <BatchScanViz active={false} sparkSeq={0} canSpark />;"
+        },
+        "components-sync-batchscanviz--match": {
+          "id": "components-sync-batchscanviz--match",
+          "name": "Match",
+          "snippet": "const Match = () => <BatchScanViz active sparkSeq={1} canSpark />;"
+        }
+      }
+    }
+  }
+}

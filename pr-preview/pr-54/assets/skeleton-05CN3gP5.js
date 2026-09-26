@@ -1,0 +1,1 @@
+import{j as o}from"./iframe-DBU_la3R.js";import{c as s}from"./utils-DCADjnpI.js";function n({className:t,...e}){return o.jsx("div",{"data-slot":"skeleton",className:s("animate-pulse rounded-md bg-muted",t),...e})}export{n as S};

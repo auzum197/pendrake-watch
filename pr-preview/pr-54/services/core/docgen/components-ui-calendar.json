@@ -1,0 +1,55 @@
+{
+  "components": {
+    "components-ui-calendar": {
+      "id": "components-ui-calendar",
+      "name": "Calendar",
+      "path": "./src/components/ui/calendar/calendar.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Calendar",
+        "exportName": "Calendar",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/calendar/calendar.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "buttonVariant": {
+            "name": "buttonVariant",
+            "required": false,
+            "type": {
+              "name": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"ghost\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/calendar/calendar.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "buttonVariant": {
+          "name": "buttonVariant",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+          },
+          "table": {
+            "type": {
+              "summary": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+            },
+            "defaultValue": {
+              "summary": "\"ghost\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

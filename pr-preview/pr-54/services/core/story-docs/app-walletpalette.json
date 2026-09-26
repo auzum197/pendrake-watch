@@ -1,0 +1,22 @@
+{
+  "components": {
+    "app-walletpalette": {
+      "id": "app-walletpalette",
+      "name": "Open",
+      "path": "./src/components/app/wallet-palette/wallet-palette.stories.tsx",
+      "import": "import { WalletPalette } from 'pendrake-watch';",
+      "stories": {
+        "app-walletpalette--default": {
+          "id": "app-walletpalette--default",
+          "name": "Default",
+          "snippet": "const Default = () => <WalletPalette />;"
+        },
+        "app-walletpalette--filtered": {
+          "id": "app-walletpalette--filtered",
+          "name": "Filtered",
+          "snippet": "const Filtered = () => <WalletPalette />;"
+        }
+      }
+    }
+  }
+}

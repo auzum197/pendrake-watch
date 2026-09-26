@@ -1,0 +1,1 @@
+import{j as c}from"./iframe-DBU_la3R.js";import{L as n,l as a}from"./lifehash-Cz-mn_BZ.js";const e=2,r=8,L=0,i="40";function x(o){const s=a(o);return{border:`${e}px solid ${s}`,boxShadow:`0 0 ${r}px ${L}px ${s}${i}`}}function p({fingerprint:o,className:s,ringed:t=!1}){return c.jsx(n,{fingerprint:o,className:s,style:t?x(o):void 0})}export{p as L};

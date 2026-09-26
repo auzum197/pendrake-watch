@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-app-discreet-eye": {
+      "id": "components-app-discreet-eye",
+      "name": "DiscreetEye",
+      "path": "./src/components/app/discreet-eye/discreet-eye.stories.tsx",
+      "import": "import { DiscreetEye, DiscreetValue } from 'pendrake-watch';",
+      "stories": {
+        "components-app-discreet-eye--toggle": {
+          "id": "components-app-discreet-eye--toggle",
+          "name": "Toggle",
+          "snippet": "const Toggle = () => <Demo />;"
+        }
+      }
+    }
+  }
+}

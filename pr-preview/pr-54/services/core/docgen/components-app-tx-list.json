@@ -1,0 +1,78 @@
+{
+  "components": {
+    "components-app-tx-list": {
+      "id": "components-app-tx-list",
+      "name": "TxList",
+      "path": "./src/components/app/tx-list/tx-list.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "TxList",
+        "exportName": "TxList",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/tx-list/tx-list.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "txs": {
+            "name": "txs",
+            "required": true,
+            "type": {
+              "name": "Tx[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/tx-list/tx-list.tsx"
+              }
+            ]
+          },
+          "limit": {
+            "name": "limit",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/tx-list/tx-list.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "txs": {
+          "name": "txs",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "Tx[]"
+          },
+          "table": {
+            "type": {
+              "summary": "Tx[]"
+            }
+          }
+        },
+        "limit": {
+          "name": "limit",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        }
+      }
+    }
+  }
+}

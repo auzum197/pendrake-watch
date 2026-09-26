@@ -1,0 +1,48 @@
+{
+  "components": {
+    "components-app-app-shell": {
+      "id": "components-app-app-shell",
+      "name": "AppShell",
+      "path": "./src/components/app/app-shell/app-shell.stories.tsx",
+      "import": "import { AppShell } from 'pendrake-watch';",
+      "stories": {
+        "components-app-app-shell--syncing": {
+          "id": "components-app-app-shell--syncing",
+          "name": "Syncing",
+          "snippet": "const Syncing = () => <AppShell\n    active=\"wallet\"\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      fingerprint: \"a1b2c3d4e5f6\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    sync={{\n      state: \"syncing\",\n      syncedHeight: 2_390_000,\n      chainTip: 2_400_000,\n      percent: 62,\n      phase: \"scanning\",\n      etaSeconds: 540,\n    }}><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        },
+        "components-app-app-shell--synced": {
+          "id": "components-app-app-shell--synced",
+          "name": "Synced",
+          "snippet": "const Synced = () => <AppShell\n    active=\"wallet\"\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      fingerprint: \"a1b2c3d4e5f6\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    sync={{\n      state: \"idle\",\n      syncedHeight: 2_400_000,\n      chainTip: 2_400_000,\n      percent: 100,\n    }}><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        },
+        "components-app-app-shell--unreachable": {
+          "id": "components-app-app-shell--unreachable",
+          "name": "Unreachable",
+          "snippet": "const Unreachable = () => <AppShell\n    active=\"wallet\"\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      fingerprint: \"a1b2c3d4e5f6\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    sync={{\n        state: \"error\",\n        syncedHeight: 2_400_000,\n        chainTip: 2_400_000,\n        percent: 100,\n        unreachable: true\n    }}><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        },
+        "components-app-app-shell--wrong-chain": {
+          "id": "components-app-app-shell--wrong-chain",
+          "name": "Wrong Chain",
+          "snippet": "const WrongChain = () => <AppShell\n    active=\"wallet\"\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      fingerprint: \"a1b2c3d4e5f6\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    sync={{\n        state: \"error\",\n        syncedHeight: 2_400_000,\n        chainTip: 2_400_000,\n        percent: 100,\n        wrongChain: true\n    }}><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        },
+        "components-app-app-shell--daemon-down": {
+          "id": "components-app-app-shell--daemon-down",
+          "name": "Daemon Down",
+          "snippet": "const DaemonDown = () => <AppShell\n    active=\"wallet\"\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      fingerprint: \"a1b2c3d4e5f6\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    sync={{\n      state: \"idle\",\n      syncedHeight: 2_400_000,\n      chainTip: 2_400_000,\n      percent: 100,\n    }}\n    error=\"connection to the daemon socket was refused\"><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        },
+        "components-app-app-shell--no-wallet": {
+          "id": "components-app-app-shell--no-wallet",
+          "name": "No Wallet",
+          "snippet": "const NoWallet = () => <AppShell active=\"wallet\" wallet={null} sync={null}><Placeholder /></AppShell>;",
+          "warning": "Incomplete snippet: `Placeholder` could not be resolved statically."
+        }
+      }
+    }
+  }
+}

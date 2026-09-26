@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-dashboard-fiat-consent-dialog": {
+      "id": "components-dashboard-fiat-consent-dialog",
+      "name": "FiatConsentDialog",
+      "path": "./src/components/dashboard/fiat-consent-dialog.stories.tsx",
+      "import": "import { Button, FiatConsentDialog } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-dashboard-fiat-consent-dialog--default": {
+          "id": "components-dashboard-fiat-consent-dialog--default",
+          "name": "Default",
+          "snippet": "const Default = () => {\n  const [open, setOpen] = useState(false);\n  return (\n    <>\n      <Button onClick={() => setOpen(true)}>Show balances in USD</Button>\n      <FiatConsentDialog\n        open={open}\n        onOpenChange={setOpen}\n        onAccept={() =>\n          new Promise((resolve) => setTimeout(resolve, 800))\n        }\n      />\n    </>\n  );\n};"
+        },
+        "components-dashboard-fiat-consent-dialog--open": {
+          "id": "components-dashboard-fiat-consent-dialog--open",
+          "name": "Open",
+          "snippet": "const Open = () => {\n  const [open, setOpen] = useState(true);\n  return (\n    <FiatConsentDialog\n      open={open}\n      onOpenChange={setOpen}\n      onAccept={async () => {}}\n    />\n  );\n};"
+        }
+      }
+    }
+  }
+}

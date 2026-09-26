@@ -1,0 +1,140 @@
+{
+  "components": {
+    "components-ui-hold-button": {
+      "id": "components-ui-hold-button",
+      "name": "HoldButton",
+      "path": "./src/components/ui/hold-button/hold-button.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "HoldButton",
+        "exportName": "HoldButton",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/hold-button/hold-button.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "onConfirm": {
+            "name": "onConfirm",
+            "required": true,
+            "type": {
+              "name": "() => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/hold-button/hold-button.tsx"
+              }
+            ]
+          },
+          "durationMs": {
+            "name": "durationMs",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "1200"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/hold-button/hold-button.tsx"
+              }
+            ]
+          },
+          "children": {
+            "name": "children",
+            "required": true,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/hold-button/hold-button.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/hold-button/hold-button.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "onConfirm": {
+          "name": "onConfirm",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "() => void"
+          },
+          "table": {
+            "type": {
+              "summary": "() => void"
+            }
+          }
+        },
+        "durationMs": {
+          "name": "durationMs",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "1200"
+            }
+          }
+        },
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

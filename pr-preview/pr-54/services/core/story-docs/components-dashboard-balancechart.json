@@ -1,0 +1,52 @@
+{
+  "components": {
+    "components-dashboard-balancechart": {
+      "id": "components-dashboard-balancechart",
+      "name": "ChartPlayground",
+      "path": "./src/components/dashboard/BalanceChart.stories.tsx",
+      "import": "import { BalanceChart } from 'pendrake-watch';",
+      "stories": {
+        "components-dashboard-balancechart--playground": {
+          "id": "components-dashboard-balancechart--playground",
+          "name": "Playground",
+          "snippet": "const Playground = () => <BalanceChart transactions={40} years={1} style=\"hodl\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--multi-year": {
+          "id": "components-dashboard-balancechart--multi-year",
+          "name": "Multi Year",
+          "snippet": "const MultiYear = () => <BalanceChart transactions={350} years={5} style=\"hodl\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--dense-history": {
+          "id": "components-dashboard-balancechart--dense-history",
+          "name": "Dense History",
+          "snippet": "const DenseHistory = () => <BalanceChart transactions={2000} years={3} style=\"trader\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--whale": {
+          "id": "components-dashboard-balancechart--whale",
+          "name": "Whale",
+          "snippet": "const Whale = () => <BalanceChart transactions={40} years={8} style=\"whale\" seed={3} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--dust-storm": {
+          "id": "components-dashboard-balancechart--dust-storm",
+          "name": "Dust Storm",
+          "snippet": "const DustStorm = () => <BalanceChart transactions={600} years={1} style=\"dust\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--trader": {
+          "id": "components-dashboard-balancechart--trader",
+          "name": "Trader",
+          "snippet": "const Trader = () => <BalanceChart transactions={150} years={1} style=\"trader\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--first-transaction": {
+          "id": "components-dashboard-balancechart--first-transaction",
+          "name": "First Transaction",
+          "snippet": "const FirstTransaction = () => <BalanceChart transactions={1} years={0.25} style=\"hodl\" seed={7} denom=\"zec\" />;"
+        },
+        "components-dashboard-balancechart--usd-multi-year": {
+          "id": "components-dashboard-balancechart--usd-multi-year",
+          "name": "Usd Multi Year",
+          "snippet": "const UsdMultiYear = () => <BalanceChart transactions={200} years={4} style=\"hodl\" seed={7} denom=\"usd\" />;"
+        }
+      }
+    }
+  }
+}

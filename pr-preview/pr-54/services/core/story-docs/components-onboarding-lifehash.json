@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-onboarding-lifehash": {
+      "id": "components-onboarding-lifehash",
+      "name": "LifeHashIcon",
+      "path": "./src/components/onboarding/lifehash.stories.tsx",
+      "import": "import { LifeHashIcon } from 'pendrake-watch';",
+      "stories": {
+        "components-onboarding-lifehash--default": {
+          "id": "components-onboarding-lifehash--default",
+          "name": "Default",
+          "snippet": "const Default = () => <LifeHashIcon fingerprint=\"a1b2c3d4e5f6\" className=\"size-24 rounded-xl\" />;"
+        },
+        "components-onboarding-lifehash--row": {
+          "id": "components-onboarding-lifehash--row",
+          "name": "Row",
+          "snippet": "const Row = () => (\n  <div className=\"flex gap-4\">\n    {[\"zec-rocks\", \"pendrake\", \"watch-only\", \"a1b2c3d4\"].map((fp) => (\n      <LifeHashIcon key={fp} fingerprint={fp} className=\"size-16 rounded-full\" />\n    ))}\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

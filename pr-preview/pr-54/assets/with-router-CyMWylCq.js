@@ -1,0 +1,1 @@
+import{c as e,a as s,b as a,j as i,R as n}from"./iframe-DBU_la3R.js";const c=t=>{const o=e({component:t}),r=s({routeTree:o,history:a({initialEntries:["/"]})});return i.jsx(n,{router:r})};export{c as w};

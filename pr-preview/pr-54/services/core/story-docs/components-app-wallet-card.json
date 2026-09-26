@@ -1,0 +1,57 @@
+{
+  "components": {
+    "components-app-wallet-card": {
+      "id": "components-app-wallet-card",
+      "name": "WalletCard",
+      "path": "./src/components/app/wallet-card/wallet-card.stories.tsx",
+      "import": "import { WalletCard } from 'pendrake-watch';",
+      "stories": {
+        "components-app-wallet-card--collapsed": {
+          "id": "components-app-wallet-card--collapsed",
+          "name": "Collapsed",
+          "snippet": "const Collapsed = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--unfolded": {
+          "id": "components-app-wallet-card--unfolded",
+          "name": "Unfolded",
+          "snippet": "const Unfolded = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--switching": {
+          "id": "components-app-wallet-card--switching",
+          "name": "Switching",
+          "snippet": "const Switching = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching />;"
+        },
+        "components-app-wallet-card--row-menu": {
+          "id": "components-app-wallet-card--row-menu",
+          "name": "Row Menu",
+          "snippet": "const RowMenu = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--head-menu": {
+          "id": "components-app-wallet-card--head-menu",
+          "name": "Head Menu",
+          "snippet": "const HeadMenu = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--renaming-row": {
+          "id": "components-app-wallet-card--renaming-row",
+          "name": "Renaming Row",
+          "snippet": "const RenamingRow = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--renaming-row-from-context-menu": {
+          "id": "components-app-wallet-card--renaming-row-from-context-menu",
+          "name": "Renaming Row From Context Menu",
+          "snippet": "const RenamingRowFromContextMenu = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--renaming-head-from-context-menu": {
+          "id": "components-app-wallet-card--renaming-head-from-context-menu",
+          "name": "Renaming Head From Context Menu",
+          "snippet": "const RenamingHeadFromContextMenu = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        },
+        "components-app-wallet-card--rename-commits": {
+          "id": "components-app-wallet-card--rename-commits",
+          "name": "Rename Commits",
+          "snippet": "const RenameCommits = () => <WalletCard\n    wallet={{\n      exists: true,\n      locked: false,\n      sessionHeld: true,\n      walletId: \"w1\",\n      fingerprint: \"a1b2c3d4e5f6\",\n      label: \"Cold storage\",\n      importType: \"ufvk\",\n      viewMode: \"full\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      indexerUri: \"https://zec.rocks:443\",\n      notificationsEnabled: true,\n    }}\n    switching={false} />;"
+        }
+      }
+    }
+  }
+}

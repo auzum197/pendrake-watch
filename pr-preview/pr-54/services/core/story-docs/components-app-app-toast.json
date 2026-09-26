@@ -1,0 +1,73 @@
+{
+  "components": {
+    "components-app-app-toast": {
+      "id": "components-app-app-toast",
+      "name": "Fired",
+      "path": "./src/components/app/app-toast/app-toast.stories.tsx",
+      "import": "import { Button, Toaster } from 'pendrake-watch';",
+      "stories": {
+        "components-app-app-toast--playground": {
+          "id": "components-app-app-toast--playground",
+          "name": "Playground",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--unreachable": {
+          "id": "components-app-app-toast--unreachable",
+          "name": "Unreachable",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--wrong-chain": {
+          "id": "components-app-app-toast--wrong-chain",
+          "name": "Wrong Chain",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--daemon": {
+          "id": "components-app-app-toast--daemon",
+          "name": "Daemon",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--error-toast": {
+          "id": "components-app-app-toast--error-toast",
+          "name": "Error Toast",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--success": {
+          "id": "components-app-app-toast--success",
+          "name": "Success",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--info": {
+          "id": "components-app-app-toast--info",
+          "name": "Info",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-app-toast--live": {
+          "id": "components-app-app-toast--live",
+          "name": "Live",
+          "snippet": "const Live = () => (\n  <div className=\"flex flex-wrap gap-2\">\n    {(Object.keys(FIRE) as Variant[]).map((v) => (\n      <Button key={v} onClick={FIRE[v]}>\n        {v}\n      </Button>\n    ))}\n    <Toaster position=\"bottom-right\" />\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

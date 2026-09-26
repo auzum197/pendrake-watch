@@ -1,0 +1,32 @@
+{
+  "components": {
+    "components-app-tx-list": {
+      "id": "components-app-tx-list",
+      "name": "TxList",
+      "path": "./src/components/app/tx-list/tx-list.stories.tsx",
+      "import": "import { TxList } from 'pendrake-watch';\nimport { txs } from '@/stories/fixtures';",
+      "stories": {
+        "components-app-tx-list--preview": {
+          "id": "components-app-tx-list--preview",
+          "name": "Preview",
+          "snippet": "const Preview = () => <TxList txs={txs} limit={5} />;"
+        },
+        "components-app-tx-list--full": {
+          "id": "components-app-tx-list--full",
+          "name": "Full",
+          "snippet": "const Full = () => <div data-scroll-restoration-id=\"app-main\" className=\"h-96 overflow-y-auto\">\n    <TxList txs={txs} />\n</div>;"
+        },
+        "components-app-tx-list--empty": {
+          "id": "components-app-tx-list--empty",
+          "name": "Empty",
+          "snippet": "const Empty = () => <TxList txs={[]} limit={5} />;"
+        },
+        "components-app-tx-list--interactive": {
+          "id": "components-app-tx-list--interactive",
+          "name": "Interactive",
+          "snippet": "const Interactive = () => <InteractiveDemo />;"
+        }
+      }
+    }
+  }
+}

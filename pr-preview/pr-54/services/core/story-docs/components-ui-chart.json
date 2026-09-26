@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-chart": {
+      "id": "components-ui-chart",
+      "name": "ChartContainer",
+      "path": "./src/components/ui/chart/chart.stories.tsx",
+      "import": "import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';\nimport { ChartContainer, ChartTooltip, ChartTooltipContent } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-chart--area": {
+          "id": "components-ui-chart--area",
+          "name": "Area",
+          "snippet": "const Area_ = () => (\n  <ChartContainer config={config} className=\"aspect-video w-[36rem]\">\n    <AreaChart data={data} margin={{ left: 12, right: 12 }}>\n      <CartesianGrid vertical={false} strokeDasharray=\"4 6\" />\n      <XAxis dataKey=\"label\" tickLine={false} axisLine={false} tickMargin={8} />\n      <ChartTooltip content={<ChartTooltipContent />} />\n      <Area\n        dataKey=\"value\"\n        type=\"stepAfter\"\n        stroke=\"var(--color-brand)\"\n        fill=\"var(--color-brand)\"\n        fillOpacity={0.15}\n        isAnimationActive={false}\n      />\n    </AreaChart>\n  </ChartContainer>\n);"
+        }
+      }
+    }
+  }
+}

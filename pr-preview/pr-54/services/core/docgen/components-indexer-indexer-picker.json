@@ -1,0 +1,357 @@
+{
+  "components": {
+    "components-indexer-indexer-picker": {
+      "id": "components-indexer-indexer-picker",
+      "name": "IndexerPicker",
+      "path": "./src/components/indexer/indexer-picker.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "IndexerPicker",
+        "exportName": "IndexerPicker",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/indexer/indexer-picker.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "network": {
+            "name": "network",
+            "required": true,
+            "type": {
+              "name": "enum",
+              "raw": "\"mainnet\" | \"regtest\"",
+              "value": [
+                {
+                  "value": "\"mainnet\""
+                },
+                {
+                  "value": "\"regtest\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "selection": {
+            "name": "selection",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "customUrl": {
+            "name": "customUrl",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "disabled": {
+            "name": "disabled",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "autoFocus": {
+            "name": "autoFocus",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "inputRef": {
+            "name": "inputRef",
+            "required": false,
+            "type": {
+              "name": "Ref<HTMLInputElement> | undefined"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "inputClassName": {
+            "name": "inputClassName",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "onSelect": {
+            "name": "onSelect",
+            "required": true,
+            "type": {
+              "name": "(selection: string) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "onCustomChange": {
+            "name": "onCustomChange",
+            "required": true,
+            "type": {
+              "name": "(url: string) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          },
+          "onCustomSubmit": {
+            "name": "onCustomSubmit",
+            "required": false,
+            "type": {
+              "name": "() => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/indexer/indexer-picker.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "network": {
+          "name": "network",
+          "description": "",
+          "type": {
+            "required": true,
+            "raw": "\"mainnet\" | \"regtest\"",
+            "name": "enum",
+            "value": [
+              "mainnet",
+              "regtest"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"mainnet\" | \"regtest\""
+            }
+          }
+        },
+        "selection": {
+          "name": "selection",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "customUrl": {
+          "name": "customUrl",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "disabled": {
+          "name": "disabled",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        },
+        "autoFocus": {
+          "name": "autoFocus",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        },
+        "inputRef": {
+          "name": "inputRef",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "Ref<HTMLInputElement> | undefined"
+          },
+          "table": {
+            "type": {
+              "summary": "Ref<HTMLInputElement> | undefined"
+            }
+          }
+        },
+        "inputClassName": {
+          "name": "inputClassName",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "onSelect": {
+          "name": "onSelect",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(selection: string) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(selection: string) => void"
+            }
+          }
+        },
+        "onCustomChange": {
+          "name": "onCustomChange",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(url: string) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(url: string) => void"
+            }
+          }
+        },
+        "onCustomSubmit": {
+          "name": "onCustomSubmit",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "() => void"
+          },
+          "table": {
+            "type": {
+              "summary": "() => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

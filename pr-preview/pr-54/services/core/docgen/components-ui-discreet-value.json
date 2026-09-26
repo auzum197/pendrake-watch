@@ -1,0 +1,176 @@
+{
+  "components": {
+    "components-ui-discreet-value": {
+      "id": "components-ui-discreet-value",
+      "name": "DiscreetValue",
+      "path": "./src/components/ui/discreet-value/discreet-value.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "DiscreetValue",
+        "exportName": "DiscreetValue",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/discreet-value/discreet-value.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "kind": {
+            "name": "kind",
+            "required": true,
+            "type": {
+              "name": "enum",
+              "raw": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\"",
+              "value": [
+                {
+                  "value": "\"txid\""
+                },
+                {
+                  "value": "\"date\""
+                },
+                {
+                  "value": "\"zec\""
+                },
+                {
+                  "value": "\"usd\""
+                },
+                {
+                  "value": "\"address\""
+                },
+                {
+                  "value": "\"label\""
+                },
+                {
+                  "value": "\"block\""
+                },
+                {
+                  "value": "\"memo\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/discreet-value/discreet-value.tsx"
+              }
+            ]
+          },
+          "children": {
+            "name": "children",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/discreet-value/discreet-value.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/discreet-value/discreet-value.tsx"
+              }
+            ]
+          },
+          "peekable": {
+            "name": "peekable",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "true"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/discreet-value/discreet-value.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "kind": {
+          "name": "kind",
+          "description": "",
+          "type": {
+            "required": true,
+            "raw": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\"",
+            "name": "enum",
+            "value": [
+              "txid",
+              "date",
+              "zec",
+              "usd",
+              "address",
+              "label",
+              "block",
+              "memo"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\""
+            }
+          }
+        },
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "peekable": {
+          "name": "peekable",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "true"
+            }
+          }
+        }
+      }
+    }
+  }
+}

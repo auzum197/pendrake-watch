@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-ui-textarea": {
+      "id": "components-ui-textarea",
+      "name": "Textarea",
+      "path": "./src/components/ui/textarea/textarea.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Textarea",
+        "exportName": "Textarea",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/textarea/textarea.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}

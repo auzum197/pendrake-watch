@@ -1,0 +1,225 @@
+{
+  "components": {
+    "components-ui-hover-card": {
+      "id": "components-ui-hover-card",
+      "name": "HoverCard",
+      "path": "./src/components/ui/hover-card/hover-card.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "HoverCard",
+        "exportName": "HoverCard",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/hover-card/hover-card.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "children": {
+            "name": "children",
+            "required": false,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          },
+          "open": {
+            "name": "open",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultOpen": {
+            "name": "defaultOpen",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": false,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          },
+          "openDelay": {
+            "name": "openDelay",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "150"
+            },
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          },
+          "closeDelay": {
+            "name": "closeDelay",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "100"
+            },
+            "parent": {
+              "name": "HoverCardProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "HoverCardProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-hover-card@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+_c85beb5946b9276bdf3eec56ef89f21e/node_modules/@radix-ui/react-hover-card/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "defaultOpen": {
+          "name": "defaultOpen",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "openDelay": {
+          "name": "openDelay",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "150"
+            }
+          }
+        },
+        "closeDelay": {
+          "name": "closeDelay",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "100"
+            }
+          }
+        }
+      }
+    }
+  }
+}

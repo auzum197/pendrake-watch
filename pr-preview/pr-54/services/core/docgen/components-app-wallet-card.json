@@ -1,0 +1,78 @@
+{
+  "components": {
+    "components-app-wallet-card": {
+      "id": "components-app-wallet-card",
+      "name": "WalletCard",
+      "path": "./src/components/app/wallet-card/wallet-card.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "WalletCard",
+        "exportName": "WalletCard",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/wallet-card/wallet-card.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "wallet": {
+            "name": "wallet",
+            "required": true,
+            "type": {
+              "name": "WalletState | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/wallet-card/wallet-card.tsx"
+              }
+            ]
+          },
+          "switching": {
+            "name": "switching",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/wallet-card/wallet-card.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "wallet": {
+          "name": "wallet",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletState | null"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletState | null"
+            }
+          }
+        },
+        "switching": {
+          "name": "switching",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

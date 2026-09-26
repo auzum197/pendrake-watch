@@ -1,0 +1,14 @@
+{
+  "components": {
+    "components-app-tx-list-tx-row": {
+      "id": "components-app-tx-list-tx-row",
+      "name": "RowDemo",
+      "path": "./src/components/app/tx-list/tx-row.stories.tsx",
+      "jsDocTags": {},
+      "error": {
+        "name": "No component import found",
+        "message": "No component file found for the \"RowDemo\" component.\n  41 | }\n  42 |\n> 43 | const meta = {\n     | ^\n  44 | \tcomponent: RowDemo,\n  45 | \targs: {\n  46 | \t\tkind: \"received\",\n\n./src/components/app/tx-list/tx-row.stories.tsx:\nimport type { Meta, StoryObj } from \"@storybook/tanstack-react\";\nimport type { Tx, TxKind, TxStatus } from \"@/lib/ipc\";\nimport { TxRow } from \"./tx-list\";\n\nfunction RowDemo({\n\tkind,\n\tstatus,\n\tmemo,\n\tflash,\n\treveal,\n}: {\n\tkind: TxKind;\n\tstatus: TxStatus;\n\tmemo: boolean;\n\tflash: boolean;\n\treveal: boolean;\n}) {\n\tconst tx: Tx = {\n\t\ttxid: \"a1b2c3d4e5f6\",\n\t\tdatetime: 1_701_200_000,\n\t\tblockHeight: status === \"confirmed\" ? 2_400_120 : undefined,\n\t\tkind,\n\t\tvalueZat: \"73450000\",\n\t\tnetZat: kind === \"received\" ? \"73450000\" : \"-73450000\",\n\t\tstatus,\n\t\tnotes: [\n\t\t\t{\n\t\t\t\tpool: \"orchard\",\n\t\t\t\tdirection: kind,\n\t\t\t\toutputIndex: 0,\n\t\t\t\tvalueZat: \"73450000\",\n\t\t\t\tmemo: memo ? \"Coffee money\" : undefined,\n\t\t\t},\n\t\t],\n\t};\n\treturn (\n\t\t<div className=\"text-sm\" style={{ height: 49 }}>\n\t\t\t<TxRow tx={tx} flash={flash} reveal={reveal} />\n\t\t</div>\n\t);\n}\n\nconst meta = {\n\tcomponent: RowDemo,\n\targs: {\n\t\tkind: \"received\",\n\t\tstatus: \"confirmed\",\n\t\tmemo: true,\n\t\tflash: false,\n\t\treveal: false,\n\t},\n\targTypes: {\n\t\tkind: { control: \"radio\", options: [\"received\", \"sent\"] },\n\t\tstatus: { control: \"radio\", options: [\"confirmed\", \"pending\"] },\n\t},\n} satisfies Meta<typeof RowDemo>;\n\nexport default meta;\ntype Story = StoryObj<typeof meta>;\n\nexport const Received: Story = {};\nexport const Sent: Story = { args: { kind: \"sent\", memo: false } };\nexport const Pending: Story = { args: { status: \"pending\" } };\nexport const ReturnFlash: Story = { args: { flash: true } };\n"
+      }
+    }
+  }
+}

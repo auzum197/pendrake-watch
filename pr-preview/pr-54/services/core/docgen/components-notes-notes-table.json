@@ -1,0 +1,108 @@
+{
+  "components": {
+    "components-notes-notes-table": {
+      "id": "components-notes-notes-table",
+      "name": "NotesTable",
+      "path": "./src/components/notes/notes-table.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "NotesTable",
+        "exportName": "NotesTable",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/notes/notes-table.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "notes": {
+            "name": "notes",
+            "required": true,
+            "type": {
+              "name": "WalletNote[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/notes/notes-table.tsx"
+              }
+            ]
+          },
+          "sort": {
+            "name": "sort",
+            "required": true,
+            "type": {
+              "name": "Sort"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/notes/notes-table.tsx"
+              }
+            ]
+          },
+          "onSort": {
+            "name": "onSort",
+            "required": true,
+            "type": {
+              "name": "(key: SortKey) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/notes/notes-table.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "notes": {
+          "name": "notes",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletNote[]"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletNote[]"
+            }
+          }
+        },
+        "sort": {
+          "name": "sort",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "Sort"
+          },
+          "table": {
+            "type": {
+              "summary": "Sort"
+            }
+          }
+        },
+        "onSort": {
+          "name": "onSort",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(key: SortKey) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(key: SortKey) => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

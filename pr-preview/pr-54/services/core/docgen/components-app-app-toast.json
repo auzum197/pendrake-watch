@@ -1,0 +1,14 @@
+{
+  "components": {
+    "components-app-app-toast": {
+      "id": "components-app-app-toast",
+      "name": "Fired",
+      "path": "./src/components/app/app-toast/app-toast.stories.tsx",
+      "jsDocTags": {},
+      "error": {
+        "name": "No component import found",
+        "message": "No component file found for the \"Fired\" component.\n  28 | }\n  29 |\n> 30 | const meta = {\n     | ^\n  31 |   component: Fired,\n  32 |   args: { variant: \"unreachable\" },\n  33 |   argTypes: {\n\n./src/components/app/app-toast/app-toast.stories.tsx:\nimport { useEffect } from \"react\";\nimport type { Meta, StoryObj } from \"@storybook/tanstack-react\";\nimport { toast } from \"sonner\";\nimport { Button } from \"@/components/ui/button/button\";\nimport { Toaster } from \"@/components/ui/sonner/sonner\";\nimport { appToast } from \"./app-toast\";\n\ntype Variant = \"unreachable\" | \"wrongChain\" | \"daemon\" | \"error\"| \"wrongChain\" | \"error\" | \"success\" | \"info\";\n\nconst FIRE: Record<Variant, () => void> = {\n  unreachable: () => appToast.unreachable(),\n  wrongChain: () => appToast.wrongChain(),\n  daemon: () => appToast.daemon(\"connection to the daemon socket was refused\"),\n  error: () => appToast.error(\"Couldn't switch Wallet\", \"failed to open wallet 33d66daa\"),\n  success: () => appToast.success(\"Copied to clipboard\"),\n  info: () => appToast.info(\"Notifications enabled\"),\n};\n\nfunction Fired({ variant }: { variant: Variant }) {\n  useEffect(() => {\n    toast.dismiss();\n    FIRE[variant]();\n    return () => {\n      toast.dismiss();\n    };\n  }, [variant]);\n  return <Toaster position=\"bottom-right\" />;\n}\n\nconst meta = {\n  component: Fired,\n  args: { variant: \"unreachable\" },\n  argTypes: {\n    variant: {\n      control: \"radio\",\n      options: [\"unreachable\", \"wrongChain\", \"daemon\", \"error\", \"success\", \"info\"],\n    },\n  },\n  decorators: [\n    (Story) => (\n      <div className=\"h-64 w-full\">\n        <Story />\n      </div>\n    ),\n  ],\n} satisfies Meta<typeof Fired>;\n\nexport default meta;\ntype Story = StoryObj<typeof meta>;\n\nexport const Playground: Story = {};\n\nexport const Unreachable: Story = { args: { variant: \"unreachable\" } };\nexport const WrongChain: Story = { args: { variant: \"wrongChain\" } };\nexport const Daemon: Story = { args: { variant: \"daemon\" } };\nexport const ErrorToast: Story = { args: { variant: \"error\" } };\nexport const Success: Story = { args: { variant: \"success\" } };\nexport const Info: Story = { args: { variant: \"info\" } };\n\nexport const Live: Story = {\n  render: () => (\n    <div className=\"flex flex-wrap gap-2\">\n      {(Object.keys(FIRE) as Variant[]).map((v) => (\n        <Button key={v} onClick={FIRE[v]}>\n          {v}\n        </Button>\n      ))}\n      <Toaster position=\"bottom-right\" />\n    </div>\n  ),\n};\n"
+      }
+    }
+  }
+}
