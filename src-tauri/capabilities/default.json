@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Capability for the main window and the detached Verify window (prototype)",
+  "windows": ["main", "verify"],
   "permissions": [
     "core:default",
     "core:webview:allow-create-webview-window",

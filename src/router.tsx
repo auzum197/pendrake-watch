@@ -15,6 +15,11 @@ import { PoolsPage } from "@/routes/pools";
 import { ActivityPage } from "@/routes/activity";
 import { NotesPage } from "@/routes/notes";
 import { UnlockPage } from "@/routes/unlock";
+import {
+  parseVariant,
+  VerifyPrototypePage,
+  VerifyWindow,
+} from "@/routes/verify-prototype";
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -80,16 +85,37 @@ const unlockRoute = createRoute({
   component: UnlockPage,
 });
 
+// PROTOTYPE: the Verify tab and its detached window. Both go once the
+// prototype is judged (see components/verify-prototype/NOTES.md).
+const verifyRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/verify",
+  validateSearch: parseVariant,
+  beforeLoad: () => {
+    if (!isEnabled("verify")) throw redirect({ to: "/dashboard" });
+  },
+  component: () => <VerifyPrototypePage detached={false} />,
+});
+
+const verifyWindowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/verify-window",
+  validateSearch: parseVariant,
+  component: VerifyWindow,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   onboardingRoute,
   unlockRoute,
+  verifyWindowRoute,
   appLayoutRoute.addChildren([
     dashboardRoute,
     poolsRoute,
     activityRoute,
     notesRoute,
     txRoute,
+    verifyRoute,
   ]),
 ]);
 

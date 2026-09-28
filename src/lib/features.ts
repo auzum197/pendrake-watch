@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
 // Each entry renders one row in the Experimental section. Gating a feature is reading its
 // flag at the site that should appear or vanish (the Notes nav item, the /notes route).
 
-export type FeatureId = "notes";
+export type FeatureId = "notes" | "verify";
 
 export const FEATURES: { id: FeatureId; label: string; description: string }[] = [
   {
@@ -14,6 +14,12 @@ export const FEATURES: { id: FeatureId; label: string; description: string }[] =
     label: "Notes",
     description:
       "Show the Notes view in the sidebar, a per-output inspector for what the wallet can see.",
+  },
+  {
+    id: "verify",
+    label: "Verify (prototype)",
+    description:
+      "Show the Verify tab, a mocked transaction verifier over outgoing cipher keys. Layouts only, no real decryption yet.",
   },
 ];
 
