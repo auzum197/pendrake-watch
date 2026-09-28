@@ -7,9 +7,10 @@ import {
 	IconListDetails,
 	IconLock,
 	IconSettings,
+	IconShieldCheck,
 } from "@tabler/icons-react";
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
-import { useFeature } from "@/lib/features";
+import { type FeatureId, useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
 import { openSettings, useSettingsModal } from "@/lib/settings-modal";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -46,7 +47,7 @@ async function openAbout() {
 	aboutWindow = win;
 }
 
-type Section = "wallet" | "activity" | "notes";
+type Section = "wallet" | "activity" | "notes" | "verify";
 
 export function AppShell({
 	active,
@@ -171,6 +172,13 @@ function AppSidebar({
 					active={active === "notes"}
 					onClick={() => navigate({ to: "/notes" })}
 				/>
+				<FeatureNavItem
+					feature="verify"
+					icon={<IconShieldCheck className="size-4" />}
+					label="Verify"
+					active={active === "verify"}
+					onClick={() => navigate({ to: "/verify", search: { variant: "a" } })}
+				/>
 			</nav>
 
 			<nav className="mt-auto flex flex-col gap-1">
@@ -228,6 +236,34 @@ function NotesNavItem({
 				active={active}
 				onClick={onClick}
 			/>
+		</div>
+	);
+}
+
+// PROTOTYPE: the Notes item's reveal, for any experimental tab. Folds into
+// NotesNavItem if the Verify tab stays.
+function FeatureNavItem({
+	feature,
+	icon,
+	label,
+	active,
+	onClick,
+}: {
+	feature: FeatureId;
+	icon: ReactNode;
+	label: string;
+	active: boolean;
+	onClick: () => void;
+}) {
+	const enabled = useFeature(feature);
+	const [animate] = useState(animationsEnabled);
+	const state = enabled ? "opacity-100 blur-none" : "opacity-0 blur-[4px]";
+	return (
+		<div
+			inert={!enabled}
+			className={`flex flex-col ${animate ? "nav-reveal" : ""} ${state}`}
+		>
+			<NavItem icon={icon} label={label} active={active} onClick={onClick} />
 		</div>
 	);
 }

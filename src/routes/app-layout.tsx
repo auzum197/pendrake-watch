@@ -6,6 +6,7 @@ import { useWalletData } from "@/hooks/use-wallet-data";
 
 function sectionFor(pathname: string) {
   if (pathname.startsWith("/notes")) return "notes" as const;
+  if (pathname.startsWith("/verify")) return "verify" as const;
   if (pathname.startsWith("/activity") || pathname.startsWith("/tx"))
     return "activity" as const;
   return "wallet" as const;
