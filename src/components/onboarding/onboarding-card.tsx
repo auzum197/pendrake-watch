@@ -20,7 +20,7 @@ export function OnboardingCard({
 }) {
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-ink text-white">
-      <OnboardingBackdrop className="onboarding-fade-in scale-[1.08] blur-[12px]" />
+      <OnboardingBackdrop className="onboarding-fade-in scale-[1.08]" />
       <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-ink/40 to-ink/80" />
       <div className="relative flex h-full flex-col items-center overflow-y-auto px-10 py-12">
         <img
