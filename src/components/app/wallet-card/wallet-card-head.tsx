@@ -10,13 +10,7 @@ import {
   type WalletMenuTarget,
 } from "../wallet-menu/wallet-menu";
 import { DiscreetEye } from "../discreet-eye/discreet-eye";
-
-export function selectedDisplayName(wallet: WalletState | null): string {
-  const custom = wallet?.label?.trim();
-  if (custom) return custom;
-  if (wallet?.fingerprint) return wallet.fingerprint.slice(0, 8);
-  return "—";
-}
+import { selectedDisplayName } from "./display-name";
 
 function shortFingerprint(fingerprint: string | null): string {
   return fingerprint ? fingerprint.slice(0, 8) : "watch-only";

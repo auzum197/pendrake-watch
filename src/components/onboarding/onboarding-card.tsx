@@ -5,8 +5,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import backdrop from "@/assets/onboarding-backdrop.jpg";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
+import { OnboardingBackdrop } from "./backdrop/onboarding-backdrop";
 import "./onboarding-card.css";
 
 export function OnboardingCard({
@@ -20,13 +20,7 @@ export function OnboardingCard({
 }) {
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-ink text-white">
-      <img
-        src={backdrop}
-        alt=""
-        aria-hidden
-        draggable={false}
-        className="onboarding-fade-in pointer-events-none absolute inset-0 h-full w-full scale-[1.08] object-cover blur-[12px]"
-      />
+      <OnboardingBackdrop className="onboarding-fade-in scale-[1.08] blur-[12px]" />
       <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-ink/40 to-ink/80" />
       <div className="relative flex h-full flex-col items-center overflow-y-auto px-10 py-12">
         <img
