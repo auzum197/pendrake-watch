@@ -9,7 +9,6 @@ import { useMasked } from "@/lib/discreet";
 import { animationsEnabled } from "@/lib/motion";
 import "./discreet-value.css";
 
-
 export type DiscreetKind =
   | "zec"
   | "usd"
@@ -88,9 +87,9 @@ function runScramble(
     }
     const resolved = Math.floor(easeOut(p) * to.length);
     set(
-      Array.from(to, (c, i) => (i < resolved || c === " " ? c : glyphs[i])).join(
-        "",
-      ),
+      Array.from(to, (c, i) =>
+        i < resolved || c === " " ? c : glyphs[i],
+      ).join(""),
     );
   });
   return stop;

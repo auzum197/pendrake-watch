@@ -70,8 +70,13 @@ package: stage-daemon
 
 # Run the app with hot reload, pinned to the freshly-built pendraked engine.
 [group('run')]
-dev: daemon
+dev: stage-daemon
     PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
+
+# Run `dev` with react-scan outlining each component as it re-renders.
+[group('run')]
+dev-scan: stage-daemon
+    VITE_REACT_SCAN=1 PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
 
 # Regenerate the GUI's wire types (src/lib/generated/wire.ts) from pendrake-ipc.
 # Run after changing any type the daemon serializes.

@@ -56,7 +56,12 @@ export const txs: Tx[] = [
     netZat: "5000000",
     status: "pending",
     notes: [
-      { pool: "sapling", direction: "received", outputIndex: 0, valueZat: "5000000" },
+      {
+        pool: "sapling",
+        direction: "received",
+        outputIndex: 0,
+        valueZat: "5000000",
+      },
     ],
   },
 ];

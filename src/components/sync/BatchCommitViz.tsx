@@ -51,9 +51,15 @@ export function BatchCommitViz({
   const leafTopPct = ((H - PAD_BOTTOM) / H) * 100;
 
   const covered = (level: number, index: number) =>
-    ((index + 1) << level) <= filled;
+    (index + 1) << level <= filled;
 
-  const edges: { x1: number; y1: number; x2: number; y2: number; on: boolean }[] = [];
+  const edges: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    on: boolean;
+  }[] = [];
   for (let level = 1; level < LEVELS; level++) {
     rows[level].forEach((node, index) => {
       for (const c of [index * 2, index * 2 + 1]) {
@@ -79,28 +85,32 @@ export function BatchCommitViz({
             y1={e.y1}
             x2={e.x2}
             y2={e.y2}
-            className={e.on ? "text-violet-500 opacity-70" : "text-border opacity-50"}
+            className={
+              e.on ? "text-violet-500 opacity-70" : "text-border opacity-50"
+            }
             stroke="currentColor"
             strokeWidth={1}
           />
         ))}
-        {rows.slice(1).flatMap((row, l) =>
-          row.map((node, i) => (
-            <circle
-              key={`n${l}-${i}`}
-              cx={node.x}
-              cy={node.y}
-              r={2.6}
-              className={
-                covered(l + 1, i)
-                  ? "text-violet-500"
-                  : "text-muted-foreground opacity-30"
-              }
-              fill="currentColor"
-              style={{ transition: "opacity 250ms var(--ease-out-strong)" }}
-            />
-          )),
-        )}
+        {rows
+          .slice(1)
+          .flatMap((row, l) =>
+            row.map((node, i) => (
+              <circle
+                key={`n${l}-${i}`}
+                cx={node.x}
+                cy={node.y}
+                r={2.6}
+                className={
+                  covered(l + 1, i)
+                    ? "text-violet-500"
+                    : "text-muted-foreground opacity-30"
+                }
+                fill="currentColor"
+                style={{ transition: "opacity 250ms var(--ease-out-strong)" }}
+              />
+            )),
+          )}
         {rows[0].map((leaf, i) => (
           <rect
             key={`l${i}`}
@@ -134,10 +144,7 @@ export function BatchCommitViz({
       ) : (
         <div className="sync-bob pointer-events-none absolute left-1/2 top-0 flex -translate-x-1/2 gap-1">
           {Array.from({ length: 4 }).map((_, i) => (
-            <span
-              key={i}
-              className="h-2 w-2 rounded-[2px] bg-violet-500/60"
-            />
+            <span key={i} className="h-2 w-2 rounded-[2px] bg-violet-500/60" />
           ))}
         </div>
       )}

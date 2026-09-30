@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { SyncStatus, WalletSummary } from "@/lib/ipc";
-import { InlineName } from "../wallet-card/inline-name";
+import { InlineName } from "../inline-name/inline-name";
 import { WalletMenu } from "../wallet-menu/wallet-menu";
 import { WalletRow, type WalletRowState } from "./wallet-row";
 
 const FINGERPRINT = "a1b2c3d4e5f6a7b8";
 
-const SYNC: Record<Exclude<WalletRowState, "unavailable" | "closed">, SyncStatus> = {
+const SYNC: Record<
+  Exclude<WalletRowState, "unavailable" | "closed">,
+  SyncStatus
+> = {
   synced: {
     state: "idle",
     syncedHeight: 2_400_000,
@@ -53,7 +56,12 @@ type Knobs = {
   onPick: (id: string) => void;
 };
 
-function summaryFor({ state, selected, named, hasBalance }: Knobs): WalletSummary {
+function summaryFor({
+  state,
+  selected,
+  named,
+  hasBalance,
+}: Knobs): WalletSummary {
   return {
     id: FINGERPRINT,
     label: named ? "Cold storage" : FINGERPRINT.slice(0, 8),
@@ -64,7 +72,8 @@ function summaryFor({ state, selected, named, hasBalance }: Knobs): WalletSummar
     lastBalance: hasBalance ? "897091655" : null,
     notificationsEnabled: true,
     indexerUri: "https://zec.rocks:443",
-    sync: state === "unavailable" || state === "closed" ? undefined : SYNC[state],
+    sync:
+      state === "unavailable" || state === "closed" ? undefined : SYNC[state],
     unavailable:
       state === "unavailable" ? "wallet file could not be read" : undefined,
   };
@@ -84,6 +93,7 @@ function Row(knobs: Knobs) {
           <InlineName
             value={wallet.label}
             placeholder={FINGERPRINT.slice(0, 8)}
+            className="wallet-rename"
             onCommit={menuAction}
             onCancel={menuAction}
           />
@@ -117,7 +127,14 @@ const meta = {
   argTypes: {
     state: {
       control: "radio",
-      options: ["synced", "syncing", "error", "wrongChain", "unavailable", "closed"],
+      options: [
+        "synced",
+        "syncing",
+        "error",
+        "wrongChain",
+        "unavailable",
+        "closed",
+      ],
     },
     onPick: { control: false },
   },
@@ -165,9 +182,20 @@ export const NeverSynced: Story = {
   args: { state: "closed", hasBalance: false },
 };
 
-const CYCLE: WalletRowState[] = ["synced", "syncing", "error", "syncing", "wrongChain", "unavailable"];
+const CYCLE: WalletRowState[] = [
+  "synced",
+  "syncing",
+  "error",
+  "syncing",
+  "wrongChain",
+  "unavailable",
+];
 
-function Cycling({ states, every, ...knobs }: Knobs & { states: WalletRowState[]; every: number }) {
+function Cycling({
+  states,
+  every,
+  ...knobs
+}: Knobs & { states: WalletRowState[]; every: number }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), every);
