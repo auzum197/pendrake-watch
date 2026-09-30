@@ -22,7 +22,11 @@ function flatten(d: string): Pt[][] {
   const re = /([MLQCZ])([^MLQCZ]*)/g;
   for (const m of d.matchAll(re)) {
     const cmd = m[1];
-    const n = m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    const n = m[2]
+      .trim()
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map(Number);
     switch (cmd) {
       case "M":
         if (cur.length > 1) contours.push(cur);
@@ -54,8 +58,14 @@ function flatten(d: string): Pt[][] {
           const t = i / CURVE_STEPS;
           const u = 1 - t;
           cur.push([
-            u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x,
-            u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y,
+            u * u * u * x0 +
+              3 * u * u * t * x1 +
+              3 * u * t * t * x2 +
+              t * t * t * x,
+            u * u * u * y0 +
+              3 * u * u * t * y1 +
+              3 * u * t * t * y2 +
+              t * t * t * y,
           ]);
         }
         pen = [x, y];
@@ -132,15 +142,24 @@ function onArc(c: Pt, r: number, a: number): Pt {
 
 // One slice of the disc: the arc from a0 to a1, then both radii back through the
 // centre. A slice covering the full turn is the disc itself.
-function wedgePoly(c: Pt, r: number, a0: number, a1: number, count: number): Pt[] {
+function wedgePoly(
+  c: Pt,
+  r: number,
+  a0: number,
+  a1: number,
+  count: number,
+): Pt[] {
   const full = Math.abs(a1 - a0) >= Math.PI * 2 - 1e-6;
   if (full) {
-    return Array.from({ length: count }, (_, k) => onArc(c, r, a0 + ((a1 - a0) * k) / count));
+    return Array.from({ length: count }, (_, k) =>
+      onArc(c, r, a0 + ((a1 - a0) * k) / count),
+    );
   }
   const arcN = Math.round(count * 0.6);
   const legN = Math.floor((count - arcN) / 2);
   const out: Pt[] = [];
-  for (let k = 0; k < arcN; k++) out.push(onArc(c, r, a0 + ((a1 - a0) * k) / (arcN - 1)));
+  for (let k = 0; k < arcN; k++)
+    out.push(onArc(c, r, a0 + ((a1 - a0) * k) / (arcN - 1)));
   const end = onArc(c, r, a1);
   const start = onArc(c, r, a0);
   for (let k = 1; k <= legN; k++) {
@@ -166,7 +185,10 @@ export type Morph = {
 export function buildMorph(d: string, center: Pt, radius: number): Morph {
   const contours = flatten(d).map((c) => resample(c, SAMPLES));
   const areas = contours.map(signedArea);
-  const largest = areas.reduce((bi, a, i) => (Math.abs(a) > Math.abs(areas[bi]) ? i : bi), 0);
+  const largest = areas.reduce(
+    (bi, a, i) => (Math.abs(a) > Math.abs(areas[bi]) ? i : bi),
+    0,
+  );
   const outerSign = Math.sign(areas[largest]);
   const outers = contours
     .map((poly, i) => ({ i, x: centroidX(poly) }))
@@ -185,8 +207,15 @@ export function buildMorph(d: string, center: Pt, radius: number): Morph {
       // The leftmost letter takes the wedge on the left, the rest follow around.
       // Neighbours overlap by a few degrees so no hairline seam shows between them.
       const a0 = Math.PI + j * span;
-      target = wedgePoly(center, radius, a0 - WEDGE_LAP, a0 + span + WEDGE_LAP, SAMPLES);
-      if (Math.sign(signedArea(target)) !== Math.sign(areas[i])) target.reverse();
+      target = wedgePoly(
+        center,
+        radius,
+        a0 - WEDGE_LAP,
+        a0 + span + WEDGE_LAP,
+        SAMPLES,
+      );
+      if (Math.sign(signedArea(target)) !== Math.sign(areas[i]))
+        target.reverse();
     }
     from.push(rotateToNearest(poly, target[0]));
     to.push(target);

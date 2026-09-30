@@ -63,8 +63,14 @@ function PoolWord({
   zIndex: number;
 }) {
   const glyph = POOL_GLYPHS[pool];
-  const center = useMemo<Pt>(() => [glyph.advance / 2, DISC_Y], [glyph.advance]);
-  const morph = useMemo(() => buildMorph(glyph.d, center, RADIUS), [glyph.d, center]);
+  const center = useMemo<Pt>(
+    () => [glyph.advance / 2, DISC_Y],
+    [glyph.advance],
+  );
+  const morph = useMemo(
+    () => buildMorph(glyph.d, center, RADIUS),
+    [glyph.d, center],
+  );
   const disc = useMemo(() => circlePath(center, RADIUS), [center]);
 
   const itemRef = useRef<HTMLSpanElement>(null);
@@ -83,8 +89,12 @@ function PoolWord({
     if (!path || !item) return;
     const apply = (v: number) => {
       t.current = v;
-      path.setAttribute("d", v >= 1 ? disc : v <= 0 ? glyph.d : morphPath(morph, v));
-      item.style.transform = v <= 0 ? "" : `translateX(${(dx * v).toFixed(2)}px)`;
+      path.setAttribute(
+        "d",
+        v >= 1 ? disc : v <= 0 ? glyph.d : morphPath(morph, v),
+      );
+      item.style.transform =
+        v <= 0 ? "" : `translateX(${(dx * v).toFixed(2)}px)`;
     };
     cancelAnimationFrame(raf.current);
     const from = t.current;
@@ -193,8 +203,15 @@ export function TxPools({ pools }: { pools: Pool[] }) {
         const dx = slotCenter - (centers[i] ?? slotCenter);
         return (
           <span key={p} className="contents">
-            {i > 0 && <span className="tx-pool-sep text-muted-foreground">,{" "}</span>}
-            <PoolWord pool={p} hidden={hidden} dx={dx} zIndex={pools.length - i} />
+            {i > 0 && (
+              <span className="tx-pool-sep text-muted-foreground">, </span>
+            )}
+            <PoolWord
+              pool={p}
+              hidden={hidden}
+              dx={dx}
+              zIndex={pools.length - i}
+            />
           </span>
         );
       })}

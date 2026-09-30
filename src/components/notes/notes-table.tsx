@@ -144,9 +144,7 @@ export function NotesTable({
   return (
     <div className="mt-4 overflow-x-auto">
       <div className="min-w-2xl text-sm">
-        <div
-          className={`${GRID} pb-3 text-left text-xs text-muted-foreground`}
-        >
+        <div className={`${GRID} pb-3 text-left text-xs text-muted-foreground`}>
           {COLUMNS.map((col) => (
             <div
               key={col.key}

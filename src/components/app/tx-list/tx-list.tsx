@@ -43,7 +43,10 @@ function colWidths(rows: Tx[]): { amount: number; block: number } {
   let amount = maskFor("zec").length + AMOUNT_EXTRA_CH;
   let block = Math.max(maskFor("block").length, BLOCK_MIN_CH);
   for (const tx of rows) {
-    amount = Math.max(amount, formatZec(BigInt(tx.valueZat)).length + AMOUNT_EXTRA_CH);
+    amount = Math.max(
+      amount,
+      formatZec(BigInt(tx.valueZat)).length + AMOUNT_EXTRA_CH,
+    );
     if (tx.blockHeight) {
       block = Math.max(block, formatBlock(tx.blockHeight).length);
     }
@@ -70,7 +73,9 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
   const rows = limit ? ordered.slice(0, limit) : ordered;
 
   if (rows.length === 0) {
-    return <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>;
+    return (
+      <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>
+    );
   }
 
   const open = (txid: string) =>
@@ -141,9 +146,7 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     );
   }
 
-  return (
-    <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />
-  );
+  return <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />;
 }
 
 function VirtualTxList({
@@ -307,14 +310,19 @@ function TxAmount({ tx }: { tx: Tx }) {
     >
       <span>
         {received ? "+" : "−"}
-        <DiscreetValue kind="zec">{formatZec(BigInt(tx.valueZat))}</DiscreetValue>
+        <DiscreetValue kind="zec">
+          {formatZec(BigInt(tx.valueZat))}
+        </DiscreetValue>
         <IconCurrencyZcash
           className="ml-1 inline size-[1em] align-[-0.15em] text-muted-foreground"
           aria-label="ZEC"
         />
       </span>
       {txHasMemo(tx) && (
-        <IconMessage2 className="size-3.5 text-muted-foreground" aria-label="Has memo" />
+        <IconMessage2
+          className="size-3.5 text-muted-foreground"
+          aria-label="Has memo"
+        />
       )}
     </span>
   );

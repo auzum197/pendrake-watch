@@ -3,8 +3,7 @@ import { buildMorph, circlePath, easeInOut, morphPath } from "./morph";
 import { POOL_GLYPHS } from "./pool-glyphs";
 
 // A square with a square hole, wound opposite ways, the shape of an "O".
-const RING =
-  "M0 0L100 0L100 100L0 100Z" + "M25 25L25 75L75 75L75 25Z";
+const RING = "M0 0L100 0L100 100L0 100Z" + "M25 25L25 75L75 75L75 25Z";
 
 describe("buildMorph", () => {
   it("pairs every contour with a target of the same point count", () => {
@@ -26,7 +25,10 @@ describe("buildMorph", () => {
     const glyph = POOL_GLYPHS.orchard;
     const m = buildMorph(glyph.d, [glyph.advance / 2, -240], 400);
     const onRim = m.to.filter((pts) =>
-      pts.some(([x, y]) => Math.abs(Math.hypot(x - glyph.advance / 2, y + 240) - 400) < 1),
+      pts.some(
+        ([x, y]) =>
+          Math.abs(Math.hypot(x - glyph.advance / 2, y + 240) - 400) < 1,
+      ),
     );
     // O r c h a r d: seven letters, so seven outer contours on the rim.
     expect(onRim).toHaveLength(7);
@@ -38,15 +40,25 @@ describe("morphPath", () => {
     const m = buildMorph(RING, [50, 50], 20);
     const at0 = morphPath(m, 0);
     const at1 = morphPath(m, 1);
-    expect(at0.startsWith(`M${m.from[0][0][0].toFixed(1)} ${m.from[0][0][1].toFixed(1)}`)).toBe(true);
-    expect(at1.startsWith(`M${m.to[0][0][0].toFixed(1)} ${m.to[0][0][1].toFixed(1)}`)).toBe(true);
+    expect(
+      at0.startsWith(
+        `M${m.from[0][0][0].toFixed(1)} ${m.from[0][0][1].toFixed(1)}`,
+      ),
+    ).toBe(true);
+    expect(
+      at1.startsWith(
+        `M${m.to[0][0][0].toFixed(1)} ${m.to[0][0][1].toFixed(1)}`,
+      ),
+    ).toBe(true);
     expect((at0.match(/Z/g) ?? []).length).toBe(2);
   });
 });
 
 describe("circlePath", () => {
   it("draws two arcs from the leftmost point", () => {
-    expect(circlePath([10, 20], 5)).toBe("M5 20a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z");
+    expect(circlePath([10, 20], 5)).toBe(
+      "M5 20a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z",
+    );
   });
 });
 

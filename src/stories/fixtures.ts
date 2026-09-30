@@ -46,7 +46,12 @@ export const txs: Tx[] = [
         valueZat: "21000000",
         recipient: "zs1exampleexampleexample",
       },
-      { pool: "orchard", direction: "received", outputIndex: 1, valueZat: "1010000" },
+      {
+        pool: "orchard",
+        direction: "received",
+        outputIndex: 1,
+        valueZat: "1010000",
+      },
     ],
   },
   {
@@ -57,7 +62,12 @@ export const txs: Tx[] = [
     netZat: "5000000",
     status: "pending",
     notes: [
-      { pool: "sapling", direction: "received", outputIndex: 0, valueZat: "5000000" },
+      {
+        pool: "sapling",
+        direction: "received",
+        outputIndex: 0,
+        valueZat: "5000000",
+      },
     ],
   },
 ];

@@ -10,10 +10,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog/alert-dialog";
 import { HoldButton } from "@/components/ui/hold-button/hold-button";
-import { startOver as startOverWallets, unlock as unlockWallet } from "@/lib/ipc";
+import {
+  startOver as startOverWallets,
+  unlock as unlockWallet,
+} from "@/lib/ipc";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { selectLinkedWallet, takePendingLink } from "@/lib/deep-link";
-import pendrakeLogo from "@/assets/pendrake-logo.svg";
+import { OnboardingCard } from "@/components/onboarding/onboarding-card";
 
 // Unlock screen (docs/adr/0003). The global passphrase set at onboarding is what
 export function UnlockPage() {
@@ -50,7 +53,11 @@ export function UnlockPage() {
       const link = takePendingLink();
       if (link) {
         await selectLinkedWallet(link.walletId, state.walletId).catch(() => {});
-        navigate({ to: "/tx/$txid", params: { txid: link.txid }, replace: true });
+        navigate({
+          to: "/tx/$txid",
+          params: { txid: link.txid },
+          replace: true,
+        });
       } else {
         navigate({ to: "/dashboard", replace: true });
       }
@@ -75,11 +82,10 @@ export function UnlockPage() {
   if (alreadyOpen) return <div className="fixed inset-0 z-50 bg-ink" />;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-ink px-10 py-12 text-white">
-      <img src={pendrakeLogo} alt="Pendrake" className="h-[27px]" />
-      <div className="flex w-full flex-1 flex-col justify-center py-10">
+    <>
+      <OnboardingCard>
         <form
-          className="mx-auto flex w-full max-w-md flex-col gap-7"
+          className="flex flex-col gap-7"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
@@ -130,7 +136,7 @@ export function UnlockPage() {
           <button
             type="submit"
             disabled={password.length === 0 || busy}
-            className="h-12 w-full rounded-full bg-brand text-sm font-semibold text-brand-foreground transition-colors hover:bg-brand/90 disabled:bg-white/10 disabled:text-white/40"
+            className="h-12 w-full rounded-full bg-brand text-sm font-semibold text-brand-foreground transition-[background-color,color,transform] duration-150 ease-out-soft hover:bg-brand/90 active:scale-[0.98] disabled:bg-white/10 disabled:text-white/40"
           >
             {busy ? "Unlocking…" : "Unlock"}
           </button>
@@ -143,7 +149,7 @@ export function UnlockPage() {
             Forgot passphrase?
           </button>
         </form>
-      </div>
+      </OnboardingCard>
 
       <AlertDialog open={confirmStartOver} onOpenChange={setConfirmStartOver}>
         <AlertDialogContent>
@@ -165,6 +171,6 @@ export function UnlockPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

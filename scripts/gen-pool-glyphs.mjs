@@ -18,9 +18,8 @@ import { decompress } from "wawoff2";
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const woff2 = require.resolve(
-  "@fontsource-variable/nunito-sans/files/nunito-sans-latin-wght-normal.woff2",
-);
+const woff2 =
+  require.resolve("@fontsource-variable/nunito-sans/files/nunito-sans-latin-wght-normal.woff2");
 const out = path.resolve(here, "../src/components/app/tx-list/pool-glyphs.ts");
 
 const NAMES = {
@@ -42,7 +41,10 @@ for (const [pool, word] of Object.entries(NAMES)) {
   run.glyphs.forEach((g, i) => {
     const glyph = regular.getGlyph(g.id);
     const pos = run.positions[i];
-    const d = glyph.path.translate(x + pos.xOffset, pos.yOffset).scale(1, -1).toSVG();
+    const d = glyph.path
+      .translate(x + pos.xOffset, pos.yOffset)
+      .scale(1, -1)
+      .toSVG();
     if (d) parts.push(d);
     x += glyph.advanceWidth;
   });

@@ -29,7 +29,8 @@ function layout(): Node[][] {
       const x =
         level === 0
           ? PAD_X + index * leafGap
-          : (rows[level - 1][index * 2].x + rows[level - 1][index * 2 + 1].x) / 2;
+          : (rows[level - 1][index * 2].x + rows[level - 1][index * 2 + 1].x) /
+            2;
       row.push({ level, index, x, y });
     }
     rows.push(row);
@@ -69,9 +70,16 @@ export function MerkleTree({
   }, [lastLeaf]);
 
   const covered = (level: number, index: number) =>
-    ((index + 1) << level) <= filled;
+    (index + 1) << level <= filled;
 
-  const edges: { x1: number; y1: number; x2: number; y2: number; on: boolean; front: boolean }[] = [];
+  const edges: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    on: boolean;
+    front: boolean;
+  }[] = [];
   for (let level = 1; level < LEVELS; level++) {
     for (const node of rows[level]) {
       for (const childIdx of [node.index * 2, node.index * 2 + 1]) {
@@ -195,7 +203,9 @@ export function MerkleTree({
         ) : (
           <>
             Appending commitments to the note tree
-            {total ? ` (${(scanned ?? 0).toLocaleString()}/${total.toLocaleString()})` : ""}
+            {total
+              ? ` (${(scanned ?? 0).toLocaleString()}/${total.toLocaleString()})`
+              : ""}
           </>
         )}
       </figcaption>

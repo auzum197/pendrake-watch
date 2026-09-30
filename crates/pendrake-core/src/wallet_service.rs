@@ -1888,8 +1888,8 @@ impl WalletService {
         if wrong_chain && !w.wrong_chain_notified.swap(true, Ordering::SeqCst) {
             let label = w.label().await;
             let _ = self.notifier.notify(
-                "Wrong chain detected",
-                &format!("Your Indexer is serving a different chain than {label} synced. Open to review."),
+                &format!("{label}: Wrong chain detected"),
+                "Your Indexer is serving a different chain than this Wallet synced. Open to review.",
                 &format!("pendrake://settings/indexer?wallet={}", w.id),
             );
         }
@@ -2327,16 +2327,19 @@ impl WalletService {
             // Wallet's label. The deep link and delivery flow are unchanged.
             let (title, body) = if self.discreet.load(Ordering::SeqCst) {
                 (
-                    "New transaction detected",
+                    "New transaction detected".to_string(),
                     "Open Pendrake to view details.".to_string(),
                 )
             } else {
                 let amount = format_amount(value);
                 let label = w.label().await;
                 if received {
-                    ("Funds received", format!("{amount} arrived in {label}."))
+                    (
+                        format!("{label}: Funds received"),
+                        format!("{amount} arrived."),
+                    )
                 } else {
-                    ("Funds sent", format!("{amount} sent from {label}."))
+                    (format!("{label}: Funds sent"), format!("{amount} sent."))
                 }
             };
             tracing::info!(id = %w.id, "new tx {txid} ({value} zat, received={received}), notifying");
@@ -2344,7 +2347,7 @@ impl WalletService {
             // it out of the set, so a later rediscovery (at the latest, the next restart's
             // catch-up sync) tries again rather than losing it.
             let link = format!("pendrake://tx?txid={txid}&wallet={}", w.id);
-            match self.notifier.notify(title, &body, &link) {
+            match self.notifier.notify(&title, &body, &link) {
                 Ok(()) => w.notify.mark_notified(txid),
                 Err(e) => {
                     tracing::warn!("notification for {txid} failed, will retry on rediscovery: {e}")
@@ -2421,8 +2424,8 @@ impl WalletService {
         {
             let label = w.label().await;
             let _ = self.notifier.notify(
-                "Wallet ready",
-                &format!("Pendrake finished scanning {label}. You'll be notified of new activity."),
+                &format!("{label}: Wallet ready"),
+                "Pendrake finished scanning. You'll be notified of new activity.",
                 &format!("pendrake://wallet?wallet={}", w.id),
             );
         }
@@ -2853,10 +2856,10 @@ mod tests {
             .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "Funds received");
-        // The toast names the Wallet and the link carries its id, since the
+        assert_eq!(calls[0].0, "w1: Funds received");
+        // The title names the Wallet and the link carries its id, since the
         // transaction may belong to a Wallet that isn't on screen.
-        assert_eq!(calls[0].1, "0.42 ZEC arrived in w1.");
+        assert_eq!(calls[0].1, "0.42 ZEC arrived.");
         assert_eq!(calls[0].2, "pendrake://tx?txid=txlive&wallet=w1");
     }
 
@@ -2881,7 +2884,7 @@ mod tests {
             .await;
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "Funds sent");
+        assert_eq!(calls[0].0, "w1: Funds sent");
     }
 
     #[tokio::test]
@@ -2987,7 +2990,7 @@ mod tests {
         // The summary's kind, value and height flow to the movement toast.
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "Funds received");
+        assert_eq!(calls[0].0, "w1: Funds received");
         assert_eq!(calls[0].2, format!("pendrake://tx?txid={id}&wallet=w1"));
         // ...and to the cache the GUI reads.
         assert!(w.txs.read().await.iter().any(|t| t.txid == id.to_string()));
@@ -3024,7 +3027,7 @@ mod tests {
             )
             .await;
 
-        assert_eq!(spy.calls()[0].0, "Funds sent");
+        assert_eq!(spy.calls()[0].0, "w1: Funds sent");
         match events.try_recv().unwrap() {
             SyncEvent::Transaction { kind, received, .. } => {
                 assert_eq!(kind, TxKind::Sent);
@@ -3108,7 +3111,7 @@ mod tests {
 
         let calls = spy.calls();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "Wrong chain detected");
+        assert_eq!(calls[0].0, "w1: Wrong chain detected");
         assert_eq!(calls[0].2, "pendrake://settings/indexer?wallet=w1");
 
         let sync = w.sync.read().await;

@@ -5,13 +5,22 @@ import { Button } from "@/components/ui/button/button";
 import { Toaster } from "@/components/ui/sonner/sonner";
 import { appToast } from "./app-toast";
 
-type Variant = "unreachable" | "wrongChain" | "daemon" | "error"| "wrongChain" | "error" | "success" | "info";
+type Variant =
+  | "unreachable"
+  | "wrongChain"
+  | "daemon"
+  | "error"
+  | "wrongChain"
+  | "error"
+  | "success"
+  | "info";
 
 const FIRE: Record<Variant, () => void> = {
   unreachable: () => appToast.unreachable(),
   wrongChain: () => appToast.wrongChain(),
   daemon: () => appToast.daemon("connection to the daemon socket was refused"),
-  error: () => appToast.error("Couldn't switch Wallet", "failed to open wallet 33d66daa"),
+  error: () =>
+    appToast.error("Couldn't switch Wallet", "failed to open wallet 33d66daa"),
   success: () => appToast.success("Copied to clipboard"),
   info: () => appToast.info("Notifications enabled"),
 };
@@ -33,7 +42,14 @@ const meta = {
   argTypes: {
     variant: {
       control: "radio",
-      options: ["unreachable", "wrongChain", "daemon", "error", "success", "info"],
+      options: [
+        "unreachable",
+        "wrongChain",
+        "daemon",
+        "error",
+        "success",
+        "info",
+      ],
     },
   },
   decorators: [

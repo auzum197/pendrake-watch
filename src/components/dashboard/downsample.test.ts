@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { downsampleSeries } from "./BalanceChart";
+import { downsampleSeries } from "./downsample";
 import type { BalancePoint } from "@/lib/format";
 
 const pt = (i: number, value: number): BalancePoint => ({

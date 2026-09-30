@@ -93,7 +93,9 @@ export const Unavailable: Story = {
 export const Rename: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: /cold storage/i }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: /cold storage/i }),
+    );
     const field = await canvas.findByRole("textbox", { name: /wallet name/i });
     await userEvent.clear(field);
     await userEvent.type(field, "Rainy day{enter}");
@@ -108,7 +110,9 @@ export const Rescan: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: /rescan…/i }));
-    const dialog = within(await within(document.body).findByRole("alertdialog"));
+    const dialog = within(
+      await within(document.body).findByRole("alertdialog"),
+    );
     await expect(dialog.getByText(/from block 419,200/i)).toBeVisible();
     await userEvent.click(dialog.getByRole("button", { name: /^rescan$/i }));
     await expect(mocked(rescanWallet)).toHaveBeenCalledWith(FINGERPRINT);

@@ -33,7 +33,12 @@ export const Area_: Story = {
     <ChartContainer config={config} className="aspect-video w-[36rem]">
       <AreaChart data={data} margin={{ left: 12, right: 12 }}>
         <CartesianGrid vertical={false} strokeDasharray="4 6" />
-        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+        <XAxis
+          dataKey="label"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+        />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Area
           dataKey="value"

@@ -25,7 +25,9 @@ const fields = [
   { file: "crates/Cargo.toml", pattern: cargoField },
   {
     file: "platform/macos/PendrakeSync/Info.plist",
-    pattern: new RegExp(`(<key>CFBundleShortVersionString</key><string>)(${semver})(</string>)`),
+    pattern: new RegExp(
+      `(<key>CFBundleShortVersionString</key><string>)(${semver})(</string>)`,
+    ),
   },
   {
     file: "packaging/arch/PKGBUILD",
@@ -46,8 +48,12 @@ function writeField({ file, pattern, encode }, version) {
   const path = resolve(root, file);
   const text = readFileSync(path, "utf8");
   const encoded = encode ? encode(version) : version;
-  let next = text.replace(pattern, (_, before, _old, after) => `${before}${encoded}${after}`);
-  if (file.endsWith("PKGBUILD")) next = next.replace(/^pkgrel=\d+$/m, "pkgrel=1");
+  let next = text.replace(
+    pattern,
+    (_, before, _old, after) => `${before}${encoded}${after}`,
+  );
+  if (file.endsWith("PKGBUILD"))
+    next = next.replace(/^pkgrel=\d+$/m, "pkgrel=1");
   writeFileSync(path, next);
 }
 
@@ -70,7 +76,9 @@ switch (command) {
     break;
   case "set": {
     if (!argument || !new RegExp(`^${semver}$`).test(argument)) {
-      console.error(`usage: version.mjs set <X.Y.Z[-pre]>, got ${JSON.stringify(argument)}`);
+      console.error(
+        `usage: version.mjs set <X.Y.Z[-pre]>, got ${JSON.stringify(argument)}`,
+      );
       process.exit(2);
     }
     for (const field of fields) writeField(field, argument);
