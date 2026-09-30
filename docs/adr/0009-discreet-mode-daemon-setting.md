@@ -9,9 +9,9 @@ boundary instead.
 
 **The flag lives in the daemon, alongside `fiat_enabled`.** Pendrake's reason to exist is
 posting a desktop notification when a transaction is detected while the window is closed. That
-notification names an amount and a direction ("Received 1.5 ZEC"). A frontend flag cannot
+notification names the Wallet, an amount and a direction ("Main: Funds received", "1.5 ZEC arrived."). A frontend flag cannot
 redact it, since the UI may not be running when it posts. With Discreet mode on, the daemon
-posts "New transaction detected" with no amount and no direction.
+posts "New transaction detected" with no Wallet name, no amount and no direction.
 
 **It survives restarts.** Someone who hides their figures before a screen share needs them
 hidden before the window opens. The setting persists to disk and is toggled over IPC from the
