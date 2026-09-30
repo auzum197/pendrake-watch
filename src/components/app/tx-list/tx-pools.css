@@ -1,0 +1,69 @@
+/* The Pools cell of a transaction row. Shape and slide are driven from one
+   requestAnimationFrame value in tx-pools.tsx, so they are one movement. This sheet
+   carries the rest of the same moment: the fill going from pool colour to grey, the
+   background ring fading in around each disc, and the comma fading, each over the
+   same duration with no delay so nothing reads as a second step. Inlined curve:
+   --ease-out-soft lives in @theme inline and is not emitted on :root. */
+
+.tx-pools {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  --dur: 260ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tx-pools[data-hidden="true"] {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tx-pool {
+  position: relative;
+  display: inline-block;
+}
+
+.tx-pool-sep {
+  display: inline-block;
+  /* An inline-block trims its own trailing space, which would eat the gap after
+     the comma. */
+  white-space: pre;
+}
+
+/* Sized in em by the component so it tracks the cell's font size. The baseline of
+   an inline-block SVG is its bottom edge, so lift it by the descender to land the
+   glyphs on the text baseline beside the comma. */
+.tx-pool-glyph {
+  display: inline-block;
+  vertical-align: -0.353em;
+  overflow: visible;
+}
+
+.tx-pool-glyph path {
+  fill: var(--pool);
+  stroke: var(--background);
+  stroke-opacity: 0;
+  paint-order: stroke;
+  stroke-linejoin: round;
+}
+
+.tx-pools[data-hidden="true"] .tx-pool-glyph path {
+  fill: var(--muted-foreground);
+  stroke-opacity: 1;
+}
+
+.tx-pools[data-hidden="true"] .tx-pool-sep {
+  opacity: 0;
+}
+
+.tx-pools[data-motion="on"] .tx-pool-glyph path {
+  transition:
+    fill var(--dur) var(--ease),
+    stroke-opacity var(--dur) var(--ease);
+}
+
+.tx-pools[data-motion="on"] .tx-pool-sep {
+  transition: opacity var(--dur) var(--ease);
+}

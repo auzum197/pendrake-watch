@@ -39,6 +39,11 @@
 	--sidebar-accent-foreground: #fafafa;
 	--sidebar-border: #2a2b30;
 	--sidebar-ring: #3a3b42;
+	/* Pool identity colours, shared by the Notes dots and the transaction list. */
+	--pool-orchard: #1d9e75;
+	--pool-sapling: #378add;
+	--pool-ironwood: #c45c2a;
+	--pool-transparent: #888780;
 }
 
 @theme inline {
@@ -47,6 +52,10 @@
 	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 	--color-brand: #2e58ff;
 	--color-brand-foreground: #ffffff;
+	--color-pool-orchard: var(--pool-orchard);
+	--color-pool-sapling: var(--pool-sapling);
+	--color-pool-ironwood: var(--pool-ironwood);
+	--color-pool-transparent: var(--pool-transparent);
 	--color-ink: #101012;
 	--color-ink-soft: #1a1a1c;
 	--color-ink-line: #2a2a2e;

@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  IconCircleCheckFilled,
+  IconArrowDownLeft,
+  IconArrowUpRight,
+  IconCurrencyZcash,
   IconLoader2,
   IconMessage2,
 } from "@tabler/icons-react";
@@ -14,22 +16,34 @@ import {
 import { formatBlock, formatTxDate, formatZec, txHasMemo } from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
 import { takeReturnRow } from "../return-flash";
+import { poolsOf, TxPools } from "./tx-pools";
 import "../reveal.css";
 
 const STAGGER_CEILING_MS = 360;
 const STAGGER_TAU = 9;
 
-const COLS = "grid grid-cols-[7rem_1fr_7.5rem_7rem_10ch] items-center gap-4";
+// One line per transaction: direction arrow, signed amount, txid, Pools, date,
+// block. Confirmed is the expected state so it carries no mark; Pending is the
+// one status that shows, and it takes the block slot (docs/adr/0013).
+const COLS = "grid items-center gap-4";
 
-const TYPE_COL = "7rem";
-const STATUS_COL = "7.5rem";
+const KIND_COL = "1.25rem";
+// The Discreet mask for a txid is wider than the shortened txid itself.
+const TXID_COL = `${maskFor("txid").length + 1}ch`;
+const POOLS_COL = "minmax(6rem, 1fr)";
 const DATE_COL = "7rem";
+// Wide enough for the Pending mark when a row has no block.
+const BLOCK_MIN_CH = 9;
+const AMOUNT_EXTRA_CH = 7;
+
+const HEADERS = ["", "Amount", "Txid", "Pools", "Date", "Block"];
 
 function colWidths(rows: Tx[]): { amount: number; block: number } {
-  let amount = maskFor("zec").length + 5;
-  let block = maskFor("block").length;
+  // Sign, digits, the currency glyph and room for the memo mark.
+  let amount = maskFor("zec").length + AMOUNT_EXTRA_CH;
+  let block = Math.max(maskFor("block").length, BLOCK_MIN_CH);
   for (const tx of rows) {
-    amount = Math.max(amount, formatZec(BigInt(tx.valueZat)).length + 5);
+    amount = Math.max(amount, formatZec(BigInt(tx.valueZat)).length + AMOUNT_EXTRA_CH);
     if (tx.blockHeight) {
       block = Math.max(block, formatBlock(tx.blockHeight).length);
     }
@@ -39,7 +53,7 @@ function colWidths(rows: Tx[]): { amount: number; block: number } {
 
 function colsFor(rows: Tx[]): string {
   const w = colWidths(rows);
-  return `${TYPE_COL} minmax(${w.amount}ch, 1fr) ${STATUS_COL} ${DATE_COL} ${w.block}ch`;
+  return `${KIND_COL} ${w.amount}ch ${TXID_COL} ${POOLS_COL} ${DATE_COL} ${w.block}ch`;
 }
 
 const ROW_HEIGHT = 49;
@@ -67,19 +81,20 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     return (
       <table className="mt-4 w-full table-fixed font-mono text-sm">
         <colgroup>
-          <col style={{ width: TYPE_COL }} />
+          <col style={{ width: KIND_COL }} />
+          <col style={{ width: `${w.amount}ch` }} />
+          <col style={{ width: TXID_COL }} />
           <col />
-          <col style={{ width: STATUS_COL }} />
           <col style={{ width: DATE_COL }} />
           <col style={{ width: `${w.block}ch` }} />
         </colgroup>
         <thead>
           <tr className="text-left font-sans text-xs text-muted-foreground">
-            <th className="pb-3 font-normal">Tx Type</th>
-            <th className="pb-3 font-normal">Amount</th>
-            <th className="pb-3 font-normal">Status</th>
-            <th className="pb-3 font-normal">Date</th>
-            <th className="pb-3 font-normal">Block</th>
+            {HEADERS.map((h, i) => (
+              <th key={i} className="pb-3 font-normal">
+                {h}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -91,7 +106,6 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
               STAGGER_CEILING_MS * (1 - Math.exp(-i / STAGGER_TAU)),
             );
             const reveal = motion && !returning;
-            const received = tx.kind === "received";
             return (
               <tr
                 key={tx.txid}
@@ -101,22 +115,23 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
                   flash ? "tx-flash" : reveal ? "reveal-up" : ""
                 }`}
               >
-                <td className="py-3 font-sans font-medium">
-                  <TxType tx={tx} received={received} />
+                <td className="py-3">
+                  <TxKind tx={tx} />
                 </td>
-                <td
-                  className={`py-3 tabular-nums ${received ? "text-green-400" : ""}`}
-                >
-                  <TxAmount tx={tx} received={received} />
+                <td className="py-3">
+                  <TxAmount tx={tx} />
+                </td>
+                <td className="py-3">
+                  <TxTxid tx={tx} />
                 </td>
                 <td className="py-3 font-sans">
-                  <StatusBadge status={tx.status} />
+                  <TxPools pools={poolsOf(tx.notes)} />
                 </td>
-                <td className="whitespace-nowrap py-3 font-sans tabular-nums text-muted-foreground">
+                <td className="whitespace-nowrap py-3 font-sans">
                   <TxDate epoch={tx.datetime} />
                 </td>
-                <td className="py-3 tabular-nums text-muted-foreground">
-                  <TxBlock height={tx.blockHeight} />
+                <td className="py-3">
+                  <TxBlock tx={tx} />
                 </td>
               </tr>
             );
@@ -186,14 +201,12 @@ function VirtualTxList({
   return (
     <div className="mt-4 text-sm">
       <div
-        className={`${COLS} pb-3 text-left font-mono text-muted-foreground`}
+        className={`${COLS} pb-3 text-left font-sans text-xs text-muted-foreground`}
         style={{ gridTemplateColumns: cols }}
       >
-        <span className="font-sans text-xs">Tx Type</span>
-        <span className="font-sans text-xs">Amount</span>
-        <span className="font-sans text-xs">Status</span>
-        <span className="font-sans text-xs">Date</span>
-        <span className="font-sans text-xs">Block</span>
+        {HEADERS.map((h, i) => (
+          <span key={i}>{h}</span>
+        ))}
       </div>
       <div
         ref={listRef}
@@ -249,41 +262,57 @@ export function TxRow({
   reveal?: boolean;
   delay?: number;
 }) {
-  const received = tx.kind === "received";
   return (
     <div
       onClick={() => onOpen?.(tx.txid)}
       style={{
-        ...(cols && { gridTemplateColumns: cols }),
+        gridTemplateColumns: cols ?? colsFor([tx]),
         ...(reveal && { animationDelay: `${delay}ms` }),
       }}
       className={`${COLS} h-full cursor-pointer border-b border-border font-mono transition-colors hover:bg-muted ${
         flash ? "tx-flash" : reveal ? "reveal-up" : ""
       }`}
     >
-      <span className="font-sans font-medium">
-        <TxType tx={tx} received={received} />
-      </span>
-      <span className={`tabular-nums ${received ? "text-green-400" : ""}`}>
-        <TxAmount tx={tx} received={received} />
-      </span>
+      <TxKind tx={tx} />
+      <TxAmount tx={tx} />
+      <TxTxid tx={tx} />
       <span className="font-sans">
-        <StatusBadge status={tx.status} />
+        <TxPools pools={poolsOf(tx.notes)} />
       </span>
-      <span className="whitespace-nowrap font-sans tabular-nums text-muted-foreground">
+      <span className="whitespace-nowrap font-sans">
         <TxDate epoch={tx.datetime} />
       </span>
-      <span className="tabular-nums text-muted-foreground">
-        <TxBlock height={tx.blockHeight} />
-      </span>
+      <TxBlock tx={tx} />
     </div>
   );
 }
 
-function TxType({ tx, received }: { tx: Tx; received: boolean }) {
+function TxKind({ tx }: { tx: Tx }) {
+  const received = tx.kind === "received";
+  const Arrow = received ? IconArrowDownLeft : IconArrowUpRight;
   return (
-    <span className="flex items-center gap-1.5">
-      {received ? "Received" : "Sent"}
+    <Arrow
+      className="size-4 text-muted-foreground"
+      aria-label={received ? "Received" : "Sent"}
+      role="img"
+    />
+  );
+}
+
+function TxAmount({ tx }: { tx: Tx }) {
+  const received = tx.kind === "received";
+  return (
+    <span
+      className={`flex items-center gap-1.5 whitespace-nowrap tabular-nums ${received ? "text-green-400" : ""}`}
+    >
+      <span>
+        {received ? "+" : "−"}
+        <DiscreetValue kind="zec">{formatZec(BigInt(tx.valueZat))}</DiscreetValue>
+        <IconCurrencyZcash
+          className="ml-1 inline size-[1em] align-[-0.15em] text-muted-foreground"
+          aria-label="ZEC"
+        />
+      </span>
       {txHasMemo(tx) && (
         <IconMessage2 className="size-3.5 text-muted-foreground" aria-label="Has memo" />
       )}
@@ -291,38 +320,38 @@ function TxType({ tx, received }: { tx: Tx; received: boolean }) {
   );
 }
 
-function TxAmount({ tx, received }: { tx: Tx; received: boolean }) {
+function shortTxid(txid: string): string {
+  return `${txid.slice(0, 6)}…${txid.slice(-4)}`;
+}
+
+function TxTxid({ tx }: { tx: Tx }) {
   return (
-    <>
-      {received ? "+" : "−"}
-      <DiscreetValue kind="zec">{formatZec(BigInt(tx.valueZat))}</DiscreetValue>{" "}
-      ZEC
-    </>
+    <DiscreetValue kind="txid" className="text-muted-foreground">
+      {shortTxid(tx.txid)}
+    </DiscreetValue>
   );
 }
 
 function TxDate({ epoch }: { epoch: number }) {
-  return <DiscreetValue kind="date">{formatTxDate(epoch)}</DiscreetValue>;
+  return (
+    <DiscreetValue kind="date" className="text-muted-foreground">
+      {formatTxDate(epoch)}
+    </DiscreetValue>
+  );
 }
 
-function TxBlock({ height }: { height: number | undefined }) {
-  if (!height) return <>{formatBlock(height)}</>;
-  return <DiscreetValue kind="block">{formatBlock(height)}</DiscreetValue>;
-}
-
-function StatusBadge({ status }: { status: Tx["status"] }) {
-  if (status === "confirmed") {
+function TxBlock({ tx }: { tx: Tx }) {
+  if (tx.status === "pending") {
     return (
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <IconCircleCheckFilled className="size-4 text-brand" />
-        Confirmed
+      <span className="flex items-center gap-1.5 whitespace-nowrap font-sans text-xs text-muted-foreground">
+        <IconLoader2 className="size-3.5 animate-spin text-brand" />
+        Pending
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1.5 text-muted-foreground">
-      <IconLoader2 className="size-4 animate-spin text-brand" />
-      Pending
-    </span>
+    <DiscreetValue kind="block" className="text-muted-foreground">
+      {formatBlock(tx.blockHeight)}
+    </DiscreetValue>
   );
 }

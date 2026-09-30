@@ -229,14 +229,14 @@
   border-radius: 50%;
 }
 .pool-dot--ironwood {
-  background: #c45c2a;
+  background: var(--pool-ironwood);
 }
 .pool-dot--orchard {
-  background: #1d9e75;
+  background: var(--pool-orchard);
 }
 .pool-dot--sapling {
-  background: #378add;
+  background: var(--pool-sapling);
 }
 .pool-dot--transparent {
-  background: #888780;
+  background: var(--pool-transparent);
 }
