@@ -12,6 +12,7 @@ const WIND = 1.5;
 const FRAME = 1000 / 15;
 
 async function pixels() {
+  // react-doctor-disable-next-line react-doctor/no-fetch-response-used-without-status-check
   const bitmap = await createImageBitmap(await (await fetch(painting)).blob());
   const ctx = context(new OffscreenCanvas(SCENE_W, SCENE_H), {
     willReadFrequently: true,
