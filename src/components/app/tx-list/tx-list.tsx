@@ -36,7 +36,14 @@ const DATE_COL = "7rem";
 const BLOCK_MIN_CH = 9;
 const AMOUNT_EXTRA_CH = 7;
 
-const HEADERS = ["", "Amount", "Txid", "Pools", "Date", "Block"];
+const HEADERS = [
+  { id: "kind", label: "" },
+  { id: "amount", label: "Amount" },
+  { id: "txid", label: "Txid" },
+  { id: "pools", label: "Pools" },
+  { id: "date", label: "Date" },
+  { id: "block", label: "Block" },
+];
 
 function colWidths(rows: Tx[]): { amount: number; block: number } {
   // Sign, digits, the currency glyph and room for the memo mark.
@@ -95,9 +102,9 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
         </colgroup>
         <thead>
           <tr className="text-left font-sans text-xs text-muted-foreground">
-            {HEADERS.map((h, i) => (
-              <th key={i} className="pb-3 font-normal">
-                {h}
+            {HEADERS.map((h) => (
+              <th key={h.id} className="pb-3 font-normal">
+                {h.label}
               </th>
             ))}
           </tr>
@@ -207,8 +214,8 @@ function VirtualTxList({
         className={`${COLS} pb-3 text-left font-sans text-xs text-muted-foreground`}
         style={{ gridTemplateColumns: cols }}
       >
-        {HEADERS.map((h, i) => (
-          <span key={i}>{h}</span>
+        {HEADERS.map((h) => (
+          <span key={h.id}>{h.label}</span>
         ))}
       </div>
       <div

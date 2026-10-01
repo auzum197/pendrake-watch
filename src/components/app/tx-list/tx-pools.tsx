@@ -76,12 +76,10 @@ function PoolWord({
   const itemRef = useRef<HTMLSpanElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
   const t = useRef(hidden ? 1 : 0);
-  const raf = useRef(0);
-
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   // One value drives both the shape and the slide, so they can never come apart.
-  // A toggle mid-flight restarts from the current t rather than snapping.
+  // A toggle mid-flight restarts from the current t rather than snapping: the
+  // cleanup cancels the frame in flight and the next run picks up where it stopped.
   useEffect(() => {
     const target = hidden ? 1 : 0;
     const path = pathRef.current;
@@ -96,7 +94,6 @@ function PoolWord({
       item.style.transform =
         v <= 0 ? "" : `translateX(${(dx * v).toFixed(2)}px)`;
     };
-    cancelAnimationFrame(raf.current);
     const from = t.current;
     if (!animationsEnabled() || from === target) {
       apply(target);
@@ -104,12 +101,14 @@ function PoolWord({
     }
     const duration = DURATION_MS * Math.abs(target - from);
     const t0 = performance.now();
+    let frame = 0;
     const step = (now: number) => {
       const p = Math.min((now - t0) / duration, 1);
       apply(from + (target - from) * easeInOut(p));
-      if (p < 1) raf.current = requestAnimationFrame(step);
+      if (p < 1) frame = requestAnimationFrame(step);
     };
-    raf.current = requestAnimationFrame(step);
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
   }, [hidden, dx, disc, glyph.d, morph]);
 
   return (
