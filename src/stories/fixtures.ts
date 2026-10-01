@@ -40,11 +40,17 @@ export const txs: Tx[] = [
     status: "confirmed",
     notes: [
       {
-        pool: "orchard",
+        pool: "sapling",
         direction: "sent",
         outputIndex: 0,
         valueZat: "21000000",
-        recipient: "u1exampleexampleexample",
+        recipient: "zs1exampleexampleexample",
+      },
+      {
+        pool: "orchard",
+        direction: "received",
+        outputIndex: 1,
+        valueZat: "1010000",
       },
     ],
   },
