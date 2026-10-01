@@ -638,7 +638,6 @@ fn place_main_window(app: &tauri::App) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
-    // A window that has not been shown yet may not report a monitor.
     let monitor = match window.current_monitor()? {
         Some(monitor) => Some(monitor),
         None => window.primary_monitor()?,
@@ -754,11 +753,9 @@ mod tests {
 
     #[test]
     fn a_16_10_screen_is_limited_by_its_width() {
-        // The work area of a 14-inch MacBook Pro, below the menu bar.
         let (width, height) = launch_size(1512.0, 944.0);
         assert!((width - 1512.0 * 0.9).abs() < 1e-9);
         assert!((width / height - WINDOW_ASPECT).abs() < 1e-9);
-        // The vertical gap is then wider than the 5 percent margin.
         assert!((944.0 - height) / 2.0 > 944.0 * 0.05);
     }
 
