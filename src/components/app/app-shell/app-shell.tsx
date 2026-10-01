@@ -66,12 +66,6 @@ export function AppShell({
   const { open: settingsOpen } = useSettingsModal();
   return (
     <div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
-      {/* The title bar is an overlay, so the webview takes its mouse events and the
-          window only moves from regions that opt in. This strip covers the zone the
-          traffic lights sit in and the gutter above the content panel. The content
-          panel is positioned and later in the DOM, so it stays on top from its own
-          top edge down. */}
-      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-9" />
       <AppSidebar active={active} wallet={wallet} switching={switching} />
       <div className="relative my-3 mr-3 flex-1 rounded-2xl border-2 border-border bg-background">
         <main
@@ -154,16 +148,8 @@ function AppSidebar({
 
   return (
     <aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
-      <div
-        data-tauri-drag-region
-        className="flex items-center justify-center px-2 py-2"
-      >
-        <img
-          data-tauri-drag-region
-          src={pendrakeLogo}
-          alt="Pendrake"
-          className="h-8"
-        />
+      <div className="flex items-center justify-center px-2 py-2">
+        <img src={pendrakeLogo} alt="Pendrake" className="h-8" />
       </div>
 
       <WalletCard wallet={wallet} switching={switching} />

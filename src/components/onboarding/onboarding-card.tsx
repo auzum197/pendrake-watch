@@ -22,24 +22,13 @@ export function OnboardingCard({
     <div className="fixed inset-0 z-50 overflow-hidden bg-ink text-white">
       <OnboardingBackdrop className="onboarding-fade-in scale-[1.08] blur-[12px]" />
       <div className="absolute inset-0 bg-gradient-to-b from-ink/20 via-ink/40 to-ink/80" />
-      {/* The title bar is an overlay, so the window only moves from regions that opt
-          in. Here that is the open space around the card and the logo. The attribute
-          applies to the element it is on, not its children, so the card stays
-          interactive. */}
-      <div
-        data-tauri-drag-region
-        className="relative flex h-full flex-col items-center overflow-y-auto px-10 py-12"
-      >
+      <div className="relative flex h-full flex-col items-center overflow-y-auto px-10 py-12">
         <img
-          data-tauri-drag-region
           src={pendrakeLogo}
           alt="Pendrake"
           className="onboarding-rise h-[27px]"
         />
-        <div
-          data-tauri-drag-region
-          className="flex w-full flex-1 flex-col justify-center py-10"
-        >
+        <div className="flex w-full flex-1 flex-col justify-center py-10">
           <div className="onboarding-card-arrive relative mx-auto w-full max-w-xl rounded-[32px] border border-white/15 bg-[#141416] p-10 shadow-[0_40px_90px_-30px_rgba(0,0,0,0.85)]">
             <HeightGlide>
               <StepSwitch stepKey={stepKey}>{children}</StepSwitch>
