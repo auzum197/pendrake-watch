@@ -611,7 +611,7 @@ fn raise_main_window(app: &tauri::AppHandle) {
 const WINDOW_ASPECT: f64 = 16.0 / 9.0;
 
 /// Share of the monitor work area left clear on each side of the window at launch.
-const WINDOW_MARGIN: f64 = 0.05;
+const WINDOW_MARGIN: f64 = 0.08;
 
 /// Smallest width the layout holds together at. Matches `minWidth` in
 /// `tauri.conf.json`, whose `minHeight` keeps the same aspect.
@@ -748,21 +748,21 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_size, spawn_due, WINDOW_ASPECT};
+    use super::{launch_size, spawn_due, WINDOW_ASPECT, WINDOW_MARGIN};
     use std::time::{Duration, Instant};
 
     #[test]
     fn a_16_10_screen_is_limited_by_its_width() {
         let (width, height) = launch_size(1512.0, 944.0);
-        assert!((width - 1512.0 * 0.9).abs() < 1e-9);
+        assert!((width - 1512.0 * (1.0 - 2.0 * WINDOW_MARGIN)).abs() < 1e-9);
         assert!((width / height - WINDOW_ASPECT).abs() < 1e-9);
-        assert!((944.0 - height) / 2.0 > 944.0 * 0.05);
+        assert!((944.0 - height) / 2.0 > 944.0 * WINDOW_MARGIN);
     }
 
     #[test]
     fn an_ultrawide_screen_is_limited_by_its_height() {
         let (width, height) = launch_size(3440.0, 1400.0);
-        assert!((height - 1400.0 * 0.9).abs() < 1e-9);
+        assert!((height - 1400.0 * (1.0 - 2.0 * WINDOW_MARGIN)).abs() < 1e-9);
         assert!((width / height - WINDOW_ASPECT).abs() < 1e-9);
     }
 
