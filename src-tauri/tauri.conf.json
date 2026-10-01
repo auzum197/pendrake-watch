@@ -14,8 +14,11 @@
 		"windows": [
 			{
 				"title": "pendrake-watch",
-				"width": 800,
-				"height": 600,
+				"width": 1280,
+				"height": 720,
+				"minWidth": 960,
+				"minHeight": 540,
+				"visible": false,
 				"theme": "Dark",
 				"backgroundColor": "#101012",
 				"titleBarStyle": "Overlay",

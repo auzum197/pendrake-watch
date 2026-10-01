@@ -607,6 +607,56 @@ fn raise_main_window(app: &tauri::AppHandle) {
     }
 }
 
+/// Width over height of the main window at launch and at its smallest.
+const WINDOW_ASPECT: f64 = 16.0 / 9.0;
+
+/// Share of the monitor work area left clear on each side of the window at launch.
+const WINDOW_MARGIN: f64 = 0.05;
+
+/// Smallest width the layout holds together at. Matches `minWidth` in
+/// `tauri.conf.json`, whose `minHeight` keeps the same aspect.
+const WINDOW_MIN_WIDTH: f64 = 960.0;
+
+/// The launch size of the main window, in logical pixels, for a work area of the
+/// given logical size: the largest `WINDOW_ASPECT` rectangle that leaves
+/// `WINDOW_MARGIN` clear on every side. The tighter axis sets the size, so the
+/// other axis ends up with a wider gap. Never smaller than the minimum.
+fn launch_size(work_width: f64, work_height: f64) -> (f64, f64) {
+    let free = 1.0 - 2.0 * WINDOW_MARGIN;
+    let width = (work_width * free)
+        .min(work_height * free * WINDOW_ASPECT)
+        .max(WINDOW_MIN_WIDTH);
+    (width, width / WINDOW_ASPECT)
+}
+
+/// Size the main window to its monitor, centre it in the work area, then show it.
+/// The window is created hidden (`visible: false` in `tauri.conf.json`) so it never
+/// appears at the config fallback size first. Runs on every launch: the size is
+/// not remembered between runs. The work area excludes the menu bar and the Dock.
+fn place_main_window(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::Manager;
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+    // A window that has not been shown yet may not report a monitor.
+    let monitor = match window.current_monitor()? {
+        Some(monitor) => Some(monitor),
+        None => window.primary_monitor()?,
+    };
+    if let Some(monitor) = monitor {
+        let scale = monitor.scale_factor();
+        let area = monitor.work_area();
+        let (area_width, area_height) = (f64::from(area.size.width), f64::from(area.size.height));
+        let (width, height) = launch_size(area_width / scale, area_height / scale);
+        window.set_size(tauri::LogicalSize::new(width, height))?;
+        window.set_position(tauri::PhysicalPosition::new(
+            f64::from(area.position.x) + (area_width - width * scale) / 2.0,
+            f64::from(area.position.y) + (area_height - height * scale) / 2.0,
+        ))?;
+    }
+    window.show()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -634,6 +684,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
+            place_main_window(app)?;
             // Register the scheme at runtime so non-installed dev builds on
             // Linux/Windows still receive pendrake:// URLs. macOS uses the
             // Info.plist registration from tauri.conf.json.
@@ -698,8 +749,30 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::spawn_due;
+    use super::{launch_size, spawn_due, WINDOW_ASPECT};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_16_10_screen_is_limited_by_its_width() {
+        // The work area of a 14-inch MacBook Pro, below the menu bar.
+        let (width, height) = launch_size(1512.0, 944.0);
+        assert!((width - 1512.0 * 0.9).abs() < 1e-9);
+        assert!((width / height - WINDOW_ASPECT).abs() < 1e-9);
+        // The vertical gap is then wider than the 5 percent margin.
+        assert!((944.0 - height) / 2.0 > 944.0 * 0.05);
+    }
+
+    #[test]
+    fn an_ultrawide_screen_is_limited_by_its_height() {
+        let (width, height) = launch_size(3440.0, 1400.0);
+        assert!((height - 1400.0 * 0.9).abs() < 1e-9);
+        assert!((width / height - WINDOW_ASPECT).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_small_screen_gets_the_minimum_size() {
+        assert_eq!(launch_size(1000.0, 600.0), (960.0, 540.0));
+    }
 
     #[test]
     fn a_daemon_never_spawned_is_due() {
