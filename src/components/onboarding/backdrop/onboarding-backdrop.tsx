@@ -12,8 +12,6 @@ import "./onboarding-backdrop.css";
 const LAYERS = [sky, far, near, water, house, ground];
 const BLUR = 12;
 
-// A worker draws the trees into a transferred canvas, blurred to match the
-// layers, so nothing here runs per frame.
 function Trees() {
   const host = useRef<HTMLDivElement>(null);
 

@@ -34,8 +34,6 @@ export type TreeSpec = {
 
 export type Tree = { spec: TreeSpec; root: Branch };
 
-// Branches this close to the tips carry the leaves. Each one is drawn once into a
-// sprite with everything above it, and only the sprite turns in the wind.
 const TWIG = 3;
 
 function mulberry32(seed: number) {
@@ -279,7 +277,6 @@ function sprite(twig: Branch, parent: number, scale: number): Sprite {
     Math.ceil((x1 - x0 + 2 * pad) * scale),
     Math.ceil((y1 - y0 + 2 * pad) * scale),
   );
-  // CPU-backed, like the canvases it is drawn into.
   const ctx = context(image, { willReadFrequently: true });
   ctx.setTransform(scale, 0, 0, scale, (pad - x0) * scale, (pad - y0) * scale);
   ctx.lineCap = "round";

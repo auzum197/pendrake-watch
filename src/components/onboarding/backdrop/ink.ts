@@ -8,8 +8,6 @@ import {
   type Tree,
 } from "./trees";
 
-// The trees are drawn at a sixth of the scene size and blurred here, so nothing
-// animated sits under a CSS filter.
 export const SCALE = 1 / 6;
 export const INK_W = Math.ceil(SCENE_W * SCALE);
 export const INK_H = Math.ceil(SCENE_H * SCALE);
@@ -55,7 +53,6 @@ function bounds(trees: Tree[], pad: number) {
   };
 }
 
-// Radii of three box blurs that together approximate a gaussian.
 function boxes(sigma: number) {
   let lo = Math.floor(Math.sqrt(4 * sigma * sigma + 1));
   if (lo % 2 === 0) lo--;
@@ -110,8 +107,6 @@ function band(
     const frame = bctx.getImageData(0, 0, w, h);
     const px = frame.data;
 
-    // Coverage to ink, fitted to the old threshold dither once both are blurred:
-    // any cover shows, dense cover turns to the dark ink.
     for (let k = 0; k < w * h; k++) {
       const a = px[k * 4 + 3] / 255;
       const cover = ramp(a, 0, 0.25);
@@ -152,7 +147,6 @@ export function inker(trees: Tree[], painting: ImageData) {
   const sprites = twigs(trees, SCALE);
   let bands: ReturnType<typeof band>[] = [];
   return {
-    // sigma is in scene pixels
     blur(sigma: number) {
       bands = [...groups.values()].map((g) =>
         band(g.members, g.palette, sprites, sigma),

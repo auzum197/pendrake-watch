@@ -2,7 +2,6 @@ import painting from "@/assets/onboarding-backdrop.jpg";
 import { INK_H, INK_W, inker } from "./ink";
 import { context, GROVE, plant, SCENE_H, SCENE_W } from "./trees";
 
-// blur is the CSS blur radius converted to scene pixels
 export type TreesMessage =
   | { canvas: OffscreenCanvas; still: boolean }
   | { blur: number }
