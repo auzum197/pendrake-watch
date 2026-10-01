@@ -1,0 +1,17 @@
+import{r as s}from"./ipc-D91hTTIc.js";import{w as c}from"./with-router-CYySQiXd.js";import{W as l}from"./wallets-panel-D2b1Y7Ml.js";import"./iframe-DwVEox3y.js";import"./preload-helper-PPVm8Dsz.js";import"./useNavigate-C8KcTAn5.js";import"./with-selector-BRMs3Cod.js";import"./index-BvskbvPS.js";import"./index-2p169Vov.js";import"./lifehash-avatar-B_mXDnUQ.js";import"./lifehash-jw9d5vb5.js";import"./app-toast-CePd7IR8.js";import"./index-DdgP1yGl.js";import"./use-wallet-data-DSrneHKp.js";import"./wallet-plate-skZgFw-p.js";import"./button-D9DaeTZR.js";import"./utils-DCADjnpI.js";import"./index-D7FZS5kO.js";import"./switch-ULGegso0.js";import"./index-BF7DMnJm.js";import"./index-hD2FI8j0.js";import"./index-D31JiO7J.js";import"./index-CKwi4uhU.js";import"./discreet-value-CGuQg7Sl.js";import"./inline-name-pbr9_p2T.js";import"./createReactComponent-Csszy0dq.js";import"./switch-wallet-BosgxCPc.js";import"./wallet-recency-DIIncMpp.js";import"./format-DAOk0-W0.js";import"./addYears-Cm1OKrbP.js";import"./remove-dialog-DxUlfQZA.js";import"./alert-dialog-EQqzjyut.js";import"./index-BMC-UmGb.js";import"./index-WjQUZwKy.js";import"./index-CRl9y6E4.js";import"./IconEye-CbXWOCoU.js";import"./IconCheck-CXufHjcQ.js";import"./IconPencil-Ax02ZbdC.js";import"./IconPlus-CLVEXsRN.js";const{expect:p,fn:m,mocked:d,userEvent:b,within:f}=__STORYBOOK_MODULE_TEST__,o={state:"idle",syncedHeight:24e5,chainTip:24e5,percent:100,lastSyncedAt:17e8},i=[{id:"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",label:"Cold storage",fingerprint:"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",network:"mainnet",birthdayHeight:419200,selected:!0,lastBalance:"897091655",sync:o,notificationsEnabled:!0,indexerUri:"https://zec.rocks:443"},{id:"9f8e7d6c5b4a39281706f5e4d3c2b1a0",label:"9f8e7d6c",fingerprint:"9f8e7d6c5b4a39281706f5e4d3c2b1a0",network:"mainnet",birthdayHeight:21e5,selected:!1,lastBalance:"1200000",sync:{...o,state:"syncing",percent:37},notificationsEnabled:!1,indexerUri:"https://na.zec.rocks:443"},{id:"0011223344556677889900aabbccddee",label:"Regtest bench",fingerprint:"0011223344556677889900aabbccddee",network:"regtest",birthdayHeight:1,selected:!1,lastBalance:null,unavailable:"wallet file could not be read",notificationsEnabled:!0,indexerUri:"http://127.0.0.1:9067"}],ee={component:l,decorators:[c],args:{wallets:i,focusWallet:null,refresh:m()},beforeEach:()=>{d(s).mockResolvedValue("uview1qqqqqqqqqqqqqqqq")}},e={},t={args:{focusWallet:i[2].id}},a={play:async({canvasElement:n})=>{const r=f(n);await b.click(r.getByRole("option",{name:/regtest bench/i})),await p(await r.findByRole("button",{name:/use this wallet/i})).toBeVisible()}};e.parameters={...e.parameters,docs:{...e.parameters?.docs,source:{originalSource:"{}",...e.parameters?.docs?.source}}};t.parameters={...t.parameters,docs:{...t.parameters?.docs,source:{originalSource:`{
+  args: {
+    focusWallet: WALLETS[2].id
+  }
+}`,...t.parameters?.docs?.source}}};a.parameters={...a.parameters,docs:{...a.parameters?.docs,source:{originalSource:`{
+  play: async ({
+    canvasElement
+  }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("option", {
+      name: /regtest bench/i
+    }));
+    await expect(await canvas.findByRole("button", {
+      name: /use this wallet/i
+    })).toBeVisible();
+  }
+}`,...a.parameters?.docs?.source}}};const te=["Default","FocusedWallet","PickAnother"];export{e as Default,t as FocusedWallet,a as PickAnother,te as __namedExportsOrder,ee as default};
