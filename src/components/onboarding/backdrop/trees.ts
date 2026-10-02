@@ -10,6 +10,7 @@ type Leaf = {
 };
 
 type Branch = {
+  depth: number;
   len: number;
   width: number;
   angle: number;
@@ -32,6 +33,8 @@ export type TreeSpec = {
 };
 
 export type Tree = { spec: TreeSpec; root: Branch };
+
+const TWIG = 3;
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -74,6 +77,7 @@ function grow(
 ): Branch {
   const level = spec.depth - depth;
   const branch: Branch = {
+    depth,
     len,
     width,
     angle,
@@ -83,7 +87,7 @@ function grow(
     children: [],
   };
 
-  if (depth <= 3) {
+  if (depth <= TWIG) {
     const count = Math.round(
       spec.foliage * between(rng, 0.5, 1.2) * (depth === 0 ? 1 : 0.45),
     );
@@ -217,16 +221,103 @@ function gust(t: number, x: number) {
   return s > 0 ? s ** 3 : 0;
 }
 
-const INK = ["#010210", "#02041a", "#050a2c"];
+export type Ctx = OffscreenCanvasRenderingContext2D;
+
+export function context(
+  canvas: OffscreenCanvas,
+  settings?: CanvasRenderingContext2DSettings,
+) {
+  const ctx = canvas.getContext("2d", settings);
+  if (!ctx) throw new Error("no 2d context");
+  return ctx;
+}
+
+type Sprite = {
+  image: OffscreenCanvas;
+  rest: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+const lineWidth = (b: Branch) => Math.max(1, Math.round(b.width * 2) / 2);
+
+function sprite(twig: Branch, parent: number, scale: number): Sprite {
+  const lines: number[] = [];
+  const leaves: number[] = [];
+  let x0 = 0;
+  let y0 = 0;
+  let x1 = 0;
+  let y1 = 0;
+  const fit = (x: number, y: number, r: number) => {
+    x0 = Math.min(x0, x - r);
+    y0 = Math.min(y0, y - r);
+    x1 = Math.max(x1, x + r);
+    y1 = Math.max(y1, y + r);
+  };
+
+  const walk = (b: Branch, x: number, y: number, parent: number) => {
+    const angle = parent + b.angle;
+    const ex = x + Math.sin(angle) * b.len;
+    const ey = y - Math.cos(angle) * b.len;
+    lines.push(x, y, ex, ey, lineWidth(b));
+    fit(x, y, lineWidth(b));
+    fit(ex, ey, lineWidth(b));
+    for (const leaf of b.leaves) {
+      leaves.push(ex + leaf.dx, ey + leaf.dy, leaf.size);
+      fit(ex + leaf.dx, ey + leaf.dy, leaf.size);
+    }
+    for (const child of b.children) walk(child, ex, ey, angle);
+  };
+  walk(twig, 0, 0, parent);
+
+  const pad = 1 / scale;
+  const image = new OffscreenCanvas(
+    Math.ceil((x1 - x0 + 2 * pad) * scale),
+    Math.ceil((y1 - y0 + 2 * pad) * scale),
+  );
+  const ctx = context(image, { willReadFrequently: true });
+  ctx.setTransform(scale, 0, 0, scale, (pad - x0) * scale, (pad - y0) * scale);
+  ctx.lineCap = "round";
+  for (let k = 0; k < lines.length; k += 5) {
+    ctx.lineWidth = lines[k + 4];
+    ctx.beginPath();
+    ctx.moveTo(lines[k], lines[k + 1]);
+    ctx.lineTo(lines[k + 2], lines[k + 3]);
+    ctx.stroke();
+  }
+  for (let k = 0; k < leaves.length; k += 3) {
+    ctx.fillRect(leaves[k], leaves[k + 1], leaves[k + 2], leaves[k + 2]);
+  }
+  return {
+    image,
+    rest: parent + twig.angle,
+    x: x0 - pad,
+    y: y0 - pad,
+    w: image.width / scale,
+    h: image.height / scale,
+  };
+}
+
+export function twigs(trees: Tree[], scale: number) {
+  const sprites = new Map<Branch, Sprite>();
+  const walk = (b: Branch, parent: number) => {
+    if (b.depth <= TWIG) sprites.set(b, sprite(b, parent, scale));
+    else for (const child of b.children) walk(child, parent + b.angle);
+  };
+  for (const { root } of trees) walk(root, 0);
+  return sprites;
+}
 
 export function draw(
-  ctx: CanvasRenderingContext2D,
+  ctx: Ctx,
   trees: Tree[],
+  sprites: Map<Branch, Sprite>,
   t: number,
   wind: number,
 ) {
   const strokes = new Map<number, Path2D>();
-  const leaves: number[][] = INK.map(() => []);
 
   for (const { spec, root } of trees) {
     const g = gust(t, spec.x);
@@ -236,10 +327,20 @@ export function draw(
         Math.sin(t * 2.3 + b.phase * 1.7) * 0.2 +
         g * 1.1;
       const angle = parent + b.angle + wind * b.flex * sway;
+
+      const twig = sprites.get(b);
+      if (twig) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle - twig.rest);
+        ctx.drawImage(twig.image, twig.x, twig.y, twig.w, twig.h);
+        ctx.restore();
+        return;
+      }
+
       const ex = x + Math.sin(angle) * b.len;
       const ey = y - Math.cos(angle) * b.len;
-
-      const width = Math.max(1, Math.round(b.width * 2) / 2);
+      const width = lineWidth(b);
       let path = strokes.get(width);
       if (!path) {
         path = new Path2D();
@@ -248,31 +349,14 @@ export function draw(
       path.moveTo(x, y);
       path.lineTo(ex, ey);
 
-      for (const leaf of b.leaves) {
-        const flutter = wind * (0.5 + g) * Math.sin(t * 5 + leaf.phase);
-        leaves[Math.floor(leaf.tone * INK.length)].push(
-          ex + leaf.dx + flutter,
-          ey + leaf.dy + flutter * 0.4,
-          leaf.size,
-        );
-      }
-
       for (const child of b.children) walk(child, ex, ey, angle);
     };
     walk(root, spec.x, spec.y, 0);
   }
 
-  ctx.clearRect(0, 0, SCENE_W, SCENE_H);
   ctx.lineCap = "round";
-  ctx.strokeStyle = INK[0];
   for (const [width, path] of strokes) {
     ctx.lineWidth = width;
     ctx.stroke(path);
   }
-  leaves.forEach((rects, i) => {
-    ctx.fillStyle = INK[i];
-    for (let k = 0; k < rects.length; k += 3) {
-      ctx.fillRect(rects[k], rects[k + 1], rects[k + 2], rects[k + 2]);
-    }
-  });
 }
