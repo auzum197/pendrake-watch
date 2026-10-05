@@ -77,11 +77,12 @@ export function WalletCard({
     function onPointerDown(e: PointerEvent) {
       const target = e.target instanceof Element ? e.target : null;
       if (!target || rootRef.current?.contains(target)) return;
-      if (target.closest("[data-wallet-menu]")) return;
+      if (document.querySelector("[data-wallet-menu]")) return;
       settle(false);
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") settle(false);
+      if (e.key === "Escape" && !document.querySelector("[data-wallet-menu]"))
+        settle(false);
     }
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
