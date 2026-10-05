@@ -1,9 +1,12 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconActivity,
   IconHelpCircle,
   IconHome,
+  IconLayoutSidebar,
+  IconLayoutSidebarFilled,
   IconListDetails,
   IconLock,
   IconSettings,
@@ -11,6 +14,7 @@ import {
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
 import { useFeature } from "@/lib/features";
 import { animationsEnabled } from "@/lib/motion";
+import { setSidebarRail, sidebarRail } from "@/lib/sidebar";
 import { openSettings, useSettingsModal } from "@/lib/settings-modal";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
@@ -19,6 +23,8 @@ import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { WalletCard } from "../wallet-card/wallet-card";
 import { WalletPalette } from "../wallet-palette/wallet-palette";
 import { appToast, TOAST_ID } from "../app-toast/app-toast";
+import { useRail } from "./use-rail";
+import "./app-sidebar.css";
 import "./nav-reveal.css";
 
 let aboutWindow: WebviewWindow | null = null;
@@ -64,19 +70,32 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { open: settingsOpen } = useSettingsModal();
+  const [rail, setRail] = useState(sidebarRail);
+
+  function toggleRail() {
+    setSidebarRail(!rail);
+    setRail(!rail);
+  }
+
   return (
     <div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
-      <AppSidebar active={active} wallet={wallet} switching={switching} />
-      <div className="relative my-3 mr-3 flex-1 rounded-2xl border-2 border-border bg-background">
+      <AppSidebar
+        active={active}
+        wallet={wallet}
+        switching={switching}
+        rail={rail}
+      />
+      <div className="relative min-w-0 flex-1 bg-background">
         <main
           data-scroll-restoration-id="app-main"
-          className="app-content absolute inset-0 overflow-y-auto rounded-2xl"
+          className="app-content absolute inset-0 overflow-y-auto"
         >
-          <div className="flex min-h-full flex-col gap-6 px-8 py-7">
+          <div className="flex min-h-full flex-col gap-6 px-8 pb-7 pt-14">
             {children}
           </div>
         </main>
       </div>
+      <RailToggle rail={rail} onToggle={toggleRail} />
       <Toaster position="bottom-right" />
       <UnreachableToast
         unreachable={sync?.unreachable ?? false}
@@ -90,6 +109,30 @@ export function AppShell({
       <SettingsDialog wallet={wallet} />
       <WalletPalette wallet={wallet} />
     </div>
+  );
+}
+
+// Rendered on the body so that it sits above the window drag bar in root.tsx.
+// To the right of the traffic lights, in the same place in both states.
+function RailToggle({
+  rail,
+  onToggle,
+}: {
+  rail: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = rail ? IconLayoutSidebar : IconLayoutSidebarFilled;
+  return createPortal(
+    <button
+      type="button"
+      aria-label={rail ? "Show sidebar" : "Hide sidebar"}
+      aria-expanded={!rail}
+      onClick={onToggle}
+      className="fixed left-26.5 top-2.5 z-101 flex size-7 cursor-pointer items-center justify-center rounded-full text-white/55 transition duration-150 ease-out hover:bg-white/5 hover:text-white/80 active:scale-97"
+    >
+      <Icon className="size-4.5" />
+    </button>,
+    document.body,
   );
 }
 
@@ -135,55 +178,72 @@ function WrongChainToast({
   return null;
 }
 
+// The sidebar does not clip its overflow: the wallet card grows over the
+// content when it opens from the rail.
 function AppSidebar({
   active,
   wallet,
   switching,
+  rail,
 }: {
   active: Section;
   wallet: WalletState | null;
   switching?: boolean;
+  rail: boolean;
 }) {
   const navigate = useNavigate();
+  const ref = useRef<HTMLElement>(null);
+  useRail(ref, rail);
 
   return (
-    <aside className="app-sidebar flex w-64 shrink-0 flex-col bg-ink px-3 pb-5 pt-9 text-white">
-      <div className="flex items-center justify-center px-2 py-2">
-        <img src={pendrakeLogo} alt="Pendrake" className="h-8" />
+    <aside
+      ref={ref}
+      data-rail={rail}
+      className="app-sidebar flex shrink-0 flex-col border-r-2 border-border bg-ink px-3 pb-5 pt-11 text-white"
+    >
+      <div className="flex justify-center px-2 py-2">
+        <div className="sidebar-logo overflow-hidden">
+          <img src={pendrakeLogo} alt="Pendrake" className="h-8 max-w-none" />
+        </div>
       </div>
 
       <WalletCard wallet={wallet} switching={switching} />
 
       <nav className="mt-5 flex flex-col gap-1">
         <NavItem
-          icon={<IconHome className="size-4" />}
+          icon={<IconHome className="size-4 shrink-0" />}
           label="Home"
+          rail={rail}
           active={active === "wallet"}
           onClick={() => navigate({ to: "/dashboard" })}
         />
         <NavItem
-          icon={<IconActivity className="size-4" />}
+          icon={<IconActivity className="size-4 shrink-0" />}
           label="Activity"
+          rail={rail}
           active={active === "activity"}
           onClick={() => navigate({ to: "/activity" })}
         />
         <NotesNavItem
+          rail={rail}
           active={active === "notes"}
           onClick={() => navigate({ to: "/notes" })}
         />
       </nav>
 
       <nav className="mt-auto flex flex-col gap-1">
-        <SettingsNavItem />
+        <SettingsNavItem rail={rail} />
 
         <NavItem
-          icon={<IconHelpCircle className="size-4" />}
+          icon={<IconHelpCircle className="size-4 shrink-0" />}
           label="About"
+          rail={rail}
           onClick={openAbout}
         />
         <NavItem
-          icon={<IconLock className="size-4" />}
+          icon={<IconLock className="size-4 shrink-0" />}
           label="Sign Out"
+          rail={rail}
           onClick={async () => {
             await lock();
             navigate({ to: "/unlock" });
@@ -194,12 +254,13 @@ function AppSidebar({
   );
 }
 
-function SettingsNavItem() {
+function SettingsNavItem({ rail }: { rail: boolean }) {
   const { open } = useSettingsModal();
   return (
     <NavItem
-      icon={<IconSettings className="size-4" />}
+      icon={<IconSettings className="size-4 shrink-0" />}
       label="Settings"
+      rail={rail}
       active={open}
       onClick={() => openSettings()}
     />
@@ -207,9 +268,11 @@ function SettingsNavItem() {
 }
 
 function NotesNavItem({
+  rail,
   active,
   onClick,
 }: {
+  rail: boolean;
   active: boolean;
   onClick: () => void;
 }) {
@@ -223,8 +286,9 @@ function NotesNavItem({
       className={`flex flex-col ${animate ? "nav-reveal" : ""} ${state}`}
     >
       <NavItem
-        icon={<IconListDetails className="size-4" />}
+        icon={<IconListDetails className="size-4 shrink-0" />}
         label="Notes"
+        rail={rail}
         active={active}
         onClick={onClick}
       />
@@ -235,27 +299,30 @@ function NotesNavItem({
 function NavItem({
   icon,
   label,
+  rail,
   active,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
+  rail: boolean;
   active?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
       type="button"
+      title={rail ? label : undefined}
       onClick={active ? undefined : onClick}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+      className={`sidebar-item flex items-center gap-3 overflow-hidden rounded-lg py-2 pl-4.5 pr-4.5 text-sm transition duration-150 ease-out active:scale-97 ${
         active
           ? "bg-brand font-bold text-ink"
           : "cursor-pointer font-medium text-white/55 hover:bg-white/5 hover:text-white/80"
       }`}
     >
       {icon}
-      {label}
+      <span className="sidebar-label whitespace-nowrap">{label}</span>
     </button>
   );
 }
