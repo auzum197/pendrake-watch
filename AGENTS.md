@@ -100,6 +100,11 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 - No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
 
+### Pull requests
+
+- Title in conventional commit form (`feat: …`, `fix: …`), short and broad: `feat: collapsible sidebar`, `fix: wallet switcher dismissal`. Say what the change is about, not how it works. No jargon that the reader has to decode.
+- Body: one high-level sentence. Details belong in the commits and the ADR. For a stacked PR, start the sentence with "Stacked on #N:".
+
 ## Agent skills
 
 ### Issue tracker
