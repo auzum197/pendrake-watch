@@ -1,0 +1,30 @@
+/* The sidebar's collapse to an icon rail. --rail runs 0 to 1 on the spring in
+   use-rail.ts. 258px open and 90px as a rail: the traffic lights end at 75px
+   and keep their 15px margin on the right. In the rail everything sits on the
+   rail's centre line, 44px. The wallet card loses its 16px inset around the
+   avatar in the rail, so its margins close up to 20px above and below the
+   avatar. The logo is cut down to its mark, the first 32px of the image. A nav
+   item becomes a 36px circle. */
+.app-sidebar {
+	--rail: 0;
+	width: calc(258px - var(--rail) * 168px);
+}
+
+.app-sidebar .wallet-card {
+	margin-top: calc(1.25rem - var(--rail) * 17px);
+	margin-bottom: calc(var(--rail) * -15px);
+}
+
+.sidebar-logo {
+	width: calc(170px - var(--rail) * 138px);
+}
+
+.sidebar-item {
+	margin-inline: calc(var(--rail) * 14px);
+	padding-left: calc(18px - var(--rail) * 8px);
+	border-radius: calc(var(--radius) + var(--rail) * 4px);
+}
+
+.sidebar-label {
+	opacity: calc(1 - var(--rail) * 2);
+}

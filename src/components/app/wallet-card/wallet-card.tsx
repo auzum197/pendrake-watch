@@ -17,11 +17,12 @@ import { RemoveDialog } from "@/components/settings/remove-dialog";
 import type { WalletMenuTarget } from "../wallet-menu/wallet-menu";
 import { appToast } from "../app-toast/app-toast";
 import { switchWallet } from "./switch-wallet";
-import { useFold, useHeight } from "./use-fold";
+import { useFold, useHeight, usePeek } from "./use-fold";
 import { selectedDisplayName } from "./display-name";
 import { WalletCardHead } from "./wallet-card-head";
 import { WalletCardList } from "./wallet-card-list";
 import "./wallet-card.css";
+import "./wallet-card-rail.css";
 import "../wallet-menu/wallet-menu.css";
 
 type RemoveTarget = {
@@ -50,6 +51,7 @@ export function WalletCard({
   const headRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const { open, animate, settle, toggle } = useFold(slabRef);
+  usePeek(slabRef);
   const headH = useHeight(headRef) || HEAD_FALLBACK_PX;
   const bodyH = useHeight(contentRef);
 
