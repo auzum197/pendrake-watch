@@ -172,7 +172,9 @@ export function NotesTable({
               className={col.align === "right" ? "pr-6 text-right" : ""}
             >
               {col.block ? (
-                <BlockDisplayToggle>{columnLabel(col, display)}</BlockDisplayToggle>
+                <BlockDisplayToggle>
+                  {columnLabel(col, display)}
+                </BlockDisplayToggle>
               ) : col.sortable ? (
                 <button
                   type="button"
