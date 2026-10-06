@@ -13,8 +13,20 @@ import {
   DiscreetValue,
   maskFor,
 } from "@/components/ui/discreet-value/discreet-value";
-import { formatBlock, formatTxDate, formatZec, txHasMemo } from "@/lib/format";
+import { useBlockDisplay, useBlockSwapping } from "@/lib/block-display";
+import {
+  formatBlock,
+  formatBlockTime,
+  formatTxDate,
+  formatZec,
+  txHasMemo,
+} from "@/lib/format";
 import { animationsEnabled } from "@/lib/motion";
+import {
+  BlockDisplayToggle,
+  blockLabel,
+} from "../block-display-toggle/block-display-toggle";
+import "../block-display-toggle/block-display-toggle.css";
 import { takeReturnRow } from "../return-flash";
 import { poolsOf, TxPools } from "./tx-pools";
 import "../reveal.css";
@@ -55,7 +67,11 @@ function colWidths(rows: Tx[]): { amount: number; block: number } {
       formatZec(BigInt(tx.valueZat)).length + AMOUNT_EXTRA_CH,
     );
     if (tx.blockHeight) {
-      block = Math.max(block, formatBlock(tx.blockHeight).length);
+      block = Math.max(
+        block,
+        formatBlock(tx.blockHeight).length,
+        formatBlockTime(tx.datetime).length,
+      );
     }
   }
   return { amount, block };
@@ -64,6 +80,12 @@ function colWidths(rows: Tx[]): { amount: number; block: number } {
 function colsFor(rows: Tx[]): string {
   const w = colWidths(rows);
   return `${KIND_COL} ${w.amount}ch ${TXID_COL} ${POOLS_COL} ${DATE_COL} ${w.block}ch`;
+}
+
+function HeaderLabel({ id, label }: { id: string; label: string }) {
+  const display = useBlockDisplay();
+  if (id !== "block") return label;
+  return <BlockDisplayToggle>{blockLabel(display)}</BlockDisplayToggle>;
 }
 
 const ROW_HEIGHT = 49;
@@ -89,71 +111,49 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     navigate({ to: "/tx/$txid", params: { txid } });
 
   if (limit) {
-    const w = colWidths(rows);
+    const cols = colsFor(rows);
+    const returning = returnTxid !== null;
+    const motion = animationsEnabled();
     return (
-      <table className="mt-4 w-full table-fixed font-mono text-sm">
-        <colgroup>
-          <col style={{ width: KIND_COL }} />
-          <col style={{ width: `${w.amount}ch` }} />
-          <col style={{ width: TXID_COL }} />
-          <col />
-          <col style={{ width: DATE_COL }} />
-          <col style={{ width: `${w.block}ch` }} />
-        </colgroup>
-        <thead>
-          <tr className="text-left font-sans text-xs text-muted-foreground">
-            {HEADERS.map((h) => (
-              <th key={h.id} className="pb-3 font-normal">
-                {h.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {rows.map((tx, i) => {
-            const returning = returnTxid !== null;
-            const motion = animationsEnabled();
-            const flash = motion && tx.txid === returnTxid;
-            const delay = Math.round(
-              STAGGER_CEILING_MS * (1 - Math.exp(-i / STAGGER_TAU)),
-            );
-            const reveal = motion && !returning;
-            return (
-              <tr
-                key={tx.txid}
-                onClick={() => open(tx.txid)}
-                style={reveal ? { animationDelay: `${delay}ms` } : undefined}
-                className={`cursor-pointer transition-colors hover:bg-muted ${
-                  flash ? "tx-flash" : reveal ? "reveal-up" : ""
-                }`}
-              >
-                <td className="py-3">
-                  <TxKind tx={tx} />
-                </td>
-                <td className="py-3">
-                  <TxAmount tx={tx} />
-                </td>
-                <td className="py-3">
-                  <TxTxid tx={tx} />
-                </td>
-                <td className="py-3 font-sans">
-                  <TxPools pools={poolsOf(tx.notes)} />
-                </td>
-                <td className="whitespace-nowrap py-3 font-sans">
-                  <TxDate epoch={tx.datetime} />
-                </td>
-                <td className="py-3">
-                  <TxBlock tx={tx} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="mt-4 text-sm">
+        <TxHeader cols={cols} />
+        {rows.map((tx, i) => {
+          const delay = Math.round(
+            STAGGER_CEILING_MS * (1 - Math.exp(-i / STAGGER_TAU)),
+          );
+          return (
+            <div key={tx.txid} style={{ height: ROW_HEIGHT }}>
+              <TxRow
+                tx={tx}
+                cols={cols}
+                onOpen={open}
+                flash={motion && tx.txid === returnTxid}
+                reveal={motion && !returning}
+                delay={delay}
+              />
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
   return <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />;
+}
+
+function TxHeader({ cols }: { cols: string }) {
+  return (
+    <div
+      className={`${COLS} pb-3 text-left font-mono text-sm text-muted-foreground`}
+      style={{ gridTemplateColumns: cols }}
+    >
+      {HEADERS.map((h) => (
+        <span key={h.id} className="font-sans text-xs">
+          <HeaderLabel id={h.id} label={h.label} />
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function VirtualTxList({
@@ -210,14 +210,7 @@ function VirtualTxList({
 
   return (
     <div className="mt-4 text-sm">
-      <div
-        className={`${COLS} pb-3 text-left font-sans text-xs text-muted-foreground`}
-        style={{ gridTemplateColumns: cols }}
-      >
-        {HEADERS.map((h) => (
-          <span key={h.id}>{h.label}</span>
-        ))}
-      </div>
+      <TxHeader cols={cols} />
       <div
         ref={listRef}
         className="relative"
@@ -356,6 +349,8 @@ function TxDate({ epoch }: { epoch: number }) {
 }
 
 function TxBlock({ tx }: { tx: Tx }) {
+  const display = useBlockDisplay();
+  const swapping = useBlockSwapping();
   if (tx.status === "pending") {
     return (
       <span className="flex items-center gap-1.5 whitespace-nowrap font-sans text-xs text-muted-foreground">
@@ -364,8 +359,24 @@ function TxBlock({ tx }: { tx: Tx }) {
       </span>
     );
   }
+  const swap = swapping ? "block-swap" : "";
+  if (display === "time") {
+    return (
+      <DiscreetValue
+        key={display}
+        kind="date"
+        className={`whitespace-nowrap font-sans text-muted-foreground ${swap}`}
+      >
+        {formatBlockTime(tx.datetime)}
+      </DiscreetValue>
+    );
+  }
   return (
-    <DiscreetValue kind="block" className="text-muted-foreground">
+    <DiscreetValue
+      key={display}
+      kind="block"
+      className={`text-muted-foreground ${swap}`}
+    >
       {formatBlock(tx.blockHeight)}
     </DiscreetValue>
   );

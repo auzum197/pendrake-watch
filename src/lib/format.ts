@@ -382,6 +382,19 @@ export function formatBlock(height: number | undefined): string {
   return height ? height.toLocaleString() : "—";
 }
 
+export function formatBlockTime(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+export function blockTimeIso(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toISOString();
+}
+
 export function formatTxDate(epoch: number): string {
   const ms = epoch < 1e12 ? epoch * 1000 : epoch;
   return new Date(ms).toLocaleDateString(undefined, {

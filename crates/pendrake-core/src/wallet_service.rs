@@ -1029,16 +1029,23 @@ impl WalletService {
             return w.notes.read().await.clone();
         };
 
-        // Authoritative txid -> confirmed height, so a note spent by transaction X can
-        // report the block X landed in. An in-flight spend's transaction isn't
-        // confirmed yet, so it's absent here and the note's spent height stays null.
-        let heights: HashMap<String, u32> = wallet
+        // Authoritative txid -> confirmed block, so a note can report the time of the
+        // block it landed in and a note spent by transaction X the block X landed in.
+        // An in-flight spend's transaction isn't confirmed yet, so it's absent here
+        // and the note's spent height and time stay null.
+        let blocks: HashMap<String, ConfirmedBlock> = wallet
             .wallet_transactions
             .values()
             .filter_map(|tx| {
-                tx.status()
-                    .get_confirmed_height()
-                    .map(|h| (tx.txid().to_string(), u32::from(h)))
+                tx.status().get_confirmed_height().map(|h| {
+                    (
+                        tx.txid().to_string(),
+                        ConfirmedBlock {
+                            height: u32::from(h),
+                            time: u64::from(tx.datetime()),
+                        },
+                    )
+                })
             })
             .collect();
 
@@ -1053,7 +1060,7 @@ impl WalletService {
                 spend_status,
                 txid,
                 change,
-                &heights,
+                &blocks,
             ));
         };
         for n in wallet.note_summaries::<IronwoodNote>(true).iter() {
@@ -2705,6 +2712,12 @@ fn spending_txid(status: SpendStatus) -> Option<TxId> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ConfirmedBlock {
+    height: u32,
+    time: u64,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn map_wallet_note(
     idx: u32,
@@ -2715,7 +2728,7 @@ fn map_wallet_note(
     spend_status: SpendStatus,
     txid: &TxId,
     change: bool,
-    heights: &HashMap<String, u32>,
+    blocks: &HashMap<String, ConfirmedBlock>,
 ) -> WalletNote {
     // A note in an unconfirmed transaction reads as pending whatever its spend
     // state. Only a confirmed note is either spent or spendable.
@@ -2726,17 +2739,20 @@ fn map_wallet_note(
     } else {
         NoteStatus::Spent
     };
-    let spent_height =
-        spending_txid(spend_status).and_then(|spender| heights.get(&spender.to_string()).copied());
+    let spent = spending_txid(spend_status).and_then(|spender| blocks.get(&spender.to_string()));
     WalletNote {
         idx,
         pool,
         value_zat: value.to_string(),
         status,
         height: confirmed.then_some(height),
+        time: confirmed
+            .then(|| blocks.get(&txid.to_string()).map(|b| b.time))
+            .flatten(),
         txid: txid.to_string(),
         change,
-        spent_height,
+        spent_height: spent.map(|b| b.height),
+        spent_time: spent.map(|b| b.time),
     }
 }
 
@@ -3402,9 +3418,11 @@ mod tests {
             value_zat: "5000".into(),
             status: NoteStatus::Unspent,
             height: Some(10),
+            time: Some(1_700_000_000),
             txid: "aa".into(),
             change: false,
             spent_height: None,
+            spent_time: None,
         }
     }
 
@@ -3825,7 +3843,22 @@ mod tests {
 
     #[test]
     fn a_confirmed_spend_resolves_the_spending_block() {
-        let heights = HashMap::from([(txid(0x02).to_string(), 99u32)]);
+        let blocks = HashMap::from([
+            (
+                txid(0x01).to_string(),
+                ConfirmedBlock {
+                    height: 42,
+                    time: 1_700_000_000,
+                },
+            ),
+            (
+                txid(0x02).to_string(),
+                ConfirmedBlock {
+                    height: 99,
+                    time: 1_700_009_000,
+                },
+            ),
+        ]);
         let note = map_wallet_note(
             0,
             Pool::Orchard,
@@ -3835,10 +3868,12 @@ mod tests {
             SpendStatus::Spent(txid(0x02)),
             &txid(0x01),
             false,
-            &heights,
+            &blocks,
         );
         assert_eq!(note.status, NoteStatus::Spent);
+        assert_eq!(note.time, Some(1_700_000_000));
         assert_eq!(note.spent_height, Some(99));
+        assert_eq!(note.spent_time, Some(1_700_009_000));
     }
 
     // An in-flight spend (transmitted, mempool, or just calculated) marks the note
