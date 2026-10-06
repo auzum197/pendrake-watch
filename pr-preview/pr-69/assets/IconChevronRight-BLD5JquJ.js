@@ -1,0 +1,1 @@
+import{c as o}from"./createReactComponent-B8PfQ_MB.js";const e=[["path",{d:"M15 6l-6 6l6 6",key:"svg-0"}]],c=o("outline","chevron-left","ChevronLeft",e);const t=[["path",{d:"M9 6l6 6l-6 6",key:"svg-0"}]],h=o("outline","chevron-right","ChevronRight",t);export{h as I,c as a};
