@@ -224,10 +224,12 @@ export type WalletAddress = { ua: string, transparent?: string, };
  * single transaction's detail, this is a wallet-wide row: it carries the
  * confirming `height`, the `txid` it landed in, whether it's `change`, and the
  * height it was spent at when that spend is confirmed. `height` and `spentHeight`
- * are null when unknown (an unconfirmed note, or an in-flight spend). Values are
+ * are null when unknown (an unconfirmed note, or an in-flight spend), and `time`
+ * and `spentTime` are the matching block times in Unix seconds, null under the
+ * same conditions, so the GUI can show either column as a local time. Values are
  * zatoshi strings, matching the rest of the wire.
  */
-export type WalletNote = { idx: number, pool: Pool, valueZat: string, status: NoteStatus, height: number | null, txid: string, change: boolean, spentHeight: number | null, };
+export type WalletNote = { idx: number, pool: Pool, valueZat: string, status: NoteStatus, height: number | null, time: number | null, txid: string, change: boolean, spentHeight: number | null, spentTime: number | null, };
 
 export type WalletState = { exists: boolean, 
 /**

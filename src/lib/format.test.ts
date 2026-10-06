@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   athStanding,
   balanceHistory,
+  blockTimeIso,
   fiatSeries,
   filterRange,
   formatBlock,
+  formatBlockTime,
   formatTxDate,
   formatEta,
   isSynced,
@@ -594,5 +596,26 @@ describe("fiatSeries", () => {
     const week = fiatSeries(bal, yearPrices, 50, "week", nowMs);
     const span = week[week.length - 1].t - week[0].t;
     expect(span).toBeLessThanOrEqual(8 * 86_400);
+  });
+});
+
+describe("formatBlockTime", () => {
+  it("renders the block's date and clock time in the local zone", () => {
+    const shown = formatBlockTime(1_701_200_000);
+    expect(shown).toContain("2023");
+    expect(shown).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it("accepts seconds and milliseconds alike", () => {
+    expect(formatBlockTime(1_701_200_000)).toBe(
+      formatBlockTime(1_701_200_000_000),
+    );
+  });
+});
+
+describe("blockTimeIso", () => {
+  it("copies as an ISO 8601 instant", () => {
+    expect(blockTimeIso(1_701_200_000)).toBe("2023-11-28T19:33:20.000Z");
+    expect(blockTimeIso(1_701_200_000_000)).toBe("2023-11-28T19:33:20.000Z");
   });
 });

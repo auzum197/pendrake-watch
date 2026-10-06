@@ -5,8 +5,23 @@ import {
   DiscreetValue,
   type DiscreetKind,
 } from "@/components/ui/discreet-value/discreet-value";
+import {
+  BlockDisplayToggle,
+  blockLabel,
+} from "@/components/app/block-display-toggle/block-display-toggle";
+import "@/components/app/block-display-toggle/block-display-toggle.css";
+import {
+  type BlockDisplay,
+  useBlockDisplay,
+  useBlockSwapping,
+} from "@/lib/block-display";
 import { useMasked } from "@/lib/discreet";
-import { formatZec, zatToZecPlain } from "@/lib/format";
+import {
+  blockTimeIso,
+  formatBlockTime,
+  formatZec,
+  zatToZecPlain,
+} from "@/lib/format";
 import type { Sort, SortKey } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 import { ChangeBadge, MempoolBadge, PoolBadge, StatusBadge } from "./badges";
@@ -17,10 +32,11 @@ type Column = {
   label: string;
   sortable: boolean;
   align?: "right";
+  block?: boolean;
 };
 
 const GRID =
-  "grid grid-cols-[7fr_13fr_18fr_12fr_12fr_15fr_10fr_13fr] items-center";
+  "grid grid-cols-[7fr_13fr_18fr_12fr_20fr_15fr_10fr_20fr] items-center";
 
 const ROW_HEIGHT = 41;
 
@@ -29,11 +45,15 @@ const COLUMNS: Column[] = [
   { key: "pool", label: "Pool", sortable: true },
   { key: "value", label: "Value (ZEC)", sortable: true, align: "right" },
   { key: "status", label: "Status", sortable: true },
-  { key: "height", label: "Block", sortable: true },
+  { key: "height", label: "Block", sortable: false, block: true },
   { key: "txid", label: "Txid", sortable: false },
   { key: "flags", label: "Flags", sortable: true },
-  { key: "spentHeight", label: "Spent at", sortable: true },
+  { key: "spentHeight", label: "Spent at", sortable: false, block: true },
 ];
+
+function columnLabel(col: Column, display: BlockDisplay): string {
+  return col.key === "height" ? blockLabel(display) : col.label;
+}
 
 function shortTxid(txid: string): string {
   return txid.length > 13 ? `${txid.slice(0, 6)}…${txid.slice(-4)}` : txid;
@@ -133,6 +153,7 @@ export function NotesTable({
   sort: Sort;
   onSort: (key: SortKey) => void;
 }) {
+  const display = useBlockDisplay();
   if (notes.length === 0) {
     return (
       <p className="mt-4 text-sm text-muted-foreground">
@@ -143,14 +164,16 @@ export function NotesTable({
 
   return (
     <div className="mt-4 overflow-x-auto">
-      <div className="min-w-2xl text-sm">
+      <div className="min-w-4xl text-sm">
         <div className={`${GRID} pb-3 text-left text-xs text-muted-foreground`}>
           {COLUMNS.map((col) => (
             <div
               key={col.key}
               className={col.align === "right" ? "pr-6 text-right" : ""}
             >
-              {col.sortable ? (
+              {col.block ? (
+                <BlockDisplayToggle>{columnLabel(col, display)}</BlockDisplayToggle>
+              ) : col.sortable ? (
                 <button
                   type="button"
                   onClick={() => onSort(col.key as SortKey)}
@@ -226,7 +249,40 @@ function VirtualRows({ notes }: { notes: WalletNote[] }) {
   );
 }
 
+function BlockCell({
+  height,
+  time,
+  display,
+  swapping,
+}: {
+  height: number;
+  time: number | null;
+  display: BlockDisplay;
+  swapping: boolean;
+}) {
+  const swap = swapping ? "block-swap" : "";
+  if (display === "time" && time != null) {
+    return (
+      <CopyCell
+        key={display}
+        kind="date"
+        copy={blockTimeIso(time)}
+        className={cn("whitespace-nowrap font-sans", swap)}
+      >
+        {formatBlockTime(time)}
+      </CopyCell>
+    );
+  }
+  return (
+    <CopyCell key={display} kind="block" copy={String(height)} className={swap}>
+      {height.toLocaleString()}
+    </CopyCell>
+  );
+}
+
 function NoteRow({ note }: { note: WalletNote }) {
+  const display = useBlockDisplay();
+  const swapping = useBlockSwapping();
   const muted = note.status === "spent" ? "text-muted-foreground" : "";
   return (
     <div className={cn(GRID, "h-full border-b border-border", muted)}>
@@ -246,9 +302,12 @@ function NoteRow({ note }: { note: WalletNote }) {
       </span>
       <span className="font-mono tabular-nums">
         {note.height != null ? (
-          <CopyCell kind="block" copy={String(note.height)}>
-            {note.height.toLocaleString()}
-          </CopyCell>
+          <BlockCell
+            height={note.height}
+            time={note.time}
+            display={display}
+            swapping={swapping}
+          />
         ) : (
           <MempoolBadge />
         )}
@@ -267,9 +326,12 @@ function NoteRow({ note }: { note: WalletNote }) {
       </span>
       <span className="font-mono tabular-nums">
         {note.spentHeight != null ? (
-          <CopyCell kind="block" copy={String(note.spentHeight)}>
-            {note.spentHeight.toLocaleString()}
-          </CopyCell>
+          <BlockCell
+            height={note.spentHeight}
+            time={note.spentTime}
+            display={display}
+            swapping={swapping}
+          />
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
