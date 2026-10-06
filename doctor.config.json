@@ -5,5 +5,8 @@
     "files": [
       "**/*-prototype/**"
     ]
+  },
+  "rules": {
+    "react-doctor/only-export-components": "off"
   }
 }
