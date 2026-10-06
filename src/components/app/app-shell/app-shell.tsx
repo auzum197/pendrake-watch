@@ -18,6 +18,7 @@ import { setSidebarRail, sidebarRail } from "@/lib/sidebar";
 import { openSettings, useSettingsModal } from "@/lib/settings-modal";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import pendrakeLogo from "@/assets/pendrake-logo.svg";
+import { MOD_KEY } from "@/components/ui/kbd/kbd";
 import { Toaster } from "@/components/ui/sonner/sonner";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { WalletCard } from "../wallet-card/wallet-card";
@@ -73,9 +74,27 @@ export function AppShell({
   const [rail, setRail] = useState(sidebarRail);
 
   function toggleRail() {
-    setSidebarRail(!rail);
-    setRail(!rail);
+    setRail((open) => {
+      setSidebarRail(!open);
+      return !open;
+    });
   }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "b"
+      ) {
+        e.preventDefault();
+        toggleRail();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="app-frame fixed inset-0 z-50 flex bg-ink text-foreground">
@@ -126,6 +145,7 @@ function RailToggle({
     <button
       type="button"
       aria-label={rail ? "Show sidebar" : "Hide sidebar"}
+      title={`${rail ? "Show" : "Hide"} sidebar (${MOD_KEY}B)`}
       aria-expanded={!rail}
       onClick={onToggle}
       className="fixed left-26.5 top-2.5 z-101 flex size-7 cursor-pointer items-center justify-center rounded-full text-white/55 transition duration-150 ease-out hover:bg-white/5 hover:text-white/80 active:scale-97"
