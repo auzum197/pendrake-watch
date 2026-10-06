@@ -42,7 +42,7 @@ async function openAbout() {
     url: "about.html",
     title: "About Pendrake Watch",
     width: 400,
-    height: 360,
+    height: 456,
     resizable: false,
     center: true,
   });
