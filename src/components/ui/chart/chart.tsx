@@ -1,4 +1,5 @@
 import * as React from "react";
+import { flushSync } from "react-dom";
 import * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
@@ -32,6 +33,44 @@ function useChart() {
   return context;
 }
 
+type ChartSize = { width: number; height: number };
+
+type ChartElement = React.ReactElement<Partial<ChartSize>>;
+
+// Sizes the chart before paint and out of flow, so it tracks the container on every frame.
+function ChartSizer({ children }: { children: ChartElement }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [size, setSize] = React.useState<ChartSize>({ width: 0, height: 0 });
+
+  React.useLayoutEffect(() => {
+    const surface = ref.current;
+    if (!surface) return;
+    const measure = (width: number, height: number) =>
+      setSize((prev) => {
+        const next = { width: Math.round(width), height: Math.round(height) };
+        return prev.width === next.width && prev.height === next.height
+          ? prev
+          : next;
+      });
+    const rect = surface.getBoundingClientRect();
+    measure(rect.width, rect.height);
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      flushSync(() => measure(width, height));
+    });
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="absolute inset-0">
+      {size.width > 0 && size.height > 0
+        ? React.cloneElement(children, size)
+        : null}
+    </div>
+  );
+}
+
 function ChartContainer({
   id,
   className,
@@ -40,9 +79,7 @@ function ChartContainer({
   ...props
 }: React.ComponentProps<"div"> & {
   config: ChartConfig;
-  children: React.ComponentProps<
-    typeof RechartsPrimitive.ResponsiveContainer
-  >["children"];
+  children: ChartElement;
 }) {
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
@@ -53,15 +90,13 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "relative flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className,
         )}
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <ChartSizer>{children}</ChartSizer>
       </div>
     </ChartContext.Provider>
   );
