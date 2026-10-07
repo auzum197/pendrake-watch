@@ -16,20 +16,20 @@
 }
 
 .note-badge--ironwood {
-  background: #fcebe7;
-  color: #9b2c1a;
+  background: #e1f5ee;
+  color: #0d634d;
 }
 .note-badge--orchard {
-  background: #e1f5ee;
-  color: #0f6e56;
+  background: #e6eef7;
+  color: #2f577f;
 }
 .note-badge--sapling {
-  background: #e6f1fb;
-  color: #185fa5;
+  background: #eceff3;
+  color: #4d5765;
 }
 .note-badge--transparent {
-  background: #f1efe8;
-  color: #5f5e5a;
+  background: #fcebe7;
+  color: #992b1a;
 }
 .note-badge--unspent {
   background: #eaf3de;
@@ -50,20 +50,20 @@
 }
 
 .dark .note-badge--ironwood {
-  background: color-mix(in srgb, #c45c2a 28%, transparent);
-  color: #f0a57a;
+  background: color-mix(in srgb, #35e9af 22%, transparent);
+  color: #9bedd3;
 }
 .dark .note-badge--orchard {
-  background: color-mix(in srgb, #1d9e75 22%, transparent);
-  color: #6fd9b6;
+  background: color-mix(in srgb, #b7d6f0 22%, transparent);
+  color: #cde2f4;
 }
 .dark .note-badge--sapling {
-  background: color-mix(in srgb, #378add 22%, transparent);
-  color: #8fbff0;
+  background: color-mix(in srgb, #ccd1d7 22%, transparent);
+  color: #dde0e4;
 }
 .dark .note-badge--transparent {
-  background: color-mix(in srgb, #888780 24%, transparent);
-  color: #c8c7c0;
+  background: color-mix(in srgb, #ffc75c 26%, transparent);
+  color: #ffde9e;
 }
 .dark .note-badge--unspent {
   background: color-mix(in srgb, #5aa015 24%, transparent);

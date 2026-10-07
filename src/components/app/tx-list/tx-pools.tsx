@@ -30,7 +30,7 @@ const POOL_NAME: Record<Pool, string> = {
   transparent: "Transparent",
 };
 
-const POOL_ORDER: Pool[] = ["orchard", "sapling", "ironwood", "transparent"];
+const POOL_ORDER: Pool[] = ["transparent", "ironwood", "orchard", "sapling"];
 
 export function poolsOf(notes: { pool: Pool }[]): Pool[] {
   const seen = new Set(notes.map((n) => n.pool));
