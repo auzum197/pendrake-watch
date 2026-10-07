@@ -40,10 +40,10 @@
 	--sidebar-border: #2a2b30;
 	--sidebar-ring: #3a3b42;
 	/* Pool identity colours, shared by the Notes dots and the transaction list. */
-	--pool-orchard: #1d9e75;
-	--pool-sapling: #378add;
-	--pool-ironwood: #c45c2a;
-	--pool-transparent: #888780;
+	--pool-orchard: #b7d6f0;
+	--pool-sapling: #ccd1d7;
+	--pool-ironwood: #35e9af;
+	--pool-transparent: #ffc75c;
 }
 
 @theme inline {

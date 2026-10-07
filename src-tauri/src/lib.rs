@@ -608,7 +608,7 @@ fn raise_main_window(app: &tauri::AppHandle) {
 }
 
 /// Width over height of the main window at launch and at its smallest.
-const WINDOW_ASPECT: f64 = 16.0 / 9.0;
+const WINDOW_ASPECT: f64 = 16.0 / 9.75;
 
 /// Share of the monitor work area left clear on each side of the window at launch.
 const WINDOW_MARGIN: f64 = 0.08;
@@ -768,7 +768,7 @@ mod tests {
 
     #[test]
     fn a_small_screen_gets_the_minimum_size() {
-        assert_eq!(launch_size(1000.0, 600.0), (960.0, 540.0));
+        assert_eq!(launch_size(1000.0, 600.0), (960.0, 585.0));
     }
 
     #[test]
