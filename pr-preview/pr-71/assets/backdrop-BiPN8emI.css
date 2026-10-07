@@ -1,0 +1,1 @@
+.backdrop-viewport{container-type:size}.backdrop-stage{aspect-ratio:1717 / 916;width:max(100cqw,calc(100cqh * 1717 / 916))}.backdrop-tile{aspect-ratio:1717 / 916;background:repeating-conic-gradient(#333 0 25%,#222 0 50%) 0 0 / 24px 24px}.backdrop-tile[data-light]{background:repeating-conic-gradient(#999 0 25%,#777 0 50%) 0 0 / 24px 24px}
