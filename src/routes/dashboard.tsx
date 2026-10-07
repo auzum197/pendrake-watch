@@ -307,12 +307,14 @@ function ChartCard({
       </div>
 
       <div className="mt-4 grid text-muted-foreground">
-        <div
-          aria-hidden={hasData}
-          style={{ opacity: hasData ? 0 : 1 }}
-          className="col-start-1 row-start-1 flex aspect-900/240 items-center justify-center text-sm text-muted-foreground transition-opacity duration-360 ease-[cubic-bezier(0.23,1,0.32,1)]"
-        >
-          No confirmed activity yet
+        <div className="col-start-1 row-start-1">
+          <div
+            aria-hidden={hasData}
+            style={{ opacity: hasData ? 0 : 1 }}
+            className="flex aspect-900/240 items-center justify-center text-sm text-muted-foreground transition-opacity duration-360 ease-[cubic-bezier(0.23,1,0.32,1)]"
+          >
+            No confirmed activity yet
+          </div>
         </div>
         {hasData && (
           <div
