@@ -42,3 +42,6 @@ src-tauri/binaries/
 # pnpm falls back to a project-local store when the checkout is on a
 # different volume from its global store (BB worktrees under ~/.bb)
 .pnpm-store/
+
+# prototype notes stay local
+NOTES.md
