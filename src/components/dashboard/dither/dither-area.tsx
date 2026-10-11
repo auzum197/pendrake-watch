@@ -1,0 +1,634 @@
+import {
+  type CSSProperties,
+  type PointerEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useMasked } from "@/lib/discreet";
+import { maskFor } from "@/components/ui/discreet-value/discreet-value";
+import { type BalancePoint, formatUsd } from "@/lib/format";
+import { animationsEnabled } from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import {
+  type Bloom,
+  bloomStyle,
+  clamp01,
+  type DitherVariant,
+  easeInOutCubic,
+  paintColumn,
+  prefersReducedMotion,
+} from "./dither-paint";
+import { INK, type Rgb, rgba } from "./palette";
+import "./dither-area.css";
+
+export type ChartKind = "area" | "line" | "bars";
+export type Curve = "step" | "linear";
+
+export type DitherLook = {
+  ink: Rgb;
+  variant: DitherVariant;
+  kind: ChartKind;
+  curve: Curve;
+  cell: number;
+  bloom: Bloom;
+  sparkles: boolean;
+};
+
+export const DEFAULT_LOOK: DitherLook = {
+  ink: INK.brand,
+  variant: "gradient",
+  kind: "area",
+  curve: "step",
+  cell: 2,
+  bloom: "low",
+  sparkles: true,
+};
+
+export type DitherAreaProps = Partial<DitherLook> & {
+  points: BalancePoint[];
+  usd?: boolean;
+  animate?: boolean;
+  interactive?: boolean;
+  axes?: boolean;
+  bins?: number;
+  className?: string;
+};
+
+type Mark = {
+  x: number;
+  y: number;
+  t: number;
+  value: number;
+  label: string;
+  height?: number;
+  zec?: number;
+};
+
+type Surface = {
+  top: Float64Array;
+  floor: Float64Array;
+  marks: Mark[];
+};
+
+type LoopState = {
+  surface: Surface;
+  look: DitherLook;
+  hover: number | null;
+  inside: boolean;
+  animate: boolean;
+  entered: { current: boolean };
+};
+
+const ENTRANCE_MS = 800;
+const MAX_LABELS = 6;
+
+function niceAxis(peak: number): { max: number; step: number } {
+  if (peak <= 0) return { max: 1, step: 1 };
+  const rough = peak / 4;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const n = rough / mag;
+  const step =
+    (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return { max: Math.ceil(peak / step) * step, step };
+}
+
+function fullDate(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function axisLabel(v: number, usd: boolean, max: number): string {
+  const decimals = max < 1 ? 4 : max < 100 ? 2 : 0;
+  const n = v.toLocaleString(undefined, { maximumFractionDigits: decimals });
+  return usd ? `$${n}` : n;
+}
+
+function valueLabel(v: number, usd: boolean): string {
+  return usd
+    ? formatUsd(v)
+    : `${v.toLocaleString(undefined, { maximumFractionDigits: 8 })} ZEC`;
+}
+
+function sampleAt(
+  points: BalancePoint[],
+  fx: number,
+  curve: Curve,
+  max: number,
+): Mark {
+  const t0 = points[0].t;
+  const span = points[points.length - 1].t - t0 || 1;
+  const t = t0 + fx * span;
+  let i = 0;
+  while (i + 1 < points.length && points[i + 1].t <= t) i++;
+  const a = points[i];
+  let value = a.value;
+  if (curve === "linear" && i + 1 < points.length) {
+    const b = points[i + 1];
+    value = a.value + (b.value - a.value) * ((t - a.t) / (b.t - a.t || 1));
+  }
+  return {
+    x: fx,
+    y: 1 - value / max,
+    t,
+    value,
+    label: a.label,
+    height: a.height,
+    zec: a.zec,
+  };
+}
+
+function buildSurface(
+  points: BalancePoint[],
+  cols: number,
+  rows: number,
+  max: number,
+  kind: ChartKind,
+  curve: Curve,
+  bins: number,
+): Surface {
+  const empty = {
+    top: new Float64Array(0),
+    floor: new Float64Array(0),
+    marks: [],
+  };
+  if (points.length === 0) return empty;
+  const t0 = points[0].t;
+  const span = points[points.length - 1].t - t0 || 1;
+  const yRow = (v: number) => (1 - v / max) * (rows - 1);
+  const top = new Float64Array(cols).fill(rows - 1);
+  const floor = new Float64Array(cols).fill(rows - 1);
+  const marks: Mark[] = [];
+
+  if (kind === "bars") {
+    top.fill(NaN);
+    floor.fill(NaN);
+    const gap = Math.max(1, Math.round((cols / bins) * 0.14));
+    let i = 0;
+    for (let b = 0; b < bins; b++) {
+      const tEnd = t0 + (span * (b + 1)) / bins;
+      while (i + 1 < points.length && points[i + 1].t <= tEnd) i++;
+      const value = points[i].value;
+      const c0 = Math.round((cols * b) / bins) + gap;
+      const c1 = Math.round((cols * (b + 1)) / bins) - gap;
+      for (let c = c0; c < c1; c++) {
+        top[c] = yRow(value);
+        floor[c] = rows - 1;
+      }
+      marks.push({
+        x: (c0 + c1) / 2 / (cols - 1),
+        y: 1 - value / max,
+        t: tEnd,
+        value,
+        label: points[i].label || fullDate(tEnd),
+        height: points[i].height,
+      });
+    }
+    return { top, floor, marks };
+  }
+
+  const glow = Math.max(5, Math.round(rows * 0.14));
+  let i = 0;
+  for (let c = 0; c < cols; c++) {
+    const t = t0 + (span * c) / (cols - 1);
+    while (i + 1 < points.length && points[i + 1].t <= t) i++;
+    let v = points[i].value;
+    if (curve === "linear" && i + 1 < points.length) {
+      const a = points[i];
+      const b = points[i + 1];
+      const f = (t - a.t) / (b.t - a.t || 1);
+      v = a.value + (b.value - a.value) * f;
+    }
+    top[c] = yRow(v);
+    floor[c] = kind === "line" ? Math.min(rows - 1, top[c] + glow) : rows - 1;
+  }
+  for (const p of points) {
+    if (p.key === "start") continue;
+    marks.push({
+      x: (p.t - t0) / span,
+      y: 1 - p.value / max,
+      t: p.t,
+      value: p.value,
+      label: p.label,
+      height: p.height,
+      zec: p.zec,
+    });
+  }
+  return { top, floor, marks };
+}
+
+function startLoop(
+  crisp: HTMLCanvasElement,
+  bloom: HTMLCanvasElement,
+  cols: number,
+  rows: number,
+  state: RefObject<LoopState>,
+) {
+  const c = crisp.getContext("2d");
+  const b = bloom.getContext("2d");
+  if (!c || !b) return;
+  crisp.width = cols;
+  crisp.height = rows;
+  bloom.width = cols;
+  bloom.height = rows;
+  const off = document.createElement("canvas");
+  off.width = cols;
+  off.height = rows;
+  const o = off.getContext("2d");
+  if (!o) return;
+
+  const still = !animationsEnabled() || prefersReducedMotion();
+  const EASE = still ? 1 : 0.18;
+  const top = new Float64Array(cols);
+  const floor = new Float64Array(cols);
+  const stars = Array.from(
+    { length: Math.max(4, Math.round(cols / 14)) },
+    (_, i) => {
+      const seed = i * 67 + 13;
+      return {
+        col: (seed * 97) % cols,
+        depth: ((seed * 53 + 7) % 100) / 100,
+        phase: (seed * 41) % 360,
+      };
+    },
+  );
+
+  let raf = 0;
+  let tick = 0;
+  let lastWink = 0;
+  let animStart = 0;
+  let lastProg = -1;
+  let intensity = 0;
+  let needsFill = true;
+  let lastSurface: Surface | null = null;
+  let lastLook: DitherLook | null = null;
+
+  const paintFill = (reveal: number) => {
+    o.clearRect(0, 0, cols, rows);
+    const { look } = state.current;
+    const revealCols = Math.ceil(reveal * cols);
+    for (let x = 0; x < cols && x <= revealCols; x++) {
+      if (Number.isNaN(top[x])) continue;
+      paintColumn(o, x, top[x], floor[x], look.ink, look.variant, intensity);
+    }
+  };
+
+  const draw = (now: number) => {
+    raf = requestAnimationFrame(draw);
+    const s = state.current;
+    const tgt = s.surface;
+    if (tgt !== lastSurface) {
+      if (lastSurface === null) {
+        top.set(tgt.top);
+        floor.set(tgt.floor);
+      }
+      lastSurface = tgt;
+      needsFill = true;
+    }
+    if (s.look !== lastLook) {
+      lastLook = s.look;
+      needsFill = true;
+    }
+    const animate = s.animate && !still && !s.entered.current;
+    if (!animStart) animStart = now;
+    const prog = animate ? Math.min(1, (now - animStart) / ENTRANCE_MS) : 1;
+    const progChanged = prog !== lastProg;
+    if (prog >= 1) s.entered.current = true;
+
+    let moving = false;
+    for (let x = 0; x < cols; x++) {
+      const tt = tgt.top[x];
+      const tf = tgt.floor[x];
+      const gapNow = Number.isNaN(top[x]);
+      const gapNext = Number.isNaN(tt);
+      if (gapNow || gapNext) {
+        if (gapNow !== gapNext || (!gapNext && top[x] !== tt)) {
+          top[x] = tt;
+          floor[x] = tf;
+          moving = true;
+        }
+        continue;
+      }
+      const dt = tt - top[x];
+      const df = tf - floor[x];
+      if (Math.abs(dt) > 0.01 || Math.abs(df) > 0.01) {
+        top[x] += dt * EASE;
+        floor[x] += df * EASE;
+        moving = true;
+      } else {
+        top[x] = tt;
+        floor[x] = tf;
+      }
+    }
+
+    const lift = s.inside ? 1 : 0;
+    let settling = false;
+    if (Math.abs(intensity - lift) > 0.001) {
+      intensity += (lift - intensity) * 0.16;
+      settling = true;
+    } else {
+      intensity = lift;
+    }
+
+    const winkDue = s.look.sparkles && !still && now - lastWink >= 100;
+    if (
+      !(
+        moving ||
+        settling ||
+        winkDue ||
+        s.hover !== null ||
+        progChanged ||
+        needsFill
+      )
+    )
+      return;
+    if (progChanged) lastProg = prog;
+    if (winkDue) {
+      lastWink = now;
+      tick += 1;
+    }
+
+    const reveal = animate ? easeInOutCubic(prog) : 1;
+    if (needsFill || moving || settling || progChanged) paintFill(reveal);
+    needsFill = false;
+    c.clearRect(0, 0, cols, rows);
+    c.drawImage(off, 0, 0);
+
+    const { ink } = s.look;
+    const revealCols = reveal * cols;
+    if (s.hover !== null) {
+      const mx = Math.round(s.hover * (cols - 1));
+      if (mx <= revealCols && !Number.isNaN(top[mx])) {
+        const my = Math.round(top[mx]);
+        c.fillStyle = rgba(ink, 0.55);
+        c.fillRect(mx, my, 1, rows - my);
+        c.fillStyle = rgba(ink);
+        c.fillRect(mx - 1, my - 1, 3, 3);
+      }
+    }
+
+    if (s.look.sparkles) {
+      for (const star of stars) {
+        const sx = star.col;
+        if (sx > revealCols || Number.isNaN(top[sx])) continue;
+        const sy = Math.round(top[sx] + star.depth * (floor[sx] - top[sx]));
+        const tw = still
+          ? 0.85
+          : (Math.sin((tick + star.phase) * 0.35) + 1) / 2;
+        const glint = tw * (0.7 + 0.3 * intensity);
+        if (glint < 0.55 || sy < 0 || sy >= rows) continue;
+        c.fillStyle = rgba(ink, glint);
+        c.fillRect(sx, sy, 1, 1);
+        if (tw > 0.9) {
+          c.fillStyle = rgba(ink, glint * 0.6 * (tw - 0.9) * 10);
+          c.fillRect(sx - 1, sy, 1, 1);
+          c.fillRect(sx + 1, sy, 1, 1);
+          c.fillRect(sx, sy - 1, 1, 1);
+          c.fillRect(sx, sy + 1, 1, 1);
+        }
+      }
+    }
+
+    if (s.look.bloom !== "off") {
+      b.clearRect(0, 0, cols, rows);
+      b.drawImage(crisp, 0, 0);
+    }
+  };
+
+  raf = requestAnimationFrame(draw);
+  return () => cancelAnimationFrame(raf);
+}
+
+export function DitherArea({
+  points,
+  usd = false,
+  animate = true,
+  interactive = true,
+  axes = true,
+  bins = 24,
+  className,
+  ink = DEFAULT_LOOK.ink,
+  variant = DEFAULT_LOOK.variant,
+  kind = DEFAULT_LOOK.kind,
+  curve = DEFAULT_LOOK.curve,
+  cell = DEFAULT_LOOK.cell,
+  bloom = DEFAULT_LOOK.bloom,
+  sparkles = DEFAULT_LOOK.sparkles,
+}: DitherAreaProps) {
+  const plotRef = useRef<HTMLDivElement>(null);
+  const crispRef = useRef<HTMLCanvasElement>(null);
+  const bloomRef = useRef<HTMLCanvasElement>(null);
+  const [plot, setPlot] = useState({ w: 0, h: 0 });
+  const [hover, setHover] = useState<number | null>(null);
+  const [inside, setInside] = useState(false);
+  const masked = useMasked();
+  const scrub = interactive && !masked;
+
+  const look = useMemo<DitherLook>(
+    () => ({ ink, variant, kind, curve, cell, bloom, sparkles }),
+    [ink, variant, kind, curve, cell, bloom, sparkles],
+  );
+
+  useLayoutEffect(() => {
+    const el = plotRef.current;
+    if (!el) return;
+    const measure = (w: number, h: number) =>
+      setPlot((prev) => {
+        const next = { w: Math.round(w), h: Math.round(h) };
+        return prev.w === next.w && prev.h === next.h ? prev : next;
+      });
+    const rect = el.getBoundingClientRect();
+    measure(rect.width, rect.height);
+    const ro = new ResizeObserver(([entry]) =>
+      measure(entry.contentRect.width, entry.contentRect.height),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const cols = Math.max(8, Math.round(plot.w / cell));
+  const rows = Math.max(8, Math.round(plot.h / cell));
+  const { max, step } = niceAxis(Math.max(0, ...points.map((p) => p.value)));
+  const surface = useMemo(
+    () => buildSurface(points, cols, rows, max, kind, curve, bins),
+    [points, cols, rows, max, kind, curve, bins],
+  );
+
+  const entered = useRef(false);
+  const stateRef = useRef<LoopState>({
+    surface,
+    look,
+    hover,
+    inside,
+    animate,
+    entered,
+  });
+  useEffect(() => {
+    stateRef.current = { surface, look, hover, inside, animate, entered };
+  });
+
+  useEffect(() => {
+    const crisp = crispRef.current;
+    const bloomCanvas = bloomRef.current;
+    if (!crisp || !bloomCanvas || plot.w === 0) return;
+    return startLoop(crisp, bloomCanvas, cols, rows, stateRef);
+  }, [cols, rows, plot.w]);
+
+  function onMove(e: PointerEvent<HTMLDivElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const fx = clamp01((e.clientX - r.left) / r.width);
+    if (kind !== "bars") {
+      setHover(fx);
+      return;
+    }
+    let best: Mark | undefined;
+    for (const m of surface.marks) {
+      if (!best || Math.abs(m.x - fx) < Math.abs(best.x - fx)) best = m;
+    }
+    setHover(best ? best.x : null);
+  }
+
+  const yWidth = axes ? (masked ? 76 : usd ? 64 : 48) : 0;
+  const xHeight = axes ? 22 : 0;
+  const ticks = Array.from(
+    { length: Math.round(max / step) + 1 },
+    (_, i) => i * step,
+  );
+  const labelEvery = Math.ceil(surface.marks.length / MAX_LABELS);
+  const xLabels = surface.marks.filter(
+    (m, i) => m.label && i % labelEvery === 0,
+  );
+  const mark =
+    hover === null
+      ? undefined
+      : kind === "bars"
+        ? surface.marks.find((m) => m.x === hover)
+        : sampleAt(points, hover, curve, max);
+  const tipShift = mark
+    ? mark.x < 0.12
+      ? "-12%"
+      : mark.x > 0.88
+        ? "-88%"
+        : "-50%"
+    : "-50%";
+  const tipY = mark && mark.y < 0.3 ? "14px" : "calc(-100% - 12px)";
+
+  if (points.length === 0) return null;
+
+  return (
+    <div className={cn("relative text-xs text-muted-foreground", className)}>
+      {axes && (
+        <div
+          className="absolute left-0 top-0"
+          style={{ width: yWidth, bottom: xHeight }}
+        >
+          {ticks.map((v) => (
+            <span
+              key={v}
+              className="absolute right-2 -translate-y-1/2 tabular-nums"
+              style={{ top: `${(1 - v / max) * 100}%` }}
+            >
+              {masked ? maskFor(usd ? "usd" : "zec") : axisLabel(v, usd, max)}
+            </span>
+          ))}
+        </div>
+      )}
+      <div
+        ref={plotRef}
+        className="dither-plot absolute right-0 top-0"
+        style={{ left: yWidth, bottom: xHeight }}
+        onPointerMove={scrub ? onMove : undefined}
+        onPointerEnter={scrub ? () => setInside(true) : undefined}
+        onPointerLeave={
+          scrub
+            ? () => {
+                setInside(false);
+                setHover(null);
+              }
+            : undefined
+        }
+      >
+        {axes && (
+          <svg className="absolute inset-0 h-full w-full" aria-hidden>
+            {ticks.map((v) => (
+              <line
+                key={v}
+                x1="0"
+                x2="100%"
+                y1={`${(1 - v / max) * 100}%`}
+                y2={`${(1 - v / max) * 100}%`}
+                stroke="var(--border)"
+                strokeOpacity={v === 0 ? 0.9 : 0.5}
+                strokeDasharray={v === 0 ? undefined : "4 6"}
+              />
+            ))}
+          </svg>
+        )}
+        <canvas ref={crispRef} className="dither-crisp" />
+        <canvas
+          ref={bloomRef}
+          className="dither-bloom"
+          style={bloomStyle(bloom)}
+        />
+        {scrub && mark && (
+          <div
+            className="dither-tip"
+            style={{
+              transform: `translate(${mark.x * plot.w}px, ${mark.y * plot.h}px)`,
+            }}
+          >
+            <div
+              className="dither-tip-card w-max rounded-lg border border-border bg-popover px-3 py-2 text-popover-foreground shadow-lg"
+              style={
+                { "--tip-shift": tipShift, "--tip-y": tipY } as CSSProperties
+              }
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-foreground">{fullDate(mark.t)}</span>
+                {mark.height ? (
+                  <span className="text-muted-foreground">
+                    Block {mark.height.toLocaleString()}
+                  </span>
+                ) : null}
+                <span className="mt-1 font-mono font-medium tabular-nums text-foreground">
+                  {valueLabel(mark.value, usd)}
+                </span>
+                {usd && typeof mark.zec === "number" && (
+                  <span className="font-mono tabular-nums text-muted-foreground">
+                    {mark.zec.toLocaleString(undefined, {
+                      maximumFractionDigits: 8,
+                    })}{" "}
+                    ZEC
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {axes && (
+        <div
+          className="absolute bottom-0 right-0"
+          style={{ left: yWidth, height: xHeight }}
+        >
+          {xLabels.map((m) => (
+            <span
+              key={m.t}
+              className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap"
+              style={{ left: `${m.x * 100}%` }}
+            >
+              {masked ? maskFor("date") : m.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
@@ -10,7 +10,8 @@ import { DiscreetEye } from "@/components/app/discreet-eye/discreet-eye";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { TxList } from "@/components/app/tx-list/tx-list";
-import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
+import type { Denom } from "@/components/dashboard/BalanceChart";
+import { DitherArea } from "@/components/dashboard/dither/dither-area";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
 import { usePriceData } from "@/hooks/use-price-data";
 import { setCachedWallet, useWalletData } from "@/hooks/use-wallet-data";
@@ -151,6 +152,8 @@ function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
   );
 }
 
+let chartEntered = false;
+
 function ChartCard({
   wallet,
   balance,
@@ -185,6 +188,10 @@ function ChartCard({
   const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
   const series = showUsd ? fiatPoints : zecSeries;
   const hasData = series.length >= 2;
+  const [enter] = useState(() => !chartEntered && animationsEnabled());
+  useEffect(() => {
+    if (hasData) chartEntered = true;
+  }, [hasData]);
 
   function onDenom(next: Denom) {
     if (next === "usd" && !fiatEnabled) {
@@ -318,10 +325,14 @@ function ChartCard({
         </div>
         {hasData && (
           <div
-            key={activeDenom === "usd" ? `usd-${range}` : "zec"}
-            className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
+            className={`col-start-1 row-start-1 ${enter ? "balance-chart-enter" : ""}`}
           >
-            <BalanceChart points={series} denom={activeDenom} />
+            <DitherArea
+              points={series}
+              usd={activeDenom === "usd"}
+              animate={enter}
+              className="aspect-900/240 w-full"
+            />
           </div>
         )}
       </div>
