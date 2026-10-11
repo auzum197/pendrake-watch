@@ -1,19 +1,8 @@
-import { useMemo } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
-import { BalanceChart, type Denom } from "./BalanceChart";
 import type { BalancePoint } from "@/lib/format";
 
-type WalletStyle = "hodl" | "trader" | "dust" | "whale";
+export type WalletStyle = "hodl" | "trader" | "dust" | "whale";
 
-type PlaygroundProps = {
-  transactions: number;
-  years: number;
-  style: WalletStyle;
-  seed: number;
-  denom: Denom;
-};
-
-const END = Date.UTC(2026, 0, 15) / 1000;
+const END = Math.floor(Date.now() / 1000);
 const DAY = 86_400;
 
 function mulberry32(seed: number) {
@@ -53,17 +42,21 @@ function delta(style: WalletStyle, balance: number, r: () => number): number {
   }
 }
 
-function zecSeries({
+export function zecSeries({
   transactions,
   years,
   style,
   seed,
-}: Omit<PlaygroundProps, "denom">): BalancePoint[] {
+}: {
+  transactions: number;
+  years: number;
+  style: WalletStyle;
+  seed: number;
+}): BalancePoint[] {
   const r = mulberry32(seed);
   const span = years * 365 * DAY;
   const t0 = END - span;
   const spanDays = span / DAY;
-
   const times = Array.from(
     { length: transactions },
     () => t0 + r() * span,
@@ -88,7 +81,7 @@ function zecSeries({
   return points;
 }
 
-function usdSeries(zec: BalancePoint[], seed: number): BalancePoint[] {
+export function usdSeries(zec: BalancePoint[], seed: number): BalancePoint[] {
   const r = mulberry32(seed ^ 0x9e3779b9);
   const t0 = zec[0].t;
   const span = zec[zec.length - 1].t - t0;
@@ -121,75 +114,37 @@ function usdSeries(zec: BalancePoint[], seed: number): BalancePoint[] {
   return points;
 }
 
-function ChartPlayground({ denom, ...gen }: PlaygroundProps) {
-  const points = useMemo(() => {
-    const zec = zecSeries(gen);
-    return denom === "usd" ? usdSeries(zec, gen.seed) : zec;
-  }, [denom, gen.transactions, gen.years, gen.style, gen.seed]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <BalanceChart points={points} denom={denom} />;
+export function poolWalk(seed: number, days = 90, scale = 1): BalancePoint[] {
+  const r = mulberry32(seed);
+  const t0 = END - days * DAY;
+  let v = 2 + r() * 3;
+  const points: BalancePoint[] = [];
+  for (let i = 0; i <= days; i++) {
+    if (r() < 0.2) v = Math.max(0.1, v + (r() - 0.4) * 2);
+    points.push({
+      key: `p-${i}`,
+      t: t0 + i * DAY,
+      value: v * scale,
+      label: label(t0 + i * DAY, days),
+    });
+  }
+  return points;
 }
 
-const meta = {
-  component: ChartPlayground,
-  decorators: [
-    (Story) => (
-      <div className="w-[900px] rounded-2xl border border-border bg-card p-6">
-        <Story />
-      </div>
-    ),
-  ],
-  argTypes: {
-    transactions: {
-      control: { type: "range", min: 1, max: 2000, step: 1 },
-    },
-    years: {
-      control: { type: "range", min: 0.25, max: 8, step: 0.25 },
-    },
-    style: {
-      control: "select",
-      options: ["hodl", "trader", "dust", "whale"],
-    },
-    seed: { control: { type: "number", min: 1 } },
-    denom: { control: "radio", options: ["zec", "usd"] },
-  },
-  args: {
-    transactions: 40,
-    years: 1,
-    style: "hodl",
-    seed: 7,
-    denom: "zec",
-  },
-} satisfies Meta<typeof ChartPlayground>;
-
-export default meta;
-type Story = StoryObj<typeof meta>;
-
-export const Playground: Story = {};
-
-export const MultiYear: Story = {
-  args: { transactions: 350, years: 5 },
+export const DATASETS = {
+  hodl: zecSeries({ transactions: 40, years: 1, style: "hodl", seed: 7 }),
+  trader: zecSeries({ transactions: 150, years: 1, style: "trader", seed: 7 }),
+  whale: zecSeries({ transactions: 40, years: 8, style: "whale", seed: 3 }),
+  dust: zecSeries({ transactions: 600, years: 1, style: "dust", seed: 7 }),
+  dense: zecSeries({ transactions: 2000, years: 3, style: "trader", seed: 7 }),
+  first: zecSeries({ transactions: 1, years: 0.25, style: "hodl", seed: 7 }),
 };
 
-export const DenseHistory: Story = {
-  args: { transactions: 2000, years: 3, style: "trader" },
-};
+export type DatasetName = keyof typeof DATASETS;
 
-export const Whale: Story = {
-  args: { transactions: 40, years: 8, style: "whale", seed: 3 },
-};
+export const DATASET_NAMES = Object.keys(DATASETS) as DatasetName[];
 
-export const DustStorm: Story = {
-  args: { transactions: 600, years: 1, style: "dust" },
-};
-
-export const Trader: Story = {
-  args: { transactions: 150, years: 1, style: "trader" },
-};
-
-export const FirstTransaction: Story = {
-  args: { transactions: 1, years: 0.25 },
-};
-
-export const UsdMultiYear: Story = {
-  args: { transactions: 200, years: 4, denom: "usd" },
-};
+export const USD = usdSeries(
+  zecSeries({ transactions: 200, years: 4, style: "hodl", seed: 7 }),
+  7,
+);

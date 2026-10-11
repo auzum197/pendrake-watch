@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
@@ -10,13 +10,15 @@ import { DiscreetEye } from "@/components/app/discreet-eye/discreet-eye";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { TxList } from "@/components/app/tx-list/tx-list";
-import { BalanceChart, type Denom } from "@/components/dashboard/BalanceChart";
+import { DitherArea } from "@/components/dashboard/dither/dither-area";
+import "@/components/dashboard/balance-chart.css";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
 import { usePriceData } from "@/hooks/use-price-data";
 import { setCachedWallet, useWalletData } from "@/hooks/use-wallet-data";
 import {
   athStanding,
   balanceHistory,
+  type BalancePoint,
   type ChartRange,
   fiatSeries,
   filterRange,
@@ -108,6 +110,8 @@ function DashboardSkeleton() {
   );
 }
 
+type Denom = "zec" | "usd";
+
 const RANGES: { value: ChartRange; label: string }[] = [
   { value: "all", label: "All" },
   { value: "year", label: "1Y" },
@@ -151,6 +155,46 @@ function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
   );
 }
 
+let chartEntered = false;
+
+function useChartEntrance(hasData: boolean): boolean {
+  const [enter] = useState(() => !chartEntered && animationsEnabled());
+  useEffect(() => {
+    if (hasData) chartEntered = true;
+  }, [hasData]);
+  return enter;
+}
+
+function ChartSlot({ series, usd }: { series: BalancePoint[]; usd: boolean }) {
+  const hasData = series.length >= 2;
+  const enter = useChartEntrance(hasData);
+  return (
+    <div className="mt-4 grid text-muted-foreground">
+      <div className="col-start-1 row-start-1">
+        <div
+          aria-hidden={hasData}
+          style={{ opacity: hasData ? 0 : 1 }}
+          className="flex aspect-900/240 items-center justify-center text-sm text-muted-foreground transition-opacity duration-360 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        >
+          No confirmed activity yet
+        </div>
+      </div>
+      {hasData && (
+        <div
+          className={`col-start-1 row-start-1 ${enter ? "balance-chart-enter" : ""}`}
+        >
+          <DitherArea
+            points={series}
+            usd={usd}
+            animate={enter}
+            className="aspect-900/240 w-full"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChartCard({
   wallet,
   balance,
@@ -184,7 +228,6 @@ function ChartCard({
   const activeDenom: Denom = showUsd ? "usd" : "zec";
   const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
   const series = showUsd ? fiatPoints : zecSeries;
-  const hasData = series.length >= 2;
 
   function onDenom(next: Denom) {
     if (next === "usd" && !fiatEnabled) {
@@ -306,25 +349,7 @@ function ChartCard({
         </div>
       </div>
 
-      <div className="mt-4 grid text-muted-foreground">
-        <div className="col-start-1 row-start-1">
-          <div
-            aria-hidden={hasData}
-            style={{ opacity: hasData ? 0 : 1 }}
-            className="flex aspect-900/240 items-center justify-center text-sm text-muted-foreground transition-opacity duration-360 ease-[cubic-bezier(0.23,1,0.32,1)]"
-          >
-            No confirmed activity yet
-          </div>
-        </div>
-        {hasData && (
-          <div
-            key={activeDenom === "usd" ? `usd-${range}` : "zec"}
-            className={`col-start-1 row-start-1 ${animationsEnabled() ? "balance-chart-enter" : ""}`}
-          >
-            <BalanceChart points={series} denom={activeDenom} />
-          </div>
-        )}
-      </div>
+      <ChartSlot series={series} usd={activeDenom === "usd"} />
 
       <FiatConsentDialog
         open={consentOpen}

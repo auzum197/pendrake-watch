@@ -1,13 +1,4 @@
-import type { BalancePoint } from "@/lib/format";
 import type { Tx, WalletNote } from "@/lib/ipc";
-
-// A balance series for BalanceChart. Times are in milliseconds, matching the unit
-// the chart reads off the leading point.
-export const balanceSeries: BalancePoint[] = [
-  { key: "start", t: 1_700_000_000_000, value: 0, label: "" },
-  { key: "tx1", t: 1_700_600_000_000, value: 0.5, label: "Nov 21" },
-  { key: "tx2", t: 1_701_200_000_000, value: 1.2345, label: "Nov 28" },
-];
 
 // A short transaction history for TxList. datetime is in unix seconds, the unit the
 // daemon sends and the list formats against.

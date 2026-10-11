@@ -67,7 +67,6 @@ export default defineConfig(async () => ({
             "react-dom/client",
             "react/jsx-runtime",
             "react/jsx-dev-runtime",
-            "recharts",
             "react-day-picker",
             "lifehash",
             "date-fns",

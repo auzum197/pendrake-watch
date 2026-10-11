@@ -1,0 +1,48 @@
+.dither-plot canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.dither-crisp {
+  image-rendering: pixelated;
+}
+
+.dither-bloom {
+  transition: opacity 220ms ease;
+}
+
+.dither-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transition: transform 90ms var(--ease-out-soft);
+}
+
+.dither-tip-card {
+  transform: translate(var(--tip-shift), var(--tip-y));
+  animation: dither-tip-in 120ms var(--ease-out-soft) both;
+}
+
+@keyframes dither-tip-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--tip-shift), var(--tip-y)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--tip-shift), var(--tip-y)) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dither-tip {
+    transition: none;
+  }
+  .dither-tip-card {
+    animation: none;
+  }
+}
