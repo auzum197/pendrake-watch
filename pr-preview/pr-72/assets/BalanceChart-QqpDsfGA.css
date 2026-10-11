@@ -1,0 +1,1 @@
+@keyframes balance-chart-in{0%{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.balance-chart-enter{animation:balance-chart-in .36s cubic-bezier(.23,1,.32,1) both}@media(prefers-reduced-motion:reduce){@keyframes balance-chart-in{0%{opacity:0}to{opacity:1}}}
