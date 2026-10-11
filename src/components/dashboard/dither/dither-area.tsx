@@ -79,7 +79,7 @@ type LoopState = {
   surface: Surface;
   look: DitherLook;
   hover: number | null;
-  inside: boolean;
+  inside: { current: boolean };
   animate: boolean;
   entered: { current: boolean };
 };
@@ -343,7 +343,7 @@ function startLoop(
       if (!moving) tweening = false;
     }
 
-    const lift = s.inside ? 1 : 0;
+    const lift = s.inside.current ? 1 : 0;
     let settling = false;
     if (Math.abs(intensity - lift) > 0.001) {
       intensity += (lift - intensity) * 0.16;
@@ -421,6 +421,210 @@ function startLoop(
   return () => cancelAnimationFrame(raf);
 }
 
+function usePlotSize(ref: RefObject<HTMLDivElement | null>) {
+  const [plot, setPlot] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = (w: number, h: number) =>
+      setPlot((prev) => {
+        const next = { w: Math.round(w), h: Math.round(h) };
+        return prev.w === next.w && prev.h === next.h ? prev : next;
+      });
+    const rect = el.getBoundingClientRect();
+    measure(rect.width, rect.height);
+    const ro = new ResizeObserver(([entry]) =>
+      measure(entry.contentRect.width, entry.contentRect.height),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return plot;
+}
+
+function markAt(
+  hover: number | null,
+  kind: ChartKind,
+  surface: Surface,
+  points: BalancePoint[],
+  curve: Curve,
+  max: number,
+): Mark | undefined {
+  if (hover === null) return undefined;
+  if (kind === "bars") return surface.marks.find((m) => m.x === hover);
+  return sampleAt(points, hover, curve, max);
+}
+
+function nearestBar(marks: Mark[], fx: number): number | null {
+  let best: Mark | undefined;
+  for (const m of marks) {
+    if (!best || Math.abs(m.x - fx) < Math.abs(best.x - fx)) best = m;
+  }
+  return best ? best.x : null;
+}
+
+function YAxis({
+  ticks,
+  max,
+  width,
+  bottom,
+  label,
+}: {
+  ticks: number[];
+  max: number;
+  width: number;
+  bottom: number;
+  label: (v: number) => string;
+}) {
+  return (
+    <div className="absolute left-0 top-0" style={{ width, bottom }}>
+      {ticks.map((v) => (
+        <span
+          key={v}
+          className="absolute right-2 -translate-y-1/2 tabular-nums"
+          style={{ top: `${(1 - v / max) * 100}%` }}
+        >
+          {label(v)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function GridLines({ ticks, max }: { ticks: number[]; max: number }) {
+  return (
+    <svg className="absolute inset-0 h-full w-full" aria-hidden>
+      {ticks.map((v) => (
+        <line
+          key={v}
+          x1="0"
+          x2="100%"
+          y1={`${(1 - v / max) * 100}%`}
+          y2={`${(1 - v / max) * 100}%`}
+          stroke="var(--border)"
+          strokeOpacity={v === 0 ? 0.9 : 0.5}
+          strokeDasharray={v === 0 ? undefined : "4 6"}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function XAxis({
+  labels,
+  left,
+  height,
+  masked,
+}: {
+  labels: Mark[];
+  left: number;
+  height: number;
+  masked: boolean;
+}) {
+  return (
+    <div className="absolute bottom-0 right-0" style={{ left, height }}>
+      {labels.map((m) => (
+        <span
+          key={m.t}
+          className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap"
+          style={{ left: `${m.x * 100}%` }}
+        >
+          {masked ? maskFor("date") : m.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function tipPlacement(mark: Mark): CSSProperties {
+  const shift = mark.x < 0.12 ? "-12%" : mark.x > 0.88 ? "-88%" : "-50%";
+  const y = mark.y < 0.3 ? "14px" : "calc(-100% - 12px)";
+  return { "--tip-shift": shift, "--tip-y": y } as CSSProperties;
+}
+
+function ScrubTip({
+  mark,
+  plot,
+  usd,
+}: {
+  mark: Mark;
+  plot: { w: number; h: number };
+  usd: boolean;
+}) {
+  return (
+    <div
+      className="dither-tip"
+      style={{
+        transform: `translate(${mark.x * plot.w}px, ${mark.y * plot.h}px)`,
+      }}
+    >
+      <div
+        className="dither-tip-card w-max rounded-lg border border-border bg-popover px-3 py-2 text-popover-foreground shadow-lg"
+        style={tipPlacement(mark)}
+      >
+        <div className="flex flex-col gap-0.5">
+          <span className="text-foreground">{fullDate(mark.t)}</span>
+          {mark.height ? (
+            <span className="text-muted-foreground">
+              Block {mark.height.toLocaleString()}
+            </span>
+          ) : null}
+          <span className="mt-1 font-mono font-medium tabular-nums text-foreground">
+            {valueLabel(mark.value, usd)}
+          </span>
+          {usd && typeof mark.zec === "number" && (
+            <span className="font-mono tabular-nums text-muted-foreground">
+              {mark.zec.toLocaleString(undefined, {
+                maximumFractionDigits: 8,
+              })}{" "}
+              ZEC
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useDitherLoop(
+  crispRef: RefObject<HTMLCanvasElement | null>,
+  bloomRef: RefObject<HTMLCanvasElement | null>,
+  cols: number,
+  rows: number,
+  ready: boolean,
+  state: LoopState,
+) {
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+  useEffect(() => {
+    const crisp = crispRef.current;
+    const bloom = bloomRef.current;
+    if (!crisp || !bloom || !ready) return;
+    return startLoop(crisp, bloom, cols, rows, stateRef);
+  }, [crispRef, bloomRef, cols, rows, ready]);
+}
+
+function axisGeometry(axes: boolean, masked: boolean, usd: boolean) {
+  if (!axes) return { yWidth: 0, xHeight: 0 };
+  return { yWidth: masked ? 76 : usd ? 64 : 48, xHeight: 22 };
+}
+
+function ticksFor(max: number, step: number): number[] {
+  return Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
+}
+
+function xLabelsFor(marks: Mark[]): Mark[] {
+  const every = Math.ceil(marks.length / MAX_LABELS);
+  return marks.filter((m, i) => m.label && i % every === 0);
+}
+
+function yLabelFor(masked: boolean, usd: boolean, max: number) {
+  if (masked) return () => maskFor(usd ? "usd" : "zec");
+  return (v: number) => axisLabel(v, usd, max);
+}
+
 export function DitherArea({
   points,
   usd = false,
@@ -440,9 +644,10 @@ export function DitherArea({
   const plotRef = useRef<HTMLDivElement>(null);
   const crispRef = useRef<HTMLCanvasElement>(null);
   const bloomRef = useRef<HTMLCanvasElement>(null);
-  const [plot, setPlot] = useState({ w: 0, h: 0 });
+  const plot = usePlotSize(plotRef);
   const [hover, setHover] = useState<number | null>(null);
-  const [inside, setInside] = useState(false);
+  const inside = useRef(false);
+  const entered = useRef(false);
   const masked = useMasked();
   const scrub = interactive && !masked;
 
@@ -450,23 +655,6 @@ export function DitherArea({
     () => ({ ink, variant, kind, curve, cell, bloom, sparkles }),
     [ink, variant, kind, curve, cell, bloom, sparkles],
   );
-
-  useLayoutEffect(() => {
-    const el = plotRef.current;
-    if (!el) return;
-    const measure = (w: number, h: number) =>
-      setPlot((prev) => {
-        const next = { w: Math.round(w), h: Math.round(h) };
-        return prev.w === next.w && prev.h === next.h ? prev : next;
-      });
-    const rect = el.getBoundingClientRect();
-    measure(rect.width, rect.height);
-    const ro = new ResizeObserver(([entry]) =>
-      measure(entry.contentRect.width, entry.contentRect.height),
-    );
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   const cols = Math.max(8, Math.round(plot.w / cell));
   const rows = Math.max(8, Math.round(plot.h / cell));
@@ -476,8 +664,7 @@ export function DitherArea({
     [points, cols, rows, max, kind, curve, bins],
   );
 
-  const entered = useRef(false);
-  const stateRef = useRef<LoopState>({
+  useDitherLoop(crispRef, bloomRef, cols, rows, plot.w > 0, {
     surface,
     look,
     hover,
@@ -485,164 +672,63 @@ export function DitherArea({
     animate,
     entered,
   });
-  useEffect(() => {
-    stateRef.current = { surface, look, hover, inside, animate, entered };
-  });
 
-  useEffect(() => {
-    const crisp = crispRef.current;
-    const bloomCanvas = bloomRef.current;
-    if (!crisp || !bloomCanvas || plot.w === 0) return;
-    return startLoop(crisp, bloomCanvas, cols, rows, stateRef);
-  }, [cols, rows, plot.w]);
+  const pointer = scrub
+    ? {
+        onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          const fx = clamp01((e.clientX - r.left) / r.width);
+          setHover(kind === "bars" ? nearestBar(surface.marks, fx) : fx);
+        },
+        onPointerEnter: () => {
+          inside.current = true;
+        },
+        onPointerLeave: () => {
+          inside.current = false;
+          setHover(null);
+        },
+      }
+    : {};
 
-  function onMove(e: PointerEvent<HTMLDivElement>) {
-    const r = e.currentTarget.getBoundingClientRect();
-    const fx = clamp01((e.clientX - r.left) / r.width);
-    if (kind !== "bars") {
-      setHover(fx);
-      return;
-    }
-    let best: Mark | undefined;
-    for (const m of surface.marks) {
-      if (!best || Math.abs(m.x - fx) < Math.abs(best.x - fx)) best = m;
-    }
-    setHover(best ? best.x : null);
-  }
-
-  const yWidth = axes ? (masked ? 76 : usd ? 64 : 48) : 0;
-  const xHeight = axes ? 22 : 0;
-  const ticks = Array.from(
-    { length: Math.round(max / step) + 1 },
-    (_, i) => i * step,
-  );
-  const labelEvery = Math.ceil(surface.marks.length / MAX_LABELS);
-  const xLabels = surface.marks.filter(
-    (m, i) => m.label && i % labelEvery === 0,
-  );
-  const mark =
-    hover === null
-      ? undefined
-      : kind === "bars"
-        ? surface.marks.find((m) => m.x === hover)
-        : sampleAt(points, hover, curve, max);
-  const tipShift = mark
-    ? mark.x < 0.12
-      ? "-12%"
-      : mark.x > 0.88
-        ? "-88%"
-        : "-50%"
-    : "-50%";
-  const tipY = mark && mark.y < 0.3 ? "14px" : "calc(-100% - 12px)";
+  const { yWidth, xHeight } = axisGeometry(axes, masked, usd);
+  const ticks = ticksFor(max, step);
+  const mark = markAt(hover, kind, surface, points, curve, max);
 
   if (points.length === 0) return null;
 
   return (
     <div className={cn("relative text-xs text-muted-foreground", className)}>
       {axes && (
-        <div
-          className="absolute left-0 top-0"
-          style={{ width: yWidth, bottom: xHeight }}
-        >
-          {ticks.map((v) => (
-            <span
-              key={v}
-              className="absolute right-2 -translate-y-1/2 tabular-nums"
-              style={{ top: `${(1 - v / max) * 100}%` }}
-            >
-              {masked ? maskFor(usd ? "usd" : "zec") : axisLabel(v, usd, max)}
-            </span>
-          ))}
-        </div>
+        <YAxis
+          ticks={ticks}
+          max={max}
+          width={yWidth}
+          bottom={xHeight}
+          label={yLabelFor(masked, usd, max)}
+        />
       )}
       <div
         ref={plotRef}
         className="dither-plot absolute right-0 top-0"
         style={{ left: yWidth, bottom: xHeight }}
-        onPointerMove={scrub ? onMove : undefined}
-        onPointerEnter={scrub ? () => setInside(true) : undefined}
-        onPointerLeave={
-          scrub
-            ? () => {
-                setInside(false);
-                setHover(null);
-              }
-            : undefined
-        }
+        {...pointer}
       >
-        {axes && (
-          <svg className="absolute inset-0 h-full w-full" aria-hidden>
-            {ticks.map((v) => (
-              <line
-                key={v}
-                x1="0"
-                x2="100%"
-                y1={`${(1 - v / max) * 100}%`}
-                y2={`${(1 - v / max) * 100}%`}
-                stroke="var(--border)"
-                strokeOpacity={v === 0 ? 0.9 : 0.5}
-                strokeDasharray={v === 0 ? undefined : "4 6"}
-              />
-            ))}
-          </svg>
-        )}
+        {axes && <GridLines ticks={ticks} max={max} />}
         <canvas ref={crispRef} className="dither-crisp" />
         <canvas
           ref={bloomRef}
           className="dither-bloom"
           style={bloomStyle(bloom)}
         />
-        {scrub && mark && (
-          <div
-            className="dither-tip"
-            style={{
-              transform: `translate(${mark.x * plot.w}px, ${mark.y * plot.h}px)`,
-            }}
-          >
-            <div
-              className="dither-tip-card w-max rounded-lg border border-border bg-popover px-3 py-2 text-popover-foreground shadow-lg"
-              style={
-                { "--tip-shift": tipShift, "--tip-y": tipY } as CSSProperties
-              }
-            >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-foreground">{fullDate(mark.t)}</span>
-                {mark.height ? (
-                  <span className="text-muted-foreground">
-                    Block {mark.height.toLocaleString()}
-                  </span>
-                ) : null}
-                <span className="mt-1 font-mono font-medium tabular-nums text-foreground">
-                  {valueLabel(mark.value, usd)}
-                </span>
-                {usd && typeof mark.zec === "number" && (
-                  <span className="font-mono tabular-nums text-muted-foreground">
-                    {mark.zec.toLocaleString(undefined, {
-                      maximumFractionDigits: 8,
-                    })}{" "}
-                    ZEC
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {scrub && mark && <ScrubTip mark={mark} plot={plot} usd={usd} />}
       </div>
       {axes && (
-        <div
-          className="absolute bottom-0 right-0"
-          style={{ left: yWidth, height: xHeight }}
-        >
-          {xLabels.map((m) => (
-            <span
-              key={m.t}
-              className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap"
-              style={{ left: `${m.x * 100}%` }}
-            >
-              {masked ? maskFor("date") : m.label}
-            </span>
-          ))}
-        </div>
+        <XAxis
+          labels={xLabelsFor(surface.marks)}
+          left={yWidth}
+          height={xHeight}
+          masked={masked}
+        />
       )}
     </div>
   );
