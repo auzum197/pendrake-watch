@@ -19,6 +19,7 @@ import {
   clamp01,
   type DitherVariant,
   easeInOutCubic,
+  easeOutCubic,
   paintColumn,
   prefersReducedMotion,
 } from "./dither-paint";
@@ -84,6 +85,7 @@ type LoopState = {
 };
 
 const ENTRANCE_MS = 800;
+const TWEEN_MS = 400;
 const MAX_LABELS = 6;
 
 function niceAxis(peak: number): { max: number; step: number } {
@@ -245,9 +247,12 @@ function startLoop(
   if (!o) return;
 
   const still = !animationsEnabled() || prefersReducedMotion();
-  const EASE = still ? 1 : 0.18;
   const top = new Float64Array(cols);
   const floor = new Float64Array(cols);
+  const fromTop = new Float64Array(cols);
+  const fromFloor = new Float64Array(cols);
+  const frame = o.createImageData(cols, rows);
+  const pixels = frame.data;
   const stars = Array.from(
     { length: Math.max(4, Math.round(cols / 14)) },
     (_, i) => {
@@ -265,19 +270,31 @@ function startLoop(
   let lastWink = 0;
   let animStart = 0;
   let lastProg = -1;
+  let tweenStart = 0;
+  let tweening = false;
   let intensity = 0;
   let needsFill = true;
   let lastSurface: Surface | null = null;
   let lastLook: DitherLook | null = null;
 
   const paintFill = (reveal: number) => {
-    o.clearRect(0, 0, cols, rows);
+    pixels.fill(0);
     const { look } = state.current;
     const revealCols = Math.ceil(reveal * cols);
     for (let x = 0; x < cols && x <= revealCols; x++) {
       if (Number.isNaN(top[x])) continue;
-      paintColumn(o, x, top[x], floor[x], look.ink, look.variant, intensity);
+      paintColumn(
+        pixels,
+        cols,
+        x,
+        top[x],
+        floor[x],
+        look.ink,
+        look.variant,
+        intensity,
+      );
     }
+    o.putImageData(frame, 0, 0);
   };
 
   const draw = (now: number) => {
@@ -285,9 +302,15 @@ function startLoop(
     const s = state.current;
     const tgt = s.surface;
     if (tgt !== lastSurface) {
-      if (lastSurface === null) {
+      if (lastSurface === null || still) {
         top.set(tgt.top);
         floor.set(tgt.floor);
+        tweening = false;
+      } else {
+        fromTop.set(top);
+        fromFloor.set(floor);
+        tweenStart = now;
+        tweening = true;
       }
       lastSurface = tgt;
       needsFill = true;
@@ -303,29 +326,21 @@ function startLoop(
     if (prog >= 1) s.entered.current = true;
 
     let moving = false;
-    for (let x = 0; x < cols; x++) {
-      const tt = tgt.top[x];
-      const tf = tgt.floor[x];
-      const gapNow = Number.isNaN(top[x]);
-      const gapNext = Number.isNaN(tt);
-      if (gapNow || gapNext) {
-        if (gapNow !== gapNext || (!gapNext && top[x] !== tt)) {
+    if (tweening) {
+      const k = easeOutCubic(Math.min(1, (now - tweenStart) / TWEEN_MS));
+      for (let x = 0; x < cols; x++) {
+        const tt = tgt.top[x];
+        const ft = fromTop[x];
+        if (Number.isNaN(tt) || Number.isNaN(ft)) {
           top[x] = tt;
-          floor[x] = tf;
-          moving = true;
+          floor[x] = tgt.floor[x];
+        } else {
+          top[x] = ft + (tt - ft) * k;
+          floor[x] = fromFloor[x] + (tgt.floor[x] - fromFloor[x]) * k;
         }
-        continue;
       }
-      const dt = tt - top[x];
-      const df = tf - floor[x];
-      if (Math.abs(dt) > 0.01 || Math.abs(df) > 0.01) {
-        top[x] += dt * EASE;
-        floor[x] += df * EASE;
-        moving = true;
-      } else {
-        top[x] = tt;
-        floor[x] = tf;
-      }
+      moving = k < 1;
+      if (!moving) tweening = false;
     }
 
     const lift = s.inside ? 1 : 0;

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { type Rgb, rgba } from "./palette";
+import type { Rgb } from "./palette";
 
 export type DitherVariant = "gradient" | "dotted" | "hatched" | "solid";
 export type Bloom = "off" | "low" | "high" | "aura";
@@ -19,8 +19,11 @@ export const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 export const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 
+export const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
+
 export function paintColumn(
-  ctx: CanvasRenderingContext2D,
+  pixels: Uint8ClampedArray,
+  cols: number,
   x: number,
   top: number,
   floor: number,
@@ -28,12 +31,19 @@ export function paintColumn(
   variant: DitherVariant,
   intensity: number,
 ) {
+  const [r, g, b] = ink;
+  const put = (y: number, alpha: number) => {
+    const p = (y * cols + x) * 4;
+    pixels[p] = r;
+    pixels[p + 1] = g;
+    pixels[p + 2] = b;
+    pixels[p + 3] = Math.round(clamp01(alpha) * 255);
+  };
   const t = Math.round(top);
   const f = Math.round(floor);
   const depth = f - t;
   if (depth <= 0) {
-    ctx.fillStyle = rgba(ink, EDGE_ALPHA);
-    ctx.fillRect(x, t, 1, 1);
+    put(t, EDGE_ALPHA);
     return;
   }
   const bias = variant === "dotted" ? 0.12 : 0;
@@ -45,15 +55,10 @@ export function paintColumn(
       density > BAYER4[y & 3][x & 3] - 0.1 * intensity - bias;
     if (variant === "dotted" && !lit) continue;
     const k = (0.3 + density * 0.7) * (1 + 0.22 * intensity);
-    ctx.fillStyle = rgba(ink, clamp01(lit ? k : k * OFF_TIER));
-    ctx.fillRect(x, y, 1, 1);
+    put(y, lit ? k : k * OFF_TIER);
   }
-  ctx.fillStyle = rgba(ink, EDGE_ALPHA);
-  ctx.fillRect(x, t, 1, 1);
-  if (depth > 1) {
-    ctx.fillStyle = rgba(ink, EDGE_ALPHA * 0.5);
-    ctx.fillRect(x, t + 1, 1, 1);
-  }
+  put(t, EDGE_ALPHA);
+  if (depth > 1) put(t + 1, EDGE_ALPHA * 0.5);
 }
 
 const BLOOM: Record<
