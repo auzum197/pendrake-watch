@@ -11,7 +11,7 @@ export function DiscreetEye() {
       aria-label="Discreet mode"
       title={hidden ? "Show values" : "Hide values"}
       onClick={() => void toggleDiscreet()}
-      className="flex shrink-0 cursor-pointer items-center text-white/45 transition-colors hover:text-white/80 focus-visible:outline-2 focus-visible:outline-brand"
+      className="flex shrink-0 cursor-pointer items-center text-white/45 transition-colors hover:text-white/80 focus-visible:outline-2 focus-visible:outline-foreground/30"
     >
       <Icon className="size-3.5" />
     </button>

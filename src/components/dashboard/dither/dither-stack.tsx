@@ -111,12 +111,11 @@ function fromHsl({ hue, saturation, lightness }: Hsl): Rgb {
   ];
 }
 
-const BRAND_HUE = toHsl(INK.brand).hue;
 const HUE_TOLERANCE = 3 / 360;
 
-function fillInk(ink: Rgb): Rgb {
+function fillInk(ink: Rgb, brandHue: number): Rgb {
   const { hue, saturation, lightness } = toHsl(ink);
-  if (Math.abs(hue - BRAND_HUE) < HUE_TOLERANCE) return INK.brand;
+  if (Math.abs(hue - brandHue) < HUE_TOLERANCE) return INK.brand;
   return fromHsl({
     hue,
     saturation: Math.min(1, saturation + FILL_SATURATION),
@@ -128,13 +127,57 @@ function poolColor(pool: Pool): string {
   return `var(--pool-${pool})`;
 }
 
+const P3_TO_SRGB = [
+  [1.2249, -0.2247, 0],
+  [-0.042, 1.0419, 0],
+  [-0.0197, -0.0786, 1.0983],
+];
+
+function gamma(channel: number): number {
+  return channel <= 0.0031308
+    ? 12.92 * channel
+    : 1.055 * channel ** (1 / 2.4) - 0.055;
+}
+
+function degamma(channel: number): number {
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function p3ToRgb(p3: number[]): Rgb {
+  const linear = p3.map(degamma);
+  const srgb = P3_TO_SRGB.map((row) =>
+    row.reduce((sum, weight, index) => sum + weight * linear[index], 0),
+  );
+  return srgb.map((channel) =>
+    Math.round(clamp01(gamma(clamp01(channel))) * 255),
+  ) as Rgb;
+}
+
+function parseInk(value: string): Rgb | null {
+  if (/^#[0-9a-f]{6}$/i.test(value)) {
+    const packed = parseInt(value.slice(1), 16);
+    return [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255];
+  }
+  const p3 = /^color\(display-p3\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/i.exec(
+    value,
+  );
+  if (p3) return p3ToRgb(p3.slice(1, 4).map(Number));
+  return null;
+}
+
+function cssInk(element: Element, variable: string, fallback: Rgb): Rgb {
+  const value = getComputedStyle(element).getPropertyValue(variable).trim();
+  return parseInk(value) ?? fallback;
+}
+
 function poolInk(element: Element, pool: Pool): Rgb {
-  const hex = getComputedStyle(element)
-    .getPropertyValue(`--pool-${pool}`)
-    .trim();
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return INK[pool];
-  const packed = parseInt(hex.slice(1), 16);
-  return [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255];
+  return cssInk(element, `--pool-${pool}`, INK[pool]);
+}
+
+function brandHue(element: Element): number {
+  return toHsl(cssInk(element, "--primary", INK.brand)).hue;
 }
 
 function sampleSeries(
@@ -360,7 +403,8 @@ function startLoop(
     if (current.pools !== lastPools) {
       lastPools = current.pools;
       inks = current.pools.map((pool) => poolInk(crispCanvas, pool));
-      fills = inks.map(fillInk);
+      const hue = brandHue(crispCanvas);
+      fills = inks.map((ink) => fillInk(ink, hue));
       needsFill = true;
     }
     if (target !== lastGeometry) {

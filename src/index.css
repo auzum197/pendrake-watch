@@ -13,8 +13,9 @@
 	--card-foreground: #fafafa;
 	--popover: #1c1d21;
 	--popover-foreground: #fafafa;
-	--primary: #2e58ff;
-	--primary-foreground: #ffffff;
+	--brand: #50a5ff;
+	--primary: var(--brand);
+	--primary-foreground: #101012;
 	--secondary: #232327;
 	--secondary-foreground: #fafafa;
 	--muted: #232327;
@@ -33,8 +34,8 @@
 	--radius: 0.875rem;
 	--sidebar: #101012;
 	--sidebar-foreground: #fafafa;
-	--sidebar-primary: #2e58ff;
-	--sidebar-primary-foreground: #ffffff;
+	--sidebar-primary: var(--brand);
+	--sidebar-primary-foreground: #101012;
 	--sidebar-accent: #232327;
 	--sidebar-accent-foreground: #fafafa;
 	--sidebar-border: #2a2b30;
@@ -42,16 +43,22 @@
 	/* Pool identity colours, shared by the Notes dots and the transaction list. */
 	--pool-orchard: #35e9af;
 	--pool-sapling: #ccd1d7;
-	--pool-ironwood: #c1ceff;
+	--pool-ironwood: var(--brand);
 	--pool-transparent: #ffc75c;
+}
+
+@supports (color: color(display-p3 0 0 0)) {
+	:root {
+		--brand: color(display-p3 0.4 0.64 1);
+	}
 }
 
 @theme inline {
 	--font-sans: "Nunito Sans Variable", sans-serif;
 	--font-heading: "Space Grotesk Variable", sans-serif;
 	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-	--color-brand: #2e58ff;
-	--color-brand-foreground: #ffffff;
+	--color-brand: var(--brand);
+	--color-brand-foreground: #101012;
 	--color-pool-orchard: var(--pool-orchard);
 	--color-pool-sapling: var(--pool-sapling);
 	--color-pool-ironwood: var(--pool-ironwood);
