@@ -1,5 +1,10 @@
 import type { Balance, Pool, Tx, WalletNote } from "@/lib/ipc";
-import { confirmed, totalConfirmed } from "@/lib/format";
+import {
+  type BalancePoint,
+  confirmed,
+  shortDate,
+  totalConfirmed,
+} from "@/lib/format";
 
 // A pool's standing, derived from the live feed: its confirmed balance and share of
 // the total, when it last moved, a balance trend for the sparkline, and the note-level
@@ -18,6 +23,83 @@ export type PoolStat = {
 };
 
 const POOLS: Pool[] = ["ironwood", "orchard", "sapling", "transparent"];
+
+export const POOL_NAMES: Record<Pool, string> = {
+  ironwood: "Ironwood",
+  orchard: "Orchard",
+  sapling: "Sapling",
+  transparent: "Transparent",
+};
+
+export type PoolSeries = {
+  pool: Pool;
+  name: string;
+  points: BalancePoint[];
+};
+
+type Move = { time: number; height: number | null; delta: number };
+
+function poolMoves(notes: WalletNote[]): Move[] {
+  const moves: Move[] = [];
+  for (const note of notes) {
+    const zec = Number(note.valueZat) / 1e8;
+    if (note.time != null)
+      moves.push({ time: note.time, height: note.height, delta: zec });
+    if (note.spentTime != null)
+      moves.push({
+        time: note.spentTime,
+        height: note.spentHeight,
+        delta: -zec,
+      });
+  }
+  return moves.sort((before, after) => before.time - after.time);
+}
+
+export type TimeFrame = { start: number; end: number };
+
+export function poolHistory(
+  notes: WalletNote[],
+  frame?: TimeFrame,
+): PoolSeries[] {
+  const byPool = POOLS.map((pool) => ({
+    pool,
+    moves: poolMoves(notes.filter((note) => note.pool === pool)),
+  })).filter((entry) => entry.moves.length > 0);
+  if (byPool.length === 0) return [];
+
+  const times = byPool.flatMap((entry) => entry.moves.map((move) => move.time));
+  const first = Math.min(...times);
+  const last = Math.max(...times);
+  const span = last - first;
+  const runway = span > 0 ? Math.round(span * 0.07) : 86_400;
+  const start = frame?.start ?? first - runway;
+  const end = frame?.end ?? last;
+
+  return byPool.map(({ pool, moves }) => {
+    let running = 0;
+    for (const move of moves) {
+      if (move.time >= start) break;
+      running = Math.max(0, running + move.delta);
+    }
+    const points: BalancePoint[] = [
+      { key: "start", t: start, value: running, label: "" },
+    ];
+    moves.forEach((move, index) => {
+      if (move.time < start) return;
+      running = Math.max(0, running + move.delta);
+      points.push({
+        key: `${pool}-${index}`,
+        t: move.time,
+        value: running,
+        label: shortDate(move.time),
+        height: move.height ?? undefined,
+      });
+    });
+    if (points[points.length - 1].t < end)
+      points.push({ key: "end", t: end, value: running, label: "" });
+    return { pool, name: POOL_NAMES[pool], points };
+  });
+}
 
 export function poolStats(
   balance: Balance | null,

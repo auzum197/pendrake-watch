@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, mocked, userEvent, waitFor, within } from "storybook/test";
 import { withRouter } from "@/stories/with-router";
-import { txs as fewTxs } from "@/stories/fixtures";
+import { txs as fewTxs, walletNotes } from "@/stories/fixtures";
 import { hydrateDiscreet } from "@/lib/discreet";
 import {
   getPriceHistory,
@@ -199,6 +199,7 @@ function Home(args: HomeArgs) {
         wallet={{ ...wallet, fiatEnabled: args.fiatEnabled }}
         balance={args.balance === "loading" ? null : BALANCE[args.balance]}
         txs={HISTORY[args.history]}
+        notes={walletNotes}
         sync={sync}
         switching={args.switching}
       />

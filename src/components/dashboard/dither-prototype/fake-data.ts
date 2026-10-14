@@ -1,9 +1,12 @@
+import type { Pool } from "@/lib/ipc";
+import type { PoolSeries } from "@/lib/pools";
 import type { BalancePoint } from "@/lib/format";
 
 export type WalletStyle = "hodl" | "trader" | "dust" | "whale";
 
 const END = Math.floor(Date.now() / 1000);
 const DAY = 86_400;
+const BLOCKS_PER_DAY = 1_152;
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -148,3 +151,67 @@ export const USD = usdSeries(
   zecSeries({ transactions: 200, years: 4, style: "hodl", seed: 7 }),
   7,
 );
+
+const MIGRATION: {
+  pool: Pool;
+  name: string;
+  seed: number;
+  from: number;
+  to: number;
+}[] = [
+  {
+    pool: "ironwood",
+    name: "Ironwood",
+    seed: 21,
+    from: 0,
+    to: 9,
+  },
+  {
+    pool: "orchard",
+    name: "Orchard",
+    seed: 22,
+    from: 5,
+    to: 6,
+  },
+  {
+    pool: "sapling",
+    name: "Sapling",
+    seed: 23,
+    from: 6,
+    to: 2,
+  },
+  {
+    pool: "transparent",
+    name: "Transparent",
+    seed: 24,
+    from: 4,
+    to: 0.6,
+  },
+];
+
+export function poolMigration(days = 120): PoolSeries[] {
+  const start = END - days * DAY;
+  return MIGRATION.map(({ pool, name, seed, from, to }) => {
+    const random = mulberry32(seed);
+    let drift = 0;
+    const points: BalancePoint[] = [];
+    for (let day = 0; day <= days; day++) {
+      const fraction = day / days;
+      const eased = fraction * fraction * (3 - 2 * fraction);
+      if (random() < 0.25)
+        drift = Math.max(-1, Math.min(1, drift + (random() - 0.5)));
+      const base = from + (to - from) * eased;
+      const value = Math.max(0, base + drift * 0.6 * Math.max(base, 0.4));
+      points.push({
+        key: `${pool}-${day}`,
+        t: start + day * DAY,
+        value,
+        label: label(start + day * DAY, days),
+        height: 3_000_000 + day * BLOCKS_PER_DAY,
+      });
+    }
+    return { pool, name, points };
+  });
+}
+
+export const POOL_SERIES = poolMigration();

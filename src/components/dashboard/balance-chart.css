@@ -29,3 +29,50 @@
     }
   }
 }
+
+.balance-chart-swap {
+  isolation: isolate;
+  visibility: visible;
+  transition:
+    opacity 200ms var(--ease-out-soft),
+    filter 200ms var(--ease-out-soft),
+    visibility 0s linear 0s;
+}
+
+.balance-chart-swap-out {
+  opacity: 0;
+  filter: blur(2px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 200ms var(--ease-out-soft),
+    filter 200ms var(--ease-out-soft),
+    visibility 0s linear 200ms;
+}
+
+.balance-chart-toggle {
+  transition:
+    opacity 150ms var(--ease-out-soft),
+    transform 160ms var(--ease-out-soft),
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.balance-chart-toggle:active {
+  transform: scale(0.97);
+}
+
+.balance-chart-toggle-out {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .balance-chart-swap-out {
+    filter: none;
+  }
+  .balance-chart-toggle-out {
+    transform: none;
+  }
+}

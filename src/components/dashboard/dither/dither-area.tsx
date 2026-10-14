@@ -59,7 +59,7 @@ export type DitherAreaProps = Partial<DitherLook> & {
   className?: string;
 };
 
-type Mark = {
+export type Mark = {
   x: number;
   y: number;
   t: number;
@@ -88,7 +88,7 @@ const ENTRANCE_MS = 800;
 const TWEEN_MS = 400;
 const MAX_LABELS = 6;
 
-function niceAxis(peak: number): { max: number; step: number } {
+export function niceAxis(peak: number): { max: number; step: number } {
   if (peak <= 0) return { max: 1, step: 1 };
   const rough = peak / 4;
   const mag = 10 ** Math.floor(Math.log10(rough));
@@ -421,7 +421,7 @@ function startLoop(
   return () => cancelAnimationFrame(raf);
 }
 
-function usePlotSize(ref: RefObject<HTMLDivElement | null>) {
+export function usePlotSize(ref: RefObject<HTMLDivElement | null>) {
   const [plot, setPlot] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
@@ -542,14 +542,16 @@ function tipPlacement(mark: Mark): CSSProperties {
   return { "--tip-shift": shift, "--tip-y": y } as CSSProperties;
 }
 
-function ScrubTip({
+export function ScrubTip({
   mark,
   plot,
   usd,
+  pool,
 }: {
   mark: Mark;
   plot: { w: number; h: number };
   usd: boolean;
+  pool?: { name: string; color: string };
 }) {
   return (
     <div
@@ -564,6 +566,7 @@ function ScrubTip({
       >
         <div className="flex flex-col gap-0.5">
           <span className="text-foreground">{fullDate(mark.t)}</span>
+          {pool && <span style={{ color: pool.color }}>{pool.name}</span>}
           {mark.height ? (
             <span className="text-muted-foreground">
               Block {mark.height.toLocaleString()}
@@ -606,18 +609,25 @@ function useDitherLoop(
   }, [crispRef, bloomRef, cols, rows, ready]);
 }
 
-function axisGeometry(axes: boolean, masked: boolean, usd: boolean) {
+export const AXIS_WIDTH = 64;
+export const MASKED_AXIS_WIDTH = 76;
+
+function axisGeometry(axes: boolean, masked: boolean) {
   if (!axes) return { yWidth: 0, xHeight: 0 };
-  return { yWidth: masked ? 76 : usd ? 64 : 48, xHeight: 22 };
+  return { yWidth: masked ? MASKED_AXIS_WIDTH : AXIS_WIDTH, xHeight: 22 };
 }
 
 function ticksFor(max: number, step: number): number[] {
   return Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
 }
 
-function xLabelsFor(marks: Mark[]): Mark[] {
+function xLabelsFor<T extends { label: string }>(marks: T[]): T[] {
   const every = Math.ceil(marks.length / MAX_LABELS);
   return marks.filter((m, i) => m.label && i % every === 0);
+}
+
+export function axisLabels(points: BalancePoint[]): BalancePoint[] {
+  return xLabelsFor(points.filter((p) => p.key !== "start"));
 }
 
 function yLabelFor(masked: boolean, usd: boolean, max: number) {
@@ -690,7 +700,7 @@ export function DitherArea({
       }
     : {};
 
-  const { yWidth, xHeight } = axisGeometry(axes, masked, usd);
+  const { yWidth, xHeight } = axisGeometry(axes, masked);
   const ticks = ticksFor(max, step);
   const mark = markAt(hover, kind, surface, points, curve, max);
 

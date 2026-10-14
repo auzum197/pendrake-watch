@@ -105,7 +105,7 @@ export type BalancePoint = {
   jump?: number;
 };
 
-function shortDate(epoch: number): string {
+export function shortDate(epoch: number): string {
   const ms = epoch < 1e12 ? epoch * 1000 : epoch;
   return new Date(ms).toLocaleDateString(undefined, {
     month: "short",

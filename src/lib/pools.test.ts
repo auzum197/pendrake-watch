@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { poolStats } from "./pools";
+import { poolHistory, poolStats } from "./pools";
 import type { Balance, Note, Pool, PoolBalance, Tx, WalletNote } from "./ipc";
 import type { PoolStat } from "./pools";
 
@@ -184,5 +184,93 @@ describe("poolStats lastActivity", () => {
       }),
     ];
     expect(get(poolStats(bal({}), txs, []), "orchard").lastActivity).toBe(2000);
+  });
+});
+
+describe("poolHistory", () => {
+  it("adds a note when it confirms and removes it when spent", () => {
+    const series = poolHistory([
+      wnote({
+        pool: "sapling",
+        valueZat: String(2 * ZEC),
+        height: 100,
+        time: 1_000,
+        status: "spent",
+        spentHeight: 300,
+        spentTime: 3_000,
+      }),
+      wnote({
+        pool: "sapling",
+        valueZat: String(ZEC),
+        height: 200,
+        time: 2_000,
+      }),
+    ]);
+    expect(series.map((entry) => entry.pool)).toEqual(["sapling"]);
+    expect(series[0].points.map((point) => point.value)).toEqual([0, 2, 3, 1]);
+    expect(series[0].points.map((point) => point.height)).toEqual([
+      undefined,
+      100,
+      200,
+      300,
+    ]);
+  });
+
+  it("starts every pool at zero on a shared time axis", () => {
+    const series = poolHistory([
+      wnote({ pool: "orchard", valueZat: String(ZEC), time: 1_000 }),
+      wnote({ pool: "ironwood", valueZat: String(ZEC), time: 9_000 }),
+    ]);
+    const starts = series.map((entry) => entry.points[0]);
+    expect(starts.map((point) => point.value)).toEqual([0, 0]);
+    expect(new Set(starts.map((point) => point.t)).size).toBe(1);
+    expect(starts[0].t).toBeLessThan(1_000);
+  });
+
+  it("orders pools outer first and omits pools without notes", () => {
+    const series = poolHistory([
+      wnote({ pool: "transparent", valueZat: String(ZEC), time: 1_000 }),
+      wnote({ pool: "ironwood", valueZat: String(ZEC), time: 2_000 }),
+    ]);
+    expect(series.map((entry) => entry.pool)).toEqual([
+      "ironwood",
+      "transparent",
+    ]);
+  });
+
+  it("is empty for a wallet with no notes", () => {
+    expect(poolHistory([])).toEqual([]);
+  });
+
+  it("fits every pool to a given time frame", () => {
+    const series = poolHistory(
+      [
+        wnote({ pool: "orchard", valueZat: String(ZEC), time: 2_000 }),
+        wnote({ pool: "sapling", valueZat: String(ZEC), time: 5_000 }),
+      ],
+      { start: 1_000, end: 9_000 },
+    );
+    for (const entry of series) {
+      expect(entry.points[0]).toMatchObject({ t: 1_000, value: 0 });
+      expect(entry.points[entry.points.length - 1]).toMatchObject({
+        t: 9_000,
+        value: 1,
+      });
+    }
+  });
+
+  it("folds moves before the frame into the starting value", () => {
+    const [orchard] = poolHistory(
+      [
+        wnote({ pool: "orchard", valueZat: String(2 * ZEC), time: 500 }),
+        wnote({ pool: "orchard", valueZat: String(ZEC), time: 5_000 }),
+      ],
+      { start: 1_000, end: 9_000 },
+    );
+    expect(orchard.points.map((point) => [point.t, point.value])).toEqual([
+      [1_000, 2],
+      [5_000, 3],
+      [9_000, 3],
+    ]);
   });
 });
