@@ -16,12 +16,12 @@
 }
 
 .note-badge--ironwood {
-  background: #e1f5ee;
-  color: #0d634d;
-}
-.note-badge--orchard {
   background: #e6eef7;
   color: #2f577f;
+}
+.note-badge--orchard {
+  background: #e1f5ee;
+  color: #0d634d;
 }
 .note-badge--sapling {
   background: #eceff3;
@@ -50,12 +50,12 @@
 }
 
 .dark .note-badge--ironwood {
-  background: color-mix(in srgb, #35e9af 22%, transparent);
-  color: #9bedd3;
+  background: color-mix(in srgb, #c1ceff 22%, transparent);
+  color: #dfe6ff;
 }
 .dark .note-badge--orchard {
-  background: color-mix(in srgb, #b7d6f0 22%, transparent);
-  color: #cde2f4;
+  background: color-mix(in srgb, #35e9af 22%, transparent);
+  color: #9bedd3;
 }
 .dark .note-badge--sapling {
   background: color-mix(in srgb, #ccd1d7 22%, transparent);

@@ -4,15 +4,21 @@ import {
   IconAlertTriangle,
   IconCircleCheckFilled,
   IconLoader2,
+  IconStack2,
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented/segmented";
 import { DiscreetEye } from "@/components/app/discreet-eye/discreet-eye";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { TxList } from "@/components/app/tx-list/tx-list";
-import { DitherArea } from "@/components/dashboard/dither/dither-area";
+import {
+  axisLabels,
+  DitherArea,
+} from "@/components/dashboard/dither/dither-area";
+import { DitherStack } from "@/components/dashboard/dither/dither-stack";
 import "@/components/dashboard/balance-chart.css";
 import { FiatConsentDialog } from "@/components/dashboard/fiat-consent-dialog";
+import { useNotesData } from "@/hooks/use-notes-data";
 import { usePriceData } from "@/hooks/use-price-data";
 import { setCachedWallet, useWalletData } from "@/hooks/use-wallet-data";
 import {
@@ -33,17 +39,21 @@ import {
   setFiatEnabled,
   type SyncStatus,
   type Tx,
+  type WalletNote,
   type WalletState,
 } from "@/lib/ipc";
 import { animationsEnabled } from "@/lib/motion";
+import { poolHistory, type PoolSeries } from "@/lib/pools";
 
 export function DashboardPage() {
   const { wallet, balance, txs, sync, switching } = useWalletData();
+  const { notes } = useNotesData();
   return (
     <DashboardView
       wallet={wallet}
       balance={balance}
       txs={txs}
+      notes={notes}
       sync={sync}
       switching={switching}
     />
@@ -54,12 +64,14 @@ export function DashboardView({
   wallet,
   balance,
   txs,
+  notes,
   sync,
   switching,
 }: {
   wallet: WalletState | null;
   balance: Balance | null;
   txs: Tx[];
+  notes: WalletNote[];
   sync: SyncStatus | null;
   switching: boolean;
 }) {
@@ -69,7 +81,13 @@ export function DashboardView({
 
   return (
     <>
-      <ChartCard wallet={wallet} balance={balance} txs={txs} sync={sync} />
+      <ChartCard
+        wallet={wallet}
+        balance={balance}
+        txs={txs}
+        notes={notes}
+        sync={sync}
+      />
       <section className="rounded-2xl border border-border bg-card p-6">
         <h2 className="font-heading text-base font-semibold">
           Recent Activity
@@ -165,7 +183,17 @@ function useChartEntrance(hasData: boolean): boolean {
   return enter;
 }
 
-function ChartSlot({ series, usd }: { series: BalancePoint[]; usd: boolean }) {
+function ChartSlot({
+  series,
+  usd,
+  pools,
+  byPool,
+}: {
+  series: BalancePoint[];
+  usd: boolean;
+  pools: PoolSeries[];
+  byPool: boolean;
+}) {
   const hasData = series.length >= 2;
   const enter = useChartEntrance(hasData);
   return (
@@ -183,12 +211,31 @@ function ChartSlot({ series, usd }: { series: BalancePoint[]; usd: boolean }) {
         <div
           className={`col-start-1 row-start-1 ${enter ? "balance-chart-enter" : ""}`}
         >
-          <DitherArea
-            points={series}
-            usd={usd}
-            animate={enter}
-            className="aspect-900/240 w-full"
-          />
+          <div className="grid">
+            <div
+              className={`balance-chart-swap col-start-1 row-start-1 ${byPool ? "balance-chart-swap-out" : ""}`}
+              aria-hidden={byPool}
+            >
+              <DitherArea
+                points={series}
+                usd={usd}
+                animate={enter}
+                className="aspect-900/240 w-full"
+              />
+            </div>
+            {pools.length > 0 && (
+              <div
+                className={`balance-chart-swap col-start-1 row-start-1 ${byPool ? "" : "balance-chart-swap-out"}`}
+                aria-hidden={!byPool}
+              >
+                <DitherStack
+                  series={pools}
+                  labels={axisLabels(series)}
+                  className="aspect-900/240 w-full"
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -199,16 +246,19 @@ function ChartCard({
   wallet,
   balance,
   txs,
+  notes,
   sync,
 }: {
   wallet: WalletState | null;
   balance: Balance | null;
   txs: Tx[];
+  notes: WalletNote[];
   sync: SyncStatus | null;
 }) {
   const navigate = useNavigate();
   const [range, setRange] = useState<ChartRange>("all");
   const [denom, setDenom] = useState<Denom>("zec");
+  const [byPool, setByPool] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [enabledLocal, setEnabledLocal] = useState(false);
   const fiatEnabled = enabledLocal || !!wallet?.fiatEnabled;
@@ -228,6 +278,15 @@ function ChartCard({
   const activeDenom: Denom = showUsd ? "usd" : "zec";
   const zecSeries = useMemo(() => filterRange(points, range), [points, range]);
   const series = showUsd ? fiatPoints : zecSeries;
+  const pools = useMemo(() => {
+    if (points.length === 0) return [];
+    const frame = { start: points[0].t, end: points[points.length - 1].t };
+    return poolHistory(notes, frame).map((poolSeries) => ({
+      ...poolSeries,
+      points: filterRange(poolSeries.points, range),
+    }));
+  }, [notes, points, range]);
+  const stacked = byPool && activeDenom === "zec" && pools.length > 0;
 
   function onDenom(next: Denom) {
     if (next === "usd" && !fiatEnabled) {
@@ -339,17 +398,35 @@ function ChartCard({
             </span>
           )}
         </div>
-        <div className="w-[24rem] max-w-[60%]">
-          <Segmented
-            tone="neutral"
-            value={range}
-            onChange={setRange}
-            options={RANGES}
-          />
+        <div className="flex w-108 max-w-3/5 shrink-0 items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={byPool}
+            title={byPool ? "Show total balance" : "Break down by pool"}
+            onClick={() => setByPool((on) => !on)}
+            className={`balance-chart-toggle flex size-9 shrink-0 items-center justify-center rounded-full border border-ink-line bg-ink-soft text-white/55 hover:text-white/80 ${
+              byPool ? "bg-white/10 text-white" : ""
+            } ${activeDenom === "usd" || pools.length === 0 ? "balance-chart-toggle-out" : ""}`}
+          >
+            <IconStack2 className="size-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <Segmented
+              tone="neutral"
+              value={range}
+              onChange={setRange}
+              options={RANGES}
+            />
+          </div>
         </div>
       </div>
 
-      <ChartSlot series={series} usd={activeDenom === "usd"} />
+      <ChartSlot
+        series={series}
+        usd={activeDenom === "usd"}
+        pools={pools}
+        byPool={stacked}
+      />
 
       <FiatConsentDialog
         open={consentOpen}
