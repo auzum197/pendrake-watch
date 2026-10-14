@@ -106,7 +106,7 @@ export function UnlockPage() {
               <input
                 autoFocus
                 type={shown ? "text" : "password"}
-                className="h-12 w-full rounded-xl border border-ink-line bg-ink-soft px-4 pr-12 font-mono text-sm text-white outline-none transition-colors placeholder:text-white/35 focus-visible:border-brand"
+                className="h-12 w-full rounded-xl border border-ink-line bg-ink-soft px-4 pr-12 font-mono text-sm text-white outline-none transition-colors placeholder:text-white/35 focus-visible:border-white/30"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => {

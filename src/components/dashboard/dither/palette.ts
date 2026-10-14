@@ -4,7 +4,7 @@ export const INK = {
   brand: [46, 88, 255],
   orchard: [53, 233, 175],
   sapling: [204, 209, 215],
-  ironwood: [193, 206, 255],
+  ironwood: [80, 165, 255],
   transparent: [255, 199, 92],
   ember: [255, 97, 12],
   grey: [120, 120, 130],

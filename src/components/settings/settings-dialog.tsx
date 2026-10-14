@@ -250,7 +250,7 @@ export function SettingsDialog({ wallet }: { wallet: WalletState | null }) {
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-16 bg-gradient-to-b from-background via-background/85 to-transparent" />
             <DialogPrimitive.Close
               aria-label="Close settings"
-              className="absolute right-4 top-4 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand"
+              className="absolute right-4 top-4 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-foreground/30"
             >
               <IconX className="size-4" />
             </DialogPrimitive.Close>

@@ -213,7 +213,7 @@ function StepHeading({ title }: { title: string }) {
 }
 
 const fieldBase =
-  "w-full rounded-xl border border-ink-line bg-ink-soft px-4 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus-visible:border-brand";
+  "w-full rounded-xl border border-ink-line bg-ink-soft px-4 text-sm text-white outline-none transition-colors placeholder:text-white/35 focus-visible:border-white/30";
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return <span className="text-sm text-white/60">{children}</span>;
@@ -433,7 +433,7 @@ function KeyField({
       ? "border-red-500/60"
       : verdict === "testnet"
         ? "border-amber-500/60"
-        : "border-ink-line focus-within:border-brand";
+        : "border-ink-line focus-within:border-white/30";
   const problem =
     verdict === "malformed" || verdict === "testnet"
       ? VERDICT_TEXT[verdict]
