@@ -13,6 +13,6 @@ export default defineMain({
 
   features: {
     experimentalReview: true,
-    experimentalDocgenServer: true
-  }
+    experimentalDocgenServer: true,
+  },
 });
