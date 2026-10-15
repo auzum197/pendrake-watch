@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { invoke, listen } from "./transport";
 
 // The wire types are generated from the daemon's pendrake-ipc crate by
 // `just bindings`, so the two sides cannot drift. They are re-exported here as

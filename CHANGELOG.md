@@ -1,5 +1,11 @@
 # Pendrake Watch — Update log
 
+## 2026-10-07: faker mode for the GUI
+
+`VITE_FAKER=1` in dev swaps the daemon for an in-memory one, so the GUI runs in a plain browser with no daemon build, no Indexer and no chain. It seeds seven Wallets, one per state the UI draws (a long history, a busy shop with every Pool and a mempool entry, an unlabelled one, one mid Initial scan, a regtest one, an unreachable Indexer, an unopenable file), with deterministic and internally consistent data: balances are the sum of the unspent notes and every spend consumes real inputs. Blocks, payments, scan progress and the spot price keep moving while it runs. A flask button in the corner opens the Lab, an editor for everything the real daemon would keep on disk: the app settings, each Wallet's identity, persona and condition, and its history row by row, with the ledger re-derived from the edited rows. Edits persist in localStorage. `just dev-faker` starts it. The gate is the same as react-scan, so the fake is dead code in a production build.
+
+---
+
 ## 2026-09-23: signed installers from a tag
 
 Pushing a `vX.Y.Z` tag now builds every installer and publishes one GitHub release with all of them attached and a `SHA256SUMS` manifest. Before, each platform job created its own release and raced the others for the release object.

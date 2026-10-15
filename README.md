@@ -59,6 +59,7 @@ The full list of tasks:
 
 ```bash
 just dev              # GUI with hot reload
+just dev-faker        # GUI in the browser against a fake daemon with seeded Wallets
 just check            # Typecheck frontend, build Rust
 just fmt              # Format Rust code
 just daemon           # Build pendraked only
@@ -72,6 +73,19 @@ just bump <version>   # Set the version everywhere and commit
 ```
 
 Run `just` to list all tasks including platform-specific ones.
+
+### Faker mode
+
+For UI work that needs no chain, `VITE_FAKER=1` in dev swaps the daemon for an in-memory one (`src/lib/faker`). It is gated like react-scan.
+
+```bash
+just dev-faker        # browser at http://localhost:1430, no daemon build
+VITE_FAKER=1 just dev # the same inside the Tauri shell
+```
+
+It seeds seven Wallets, one per state the UI draws: a long quiet history, a busy shop with every Pool and a mempool entry, one with no label, one still in its Initial scan, a regtest one, one whose Indexer is unreachable, and one whose file will not open. The data is deterministic (the same Wallet on every reload within a day) and internally consistent: each Wallet's history is a list of transfer events, and the txids, inputs, change, fees and notes derive from it, so the balance is always the sum of the unspent notes. Heights follow the chain clock. While it runs, a block lands every 75 seconds, a payment arrives on the Selected Wallet every 90 seconds, and the scan progresses to the tip. The passphrase is `pendrake`. Importing any `uview1…` or `uviewregtest1…` string adds a Wallet.
+
+The flask button in the bottom-right corner opens the Lab, the editor. It changes everything the real daemon would keep on disk: the app settings (lock, fiat, Discreet mode, passphrase, a USD price override), and per Wallet the label, network, Pools, Birthday, Indexer, notifications, the condition it starts in (synced, scanning from a given percent, Indexer unreachable, or unavailable with a reason), the persona knobs that generate a history, and the history itself row by row. Sync progress, the chain tip and the mempool are runtime and are rebuilt on each start. Edits apply at once and persist in localStorage, so a reload comes back to the same scenario. Reset returns to the seeded one, and the copy and paste buttons move a scenario as JSON.
 
 ### Repository Layout
 
