@@ -1,0 +1,1 @@
+import{c as r,b as s,d as a,j as i,e as n}from"./iframe-DwEx0tWq.js";const c=t=>{const o=r({component:t}),e=s({routeTree:o,history:a({initialEntries:["/"]})});return i.jsx(n,{router:e})};export{c as w};

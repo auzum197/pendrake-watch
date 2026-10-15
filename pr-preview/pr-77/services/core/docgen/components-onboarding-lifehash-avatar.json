@@ -1,0 +1,110 @@
+{
+  "components": {
+    "components-onboarding-lifehash-avatar": {
+      "id": "components-onboarding-lifehash-avatar",
+      "name": "LifeHashAvatar",
+      "path": "./src/components/onboarding/lifehash-avatar.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "LifeHashAvatar",
+        "exportName": "LifeHashAvatar",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/onboarding/lifehash-avatar.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "fingerprint": {
+            "name": "fingerprint",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash-avatar.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash-avatar.tsx"
+              }
+            ]
+          },
+          "ringed": {
+            "name": "ringed",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash-avatar.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "fingerprint": {
+          "name": "fingerprint",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "ringed": {
+          "name": "ringed",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        }
+      }
+    }
+  }
+}

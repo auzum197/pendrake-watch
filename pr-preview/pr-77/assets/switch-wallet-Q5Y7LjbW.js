@@ -1,0 +1,1 @@
+import{s}from"./ipc-D5TAAgn3.js";import{m as e}from"./wallet-recency-DIIncMpp.js";import{b as o,a as r,r as l}from"./use-wallet-data-BSUVa1jG.js";import{a as i}from"./app-toast-jL3Q-CFk.js";async function _(a){o();try{const t=await s(a);e(a),r(t)}catch(t){i.error("Couldn't switch Wallet",String(t)),l()}}export{_ as s};

@@ -1,0 +1,71 @@
+{
+  "components": {
+    "components-notes-badges": {
+      "id": "components-notes-badges",
+      "name": "PoolBadge",
+      "path": "./src/components/notes/badges.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "PoolBadge",
+        "exportName": "PoolBadge",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/notes/badges.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "pool": {
+            "name": "pool",
+            "required": true,
+            "type": {
+              "name": "enum",
+              "raw": "\"orchard\" | \"sapling\" | \"transparent\" | \"ironwood\"",
+              "value": [
+                {
+                  "value": "\"orchard\""
+                },
+                {
+                  "value": "\"sapling\""
+                },
+                {
+                  "value": "\"transparent\""
+                },
+                {
+                  "value": "\"ironwood\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/notes/badges.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "pool": {
+          "name": "pool",
+          "description": "",
+          "type": {
+            "required": true,
+            "raw": "\"orchard\" | \"sapling\" | \"transparent\" | \"ironwood\"",
+            "name": "enum",
+            "value": [
+              "orchard",
+              "sapling",
+              "transparent",
+              "ironwood"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"orchard\" | \"sapling\" | \"transparent\" | \"ironwood\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

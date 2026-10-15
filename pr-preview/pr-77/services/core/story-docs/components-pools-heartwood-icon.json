@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-pools-heartwood-icon": {
+      "id": "components-pools-heartwood-icon",
+      "name": "HeartwoodIcon",
+      "path": "./src/components/pools/heartwood-icon.stories.tsx",
+      "import": "import { HeartwoodIcon } from 'pendrake-watch';",
+      "stories": {
+        "components-pools-heartwood-icon--default": {
+          "id": "components-pools-heartwood-icon--default",
+          "name": "Default",
+          "snippet": "const Default = () => <span className=\"pool-tile size-14\">\n    <HeartwoodIcon className=\"size-8\" />\n</span>;"
+        }
+      }
+    }
+  }
+}
