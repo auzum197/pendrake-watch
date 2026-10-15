@@ -12,6 +12,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The Rust job is the critical path and most PRs only touch src/, so it runs
+  # only when something it compiles changed. A skipped job still satisfies a
+  # required status check, which a workflow-level paths filter would not.
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            rust:
+              - "crates/**"
+              - "src-tauri/**"
+              - "rust-toolchain.toml"
+              - ".github/workflows/ci.yml"
+              - ".github/actions/**"
+
   typecheck-build:
     name: TypeScript typecheck and build
     runs-on: ubuntu-latest
@@ -31,34 +55,59 @@ jobs:
       - name: Check formatting
         run: pnpm fmt:check
 
-      - name: Typecheck and build
-        run: pnpm build
+      # vite build does not typecheck and the unit tests need neither, so the
+      # three run side by side. The Storybook browser tests stay out of CI: they
+      # need a Playwright Chromium download and a second cache.
+      - name: Typecheck, test and build
+        run: |
+          pnpm exec tsc --noEmit > "$RUNNER_TEMP/tsc.log" 2>&1 & tsc=$!
+          pnpm exec vitest run --project unit > "$RUNNER_TEMP/vitest.log" 2>&1 & vitest=$!
+          pnpm exec vite build > "$RUNNER_TEMP/vite.log" 2>&1 & vite=$!
+          status=0
+          for name in tsc vitest vite; do
+            wait "${!name}" || { status=1; echo "::error::$name failed"; }
+            echo "::group::$name"
+            cat "$RUNNER_TEMP/$name.log"
+            echo "::endgroup::"
+          done
+          exit "$status"
 
   check-format-and-test:
     name: Rust formatting and tests
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    env:
+      # Halves the target directory, so the cache restores and saves faster and
+      # the big binaries link faster. Backtraces keep their line numbers.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      # Compile-unit cache on top of rust-cache's target cache. A Cargo.lock bump
+      # recompiles only the crates that changed instead of everything.
+      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
 
-      # The Tauri crate needs these system libraries to compile on Linux, and the
-      # pinned lightwallet-protocol regenerates its gRPC stubs at build time, which
-      # needs protoc.
-      - name: Install Tauri system dependencies
+      # The Tauri crate needs webkit2gtk and gtk to compile on Linux, and the
+      # pinned lightwallet-protocol regenerates its gRPC stubs at build time,
+      # which needs protoc. apt runs in the background so it overlaps with the
+      # toolchain install and the cache restore. The step below waits on it.
+      # Tray and bundler libraries are left out: the tray feature is off and
+      # nothing bundles here.
+      - name: Start installing the Tauri system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libxdo-dev \
-            libssl-dev \
-            build-essential \
-            protobuf-compiler
+          nohup sh -c '
+            sudo apt-get -o Acquire::Retries=3 update &&
+            sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=120 install -y --no-install-recommends \
+              libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev protobuf-compiler
+            echo $? > "$RUNNER_TEMP/apt.status"
+          ' > "$RUNNER_TEMP/apt.log" 2>&1 &
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      - uses: ./.github/actions/setup-rust
+
+      - uses: rui314/setup-mold@v1
+
+      - uses: mozilla-actions/sccache-action@v0.0.11
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -69,6 +118,14 @@ jobs:
       - name: Format check
         working-directory: src-tauri
         run: cargo fmt --all --check
+
+      - name: Wait for the Tauri system dependencies
+        run: |
+          until [ -f "$RUNNER_TEMP/apt.status" ]; do sleep 2; done
+          if [ "$(cat "$RUNNER_TEMP/apt.status")" != 0 ]; then
+            cat "$RUNNER_TEMP/apt.log"
+            exit 1
+          fi
 
       # src-tauri's build script needs the pendraked sidecar (externalBin) to exist, so
       # build the daemon and stage it under the target-triple name Tauri expects. This
