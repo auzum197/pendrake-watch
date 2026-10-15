@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { mocked } from "storybook/test";
 import { withRouter } from "@/stories/with-router";
 import { unlock } from "@/lib/ipc";

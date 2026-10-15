@@ -4,7 +4,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import type { Decorator } from "@storybook/react-vite";
+import type { Decorator } from "@storybook/tanstack-react";
 
 // A throwaway in-memory router for the components that call useNavigate(). The
 // story renders as the root route's component, so navigations resolve against a

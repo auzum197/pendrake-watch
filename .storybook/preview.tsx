@@ -1,4 +1,4 @@
-import type { Preview } from "@storybook/react-vite";
+import type { Preview } from "@storybook/tanstack-react";
 import { withThemeByClassName } from "@storybook/addon-themes";
 import { sb } from "storybook/test";
 import "../src/index.css";
@@ -7,7 +7,7 @@ sb.mock("../src/lib/ipc.ts", { spy: true });
 
 const preview: Preview = {
   parameters: {
-    backgrounds: { disable: true },
+    backgrounds: { disabled: true },
     a11y: { test: "todo" },
   },
   decorators: [

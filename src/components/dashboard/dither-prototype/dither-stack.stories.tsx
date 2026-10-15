@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { Curve } from "../dither/dither-area";
 import type { Bloom, DitherVariant } from "../dither/dither-paint";
 import {

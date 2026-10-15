@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { Tx, TxKind, TxStatus } from "@/lib/ipc";
 import { hydrateDiscreet, isMasked, useMasked } from "@/lib/discreet";
 import { TxList } from "./tx-list";

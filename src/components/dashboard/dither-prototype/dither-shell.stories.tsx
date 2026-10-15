@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { withRouter } from "@/stories/with-router";
 import type { Bloom, DitherVariant } from "../dither/dither-paint";
 import { DATASET_NAMES, DATASETS, type DatasetName, USD } from "./fake-data";

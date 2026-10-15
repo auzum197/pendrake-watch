@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import original from "@/assets/onboarding-backdrop.jpg";
 import { BackdropScene, LAYERS, TreeCanvas } from "./backdrop-scene";
 
