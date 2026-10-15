@@ -35,6 +35,8 @@ import {
   onboardingSteps,
 } from "@/lib/onboarding";
 import { indexerReady, resolveIndexer } from "@/lib/indexer";
+import { setSelectedId } from "@/lib/selection";
+import { showSelectedWallet } from "@/hooks/use-wallet-data";
 import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import { LifeHashAvatar } from "@/components/onboarding/lifehash-avatar";
 import { OnboardingCard } from "@/components/onboarding/onboarding-card";
@@ -118,7 +120,7 @@ export function OnboardingPage() {
     setError(null);
     try {
       // Never call removeWallet here — Add wallet and first-run both only import.
-      await importUfvk({
+      const created = await importUfvk({
         ufvk: draft.ufvk.trim(),
         // The daemon's resolver settles this raw choice into a height
         // (docs/adr/0002), so the GUI never pre-resolves a date.
@@ -137,6 +139,8 @@ export function OnboardingPage() {
         // post-Replace import omits it so the daemon reuses the held one.
         passphrase: sessionHeld ? undefined : draft.password,
       });
+      if (created.walletId) setSelectedId(created.walletId);
+      showSelectedWallet(created);
       navigate({ to: "/dashboard" });
     } catch (e) {
       setError(String(e));

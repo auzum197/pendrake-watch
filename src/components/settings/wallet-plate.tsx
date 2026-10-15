@@ -220,7 +220,7 @@ function PlateActions({
   async function toggleAlerts(next: boolean) {
     setAlerts(next);
     try {
-      const state = await setNotifications(next, wallet.id);
+      const state = await setNotifications(wallet.id, next);
       if (wallet.selected) setCachedWallet(state);
     } catch {
       setAlerts(!next);

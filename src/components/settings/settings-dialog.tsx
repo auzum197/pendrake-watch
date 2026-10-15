@@ -382,9 +382,10 @@ function GeneralPanel({
 
   return (
     <>
-      {wallet?.exists && show("notifications") && (
+      {wallet?.walletId && show("notifications") && (
         <NotificationsSection
-          key={`notify-${wallet.fingerprint ?? "wallet"}`}
+          key={`notify-${wallet.walletId}`}
+          walletId={wallet.walletId}
           enabled={wallet.notificationsEnabled}
           query={query}
         />
@@ -392,9 +393,10 @@ function GeneralPanel({
 
       {show("background") && <BackgroundSection query={query} />}
 
-      {wallet?.exists && show("fiat") && (
+      {wallet?.walletId && show("fiat") && (
         <FiatSection
-          key={`fiat-${wallet.fingerprint ?? "wallet"}`}
+          key={`fiat-${wallet.walletId}`}
+          walletId={wallet.walletId}
           enabled={wallet.fiatEnabled ?? false}
           query={query}
         />
@@ -402,9 +404,10 @@ function GeneralPanel({
 
       {wallet?.exists && show("discreet") && <DiscreetSection query={query} />}
 
-      {wallet?.exists && show("indexer") && (
+      {wallet?.walletId && show("indexer") && (
         <IndexerSection
-          key={wallet.fingerprint ?? "wallet"}
+          key={wallet.walletId}
+          walletId={wallet.walletId}
           network={wallet.network}
           current={wallet.indexerUri}
           focusOnMount={focusIndexer}
@@ -537,9 +540,11 @@ function BackgroundSection({ query = "" }: { query?: string }) {
 }
 
 function NotificationsSection({
+  walletId,
   enabled,
   query = "",
 }: {
+  walletId: string;
   enabled: boolean;
   query?: string;
 }) {
@@ -550,7 +555,7 @@ function NotificationsSection({
     setOn(next);
     setBusy(true);
     try {
-      const state = await setNotifications(next);
+      const state = await setNotifications(walletId, next);
       setOn(state.notificationsEnabled);
     } catch {
       setOn(!next);
@@ -573,9 +578,11 @@ function NotificationsSection({
 }
 
 function FiatSection({
+  walletId,
   enabled,
   query = "",
 }: {
+  walletId: string;
   enabled: boolean;
   query?: string;
 }) {
@@ -586,7 +593,7 @@ function FiatSection({
     setOn(next);
     setBusy(true);
     try {
-      const state = await setFiatEnabled(next);
+      const state = await setFiatEnabled(walletId, next);
       setOn(state.fiatEnabled ?? false);
     } catch {
       setOn(!next);
@@ -700,11 +707,13 @@ function ReduceMotionToggle({ query = "" }: { query?: string }) {
 type SaveStatus = "idle" | "connecting" | "saved" | "error";
 
 function IndexerSection({
+  walletId,
   network,
   current,
   focusOnMount,
   query = "",
 }: {
+  walletId: string;
   network: Network;
   current: string;
   focusOnMount: boolean;
@@ -746,7 +755,7 @@ function IndexerSection({
     setStatus("connecting");
     setError(null);
     try {
-      const result = await setIndexer(resolved);
+      const result = await setIndexer(walletId, resolved);
       setSaved(result.indexerUri);
       setStatus("saved");
     } catch (e) {

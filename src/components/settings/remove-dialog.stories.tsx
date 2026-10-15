@@ -17,18 +17,7 @@ const meta = {
   beforeEach: () => {
     mocked(verifyPassphrase).mockResolvedValue(false);
     mocked(listWallets).mockResolvedValue([]);
-    mocked(removeWallet).mockResolvedValue({
-      exists: false,
-      locked: false,
-      sessionHeld: true,
-      fingerprint: null,
-      importType: "ufvk",
-      viewMode: "full",
-      network: "mainnet",
-      birthdayHeight: 0,
-      indexerUri: "",
-      notificationsEnabled: true,
-    });
+    mocked(removeWallet).mockResolvedValue(undefined);
   },
 } satisfies Meta<typeof RemoveDialog>;
 

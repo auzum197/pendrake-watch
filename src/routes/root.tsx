@@ -28,9 +28,7 @@ export function RootLayout() {
               stashPendingLink({ txid, walletId });
               navigate({ to: "/unlock", replace: true });
             } else {
-              await selectLinkedWallet(walletId, state?.walletId).catch(
-                () => {},
-              );
+              await selectLinkedWallet(walletId).catch(() => {});
               navigate({ to: "/tx/$txid", params: { txid } });
             }
             return;
@@ -38,7 +36,7 @@ export function RootLayout() {
         } else if (parsed.host === "wallet") {
           const state = await getWalletState().catch(() => null);
           if (!state?.locked) {
-            await selectLinkedWallet(walletId, state?.walletId).catch(() => {});
+            await selectLinkedWallet(walletId).catch(() => {});
           }
           navigate({ to: "/dashboard" });
           return;
@@ -48,7 +46,7 @@ export function RootLayout() {
         ) {
           const state = await getWalletState().catch(() => null);
           if (!state?.locked) {
-            await selectLinkedWallet(walletId, state?.walletId).catch(() => {});
+            await selectLinkedWallet(walletId).catch(() => {});
           }
           navigate({ to: "/dashboard" });
           openSettings({ indexer: true });

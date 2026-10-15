@@ -5,13 +5,16 @@
 //! tears the runtime down.
 
 use std::fs::File;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
+use rand::RngCore;
+use zeroize::Zeroizing;
 
-use crate::ipc;
+use crate::ipc::{self, RpcListen};
 use crate::notify::Notifier;
 use crate::paths::Paths;
 use crate::wallet_service::WalletService;
@@ -20,6 +23,60 @@ use crate::wallet_service::WalletService;
 pub struct Config {
     /// Override the data directory. `None` uses the per-user default.
     pub data_dir: Option<PathBuf>,
+    /// The JSON-RPC TCP listener. `None` means the environment variables
+    /// `PENDRAKE_RPC_LISTEN` and `PENDRAKE_RPC_COOKIE_UNLOCKS` decide. Without them
+    /// there is no listener.
+    pub rpc: Option<RpcConfig>,
+}
+
+/// The loopback JSON-RPC listener (docs/adr/0014). The per-run cookie in
+/// `rpc.cookie` is the proof of local access. Only loopback addresses are accepted.
+#[derive(Debug, Clone)]
+pub struct RpcConfig {
+    pub listen: SocketAddr,
+    /// Whether a session that presented the cookie starts unlocked if the daemon
+    /// has the Passphrase in memory.
+    pub cookie_unlocks: bool,
+}
+
+impl RpcConfig {
+    pub fn from_env() -> Result<Option<Self>> {
+        let Some(listen) = std::env::var_os("PENDRAKE_RPC_LISTEN") else {
+            return Ok(None);
+        };
+        let listen: SocketAddr = listen
+            .to_string_lossy()
+            .parse()
+            .context("PENDRAKE_RPC_LISTEN is not a host:port address")?;
+        let cookie_unlocks = std::env::var("PENDRAKE_RPC_COOKIE_UNLOCKS")
+            .map(|v| matches!(v.as_str(), "1" | "true"))
+            .unwrap_or(false);
+        Ok(Some(Self {
+            listen,
+            cookie_unlocks,
+        }))
+    }
+}
+
+/// A fresh cookie of 32 random bytes in hex, written to `path` as an owner-only
+/// file.
+fn write_cookie(path: &std::path::Path) -> Result<Zeroizing<String>> {
+    let mut bytes = Zeroizing::new([0u8; 32]);
+    rand::rngs::OsRng.fill_bytes(&mut *bytes);
+    let cookie = Zeroizing::new(bytes.iter().map(|b| format!("{b:02x}")).collect::<String>());
+    let _ = std::fs::remove_file(path);
+    let mut options = File::options();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .with_context(|| format!("creating {}", path.display()))?;
+    std::io::Write::write_all(&mut file, cookie.as_bytes())?;
+    Ok(cookie)
 }
 
 /// Why [`run`] declined to start. A host distinguishes these: `AlreadyRunning`
@@ -36,6 +93,9 @@ pub enum StartError {
 pub struct ServiceHandle {
     runtime: Option<tokio::runtime::Runtime>,
     socket: PathBuf,
+    /// The cookie file. It exists only if the TCP listener is open. It is removed
+    /// together with the socket.
+    cookie: Option<PathBuf>,
     // Held for the service's lifetime so a second instance can't serve the same
     // wallet. Released when the handle drops.
     _lock: File,
@@ -57,6 +117,9 @@ impl Drop for ServiceHandle {
         // socket file is removed.
         self.runtime.take();
         let _ = std::fs::remove_file(&self.socket);
+        if let Some(cookie) = &self.cookie {
+            let _ = std::fs::remove_file(cookie);
+        }
     }
 }
 
@@ -88,6 +151,16 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
+    let rpc = match config
+        .rpc
+        .map(Ok)
+        .or_else(|| RpcConfig::from_env().transpose())
+    {
+        Some(rpc) => Some(rpc_listen(rpc?, &paths)?),
+        None => None,
+    };
+    let cookie = rpc.as_ref().map(|_| paths.rpc_cookie_file.clone());
+
     let service = runtime.block_on(WalletService::load(paths.clone(), notifier))?;
     service.arm_shutdown(shutdown_tx);
 
@@ -100,7 +173,8 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
         // from scratch (the stale socket file is unlinked first), so this heals
         // once the cause clears instead of leaving a deaf daemon behind.
         loop {
-            if let Err(e) = ipc::serve(Arc::clone(&service), serve_paths.clone()).await {
+            if let Err(e) = ipc::serve(Arc::clone(&service), serve_paths.clone(), rpc.clone()).await
+            {
                 tracing::error!("ipc server stopped, rebinding shortly: {e}");
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
@@ -110,9 +184,27 @@ pub fn run(config: Config, notifier: Arc<dyn Notifier>) -> Result<ServiceHandle,
     Ok(ServiceHandle {
         runtime: Some(runtime),
         socket: paths.socket,
+        cookie,
         _lock: lock,
         shutdown_rx,
     })
+}
+
+/// The listener for this run, with a fresh cookie. A non-loopback address is an
+/// error.
+fn rpc_listen(config: RpcConfig, paths: &Paths) -> Result<Arc<RpcListen>> {
+    if !config.listen.ip().is_loopback() {
+        bail!(
+            "PENDRAKE_RPC_LISTEN must be a loopback address, got {}; tunnel remote access over SSH",
+            config.listen
+        );
+    }
+    let cookie = write_cookie(&paths.rpc_cookie_file)?;
+    Ok(Arc::new(RpcListen {
+        addr: config.listen,
+        cookie,
+        cookie_unlocks: config.cookie_unlocks,
+    }))
 }
 
 #[cfg(test)]
@@ -124,6 +216,7 @@ mod tests {
     fn config_at(dir: &Path) -> Config {
         Config {
             data_dir: Some(dir.to_path_buf()),
+            rpc: None,
         }
     }
 
@@ -175,21 +268,139 @@ mod tests {
 
         // A client that sends half a request and vanishes mid-line.
         let mut rude = connect_with_retry(&socket);
-        rude.write_all(b"{\"id\":1,\"met").unwrap();
+        rude.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"met")
+            .unwrap();
         drop(rude);
 
         // The server must still answer a fresh connection afterwards.
         let mut stream = connect_with_retry(&socket);
         stream
-            .write_all(b"{\"id\":2,\"method\":\"getSyncStatus\"}\n")
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"listWallets\"}\n")
             .unwrap();
         stream
             .set_read_timeout(Some(std::time::Duration::from_secs(5)))
             .unwrap();
         let mut reply = String::new();
         BufReader::new(&stream).read_line(&mut reply).unwrap();
-        assert!(reply.contains("\"ok\":true"), "unexpected reply: {reply}");
+        assert!(
+            reply.starts_with("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":"),
+            "unexpected reply: {reply}"
+        );
         drop(handle);
+    }
+
+    fn tcp_connect_with_retry(addr: SocketAddr) -> std::net::TcpStream {
+        for _ in 0..50 {
+            if let Ok(stream) = std::net::TcpStream::connect(addr) {
+                return stream;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("rpc listener never came up on {addr}");
+    }
+
+    fn free_loopback_port() -> SocketAddr {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+    }
+
+    #[test]
+    fn the_rpc_listener_demands_the_cookie_before_anything_else() {
+        use std::io::{BufRead, BufReader, Write};
+
+        let dir = tempfile::tempdir().unwrap();
+        let listen = free_loopback_port();
+        let config = Config {
+            data_dir: Some(dir.path().to_path_buf()),
+            rpc: Some(RpcConfig {
+                listen,
+                cookie_unlocks: false,
+            }),
+        };
+        let handle = run(config, Arc::new(NullNotifier)).expect("the instance starts");
+        let cookie_file = dir.path().join("rpc.cookie");
+        let cookie = std::fs::read_to_string(&cookie_file).unwrap();
+        assert_eq!(cookie.len(), 64);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&cookie_file)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+
+        let mut stream = tcp_connect_with_retry(listen);
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut reply = String::new();
+
+        stream
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"listWallets\"}\n")
+            .unwrap();
+        reader.read_line(&mut reply).unwrap();
+        assert!(
+            reply.contains("\"code\":-32002"),
+            "unexpected reply: {reply}"
+        );
+
+        reply.clear();
+        stream
+            .write_all(
+                b"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"authenticate\",\"params\":{\"cookie\":\"nope\"}}\n",
+            )
+            .unwrap();
+        reader.read_line(&mut reply).unwrap();
+        assert!(
+            reply.contains("\"code\":-32002"),
+            "unexpected reply: {reply}"
+        );
+
+        reply.clear();
+        let auth = format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"authenticate\",\"params\":{{\"cookie\":\"{cookie}\"}}}}\n"
+        );
+        stream.write_all(auth.as_bytes()).unwrap();
+        reader.read_line(&mut reply).unwrap();
+        assert!(
+            reply.contains("\"id\":3,\"result\":null"),
+            "unexpected reply: {reply}"
+        );
+        reply.clear();
+        stream
+            .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"listWallets\"}\n")
+            .unwrap();
+        reader.read_line(&mut reply).unwrap();
+        assert!(
+            reply.starts_with("{\"jsonrpc\":\"2.0\",\"id\":4,\"result\":"),
+            "unexpected reply: {reply}"
+        );
+
+        drop(handle);
+        assert!(!cookie_file.exists(), "the cookie must go with the daemon");
+    }
+
+    #[test]
+    fn a_non_loopback_rpc_address_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config {
+            data_dir: Some(dir.path().to_path_buf()),
+            rpc: Some(RpcConfig {
+                listen: "0.0.0.0:0".parse().unwrap(),
+                cookie_unlocks: false,
+            }),
+        };
+        match run(config, Arc::new(NullNotifier)) {
+            Err(StartError::Failed(e)) => assert!(e.to_string().contains("loopback")),
+            Err(StartError::AlreadyRunning) => panic!("not an instance clash"),
+            Ok(_) => panic!("a non-loopback listener must be refused"),
+        }
     }
 
     #[test]
@@ -200,6 +411,7 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         let config = Config {
             data_dir: Some(file.path().to_path_buf()),
+            rpc: None,
         };
         match run(config, Arc::new(NullNotifier)) {
             Err(StartError::Failed(_)) => {}

@@ -1,12 +1,11 @@
-import { selectWallet } from "@/lib/ipc";
+import { getWalletState } from "@/lib/ipc";
+import { getSelectedId, setSelectedId } from "@/lib/selection";
 import { showSelectedWallet } from "@/hooks/use-wallet-data";
 
-export async function selectLinkedWallet(
-  walletId: string | undefined,
-  currentId: string | null | undefined,
-) {
-  if (!walletId || walletId === currentId) return;
-  const state = await selectWallet(walletId);
+export async function selectLinkedWallet(walletId: string | undefined) {
+  if (!walletId || walletId === getSelectedId()) return;
+  const state = await getWalletState(walletId);
+  setSelectedId(walletId);
   showSelectedWallet(state);
 }
 

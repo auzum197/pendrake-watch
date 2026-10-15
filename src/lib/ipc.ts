@@ -6,6 +6,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 // aliases (a plain re-export would survive into the Storybook module mock);
 // nothing imports from generated/ directly.
 import type * as Wire from "./generated/wire";
+import { getSelectedId } from "./selection";
 
 export type Balance = Wire.Balance;
 export type BatchPhase = Wire.BatchPhase;
@@ -38,7 +39,7 @@ export type ViewMode = Wire.ViewMode;
 export type WalletAddress = Wire.WalletAddress;
 export type WalletNote = Wire.WalletNote;
 export type WalletState = Wire.WalletState;
-export type WalletSummary = Wire.WalletSummary;
+export type WalletSummary = Wire.WalletSummary & { selected: boolean };
 export type ImportUfvkInput = Wire.ImportUfvkArgs;
 
 // The public mainnet default: zec.rocks auto-routes to a nearby region.
@@ -71,7 +72,8 @@ export function parseUfvk(ufvk: string): Promise<ParseUfvkResult> {
   return invoke("parse_ufvk", { ufvk });
 }
 
-// Open an encrypted wallet on this run. Rejects when the passphrase is wrong.
+// Unlocks this session. Rejects on a wrong passphrase. The result is the
+// session-level state.
 export function unlock(passphrase: string): Promise<WalletState> {
   return invoke("unlock", { passphrase });
 }
@@ -80,18 +82,16 @@ export function lock(): Promise<void> {
   return invoke("lock");
 }
 
-export function setIndexer(indexerUri: string): Promise<WalletState> {
-  return invoke("set_indexer", { indexerUri });
+export function setIndexer(id: string, indexerUri: string): Promise<WalletState> {
+  return invoke("set_indexer", { id, indexerUri });
 }
 
-// Toggle transaction and scan-complete notifications for one Wallet (the Selected
-// Wallet when `id` is omitted). The daemon persists the choice and returns the
-// Selected Wallet's state.
+// One Wallet's notification setting. The result is that Wallet's state.
 export function setNotifications(
+  id: string,
   enabled: boolean,
-  id?: string,
 ): Promise<WalletState> {
-  return invoke("set_notifications", { enabled, id });
+  return invoke("set_notifications", { id, enabled });
 }
 
 // The UFVK a Wallet was imported from, released only against the session
@@ -106,42 +106,47 @@ export function verifyPassphrase(passphrase: string): Promise<boolean> {
   return invoke("verify_passphrase", { passphrase });
 }
 
-export function getWalletState(): Promise<WalletState> {
-  return invoke("get_wallet_state");
+// One Wallet's state, or the session-level state when `id` is omitted.
+export function getWalletState(id?: string): Promise<WalletState> {
+  return invoke("get_wallet_state", { id });
 }
 
-export function getAddresses(): Promise<WalletAddress[]> {
-  return invoke("get_addresses");
+export function getAddresses(id: string): Promise<WalletAddress[]> {
+  return invoke("get_addresses", { id });
 }
 
-export function getSyncStatus(): Promise<SyncStatus> {
-  return invoke("get_sync_status");
+export function getSyncStatus(id: string): Promise<SyncStatus> {
+  return invoke("get_sync_status", { id });
 }
 
-export function getBalance(): Promise<Balance> {
-  return invoke("get_balance");
+export function getBalance(id: string): Promise<Balance> {
+  return invoke("get_balance", { id });
 }
 
-export function getTransactions(): Promise<Tx[]> {
-  return invoke("get_transactions");
+export function getTransactions(id: string): Promise<Tx[]> {
+  return invoke("get_transactions", { id });
 }
 
-export function getTransaction(txid: string): Promise<Tx | null> {
-  return invoke("get_transaction", { txid });
+export function getTransaction(id: string, txid: string): Promise<Tx | null> {
+  return invoke("get_transaction", { id, txid });
 }
 
 // Every note the wallet can see, with spend status, for the notes debug view.
-export function getNotes(): Promise<WalletNote[]> {
-  return invoke("get_notes");
+export function getNotes(id: string): Promise<WalletNote[]> {
+  return invoke("get_notes", { id });
 }
 
 // Record consent to the price egress and start (or stop) the daemon's price refresh.
-export function setFiatEnabled(enabled: boolean): Promise<WalletState> {
-  return invoke("set_fiat_enabled", { enabled });
+export function setFiatEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<WalletState> {
+  return invoke("set_fiat_enabled", { id, enabled });
 }
 
 // Persist Discreet mode in the daemon, which redacts notification text while it is
-// on (docs/adr/0009). Masking in the UI keys off the store in lib/discreet.ts.
+// on (docs/adr/0009). Masking in the UI keys off the store in lib/discreet.ts. The
+// returned state is session-level.
 export function setDiscreet(enabled: boolean): Promise<WalletState> {
   return invoke("set_discreet", { enabled });
 }
@@ -156,11 +161,8 @@ export function getPriceHistory(): Promise<PricePoint[]> {
   return invoke("get_price_history");
 }
 
-export function removeWallet(
-  id: string,
-  select?: string,
-): Promise<WalletState> {
-  return invoke("remove_wallet", { id, select });
+export function removeWallet(id: string, passphrase: string): Promise<void> {
+  return invoke("remove_wallet", { id, passphrase });
 }
 
 export function rescanWallet(id: string): Promise<WalletState> {
@@ -171,12 +173,10 @@ export function startOver(): Promise<void> {
   return invoke("start_over");
 }
 
-export function listWallets(): Promise<WalletSummary[]> {
-  return invoke("list_wallets");
-}
-
-export function selectWallet(id: string): Promise<WalletState> {
-  return invoke("select_wallet", { id });
+export async function listWallets(): Promise<WalletSummary[]> {
+  const wallets: Wire.WalletSummary[] = await invoke("list_wallets");
+  const selected = getSelectedId();
+  return wallets.map((w) => ({ ...w, selected: w.id === selected }));
 }
 
 // Set or clear a user-facing wallet name. Empty string clears (short fingerprint).

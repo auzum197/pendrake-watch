@@ -49,10 +49,7 @@ export async function toggleDiscreet(): Promise<void> {
     const state = await setDiscreet(next);
     hidden = state.discreet ?? next;
     const prev = getCachedWallet();
-    setCachedWallet({
-      ...state,
-      label: state.label ?? prev?.label,
-    });
+    if (prev) setCachedWallet({ ...prev, discreet: hidden });
   } catch {
     hidden = !next;
   } finally {

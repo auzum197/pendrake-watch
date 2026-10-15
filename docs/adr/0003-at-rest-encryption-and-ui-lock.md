@@ -20,6 +20,8 @@ The model is now two layers. The session key (the Passphrase held in memory with
 
 The trade this accepts is that the key lives in daemon memory while the GUI is locked. For a watch-only wallet guarding viewing privacy rather than spend authority, that is the same trade the keychain amendment below already accepts. A plaintext (pre-encryption) Wallet has no Passphrase to demand, so it is never session-locked. Idle auto-relock stays post-v0.
 
+Superseded in part by docs/adr/0014: the flag is no longer daemon-wide. Each connection owns its own Session lock, which starts armed whenever an encrypted Wallet exists and drops with the connection, so the "last GUI session disconnects" rule above is gone. The two-layer model, the held key and the verification-only unlock, stand.
+
 ## Amendment (post-v0): optional Passphrase persistence via the OS keychain
 
 v0 keeps the Passphrase in daemon memory only, the decision above, so after a restart the daemon cannot sync until the GUI re-supplies it and the app lands on the unlock screen. Letting background sync survive a reboot is deferred post-v0, tracked in AUZ-102. When it lands the Passphrase may be persisted under one constraint: the OS keychain only (macOS Keychain, Windows Credential Manager, Linux Secret Service), never an app-managed file. The keychain is gated by the OS login and its key lives off the at-rest disk image. An app-managed encrypted blob would be obfuscation, since its key would sit on the same disk it protects. That is the theater this ADR already rejects for plaintext files.

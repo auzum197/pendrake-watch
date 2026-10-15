@@ -14,7 +14,11 @@ import {
   startOver as startOverWallets,
   unlock as unlockWallet,
 } from "@/lib/ipc";
-import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
+import {
+  getCachedWallet,
+  loadSelectedWallet,
+  setCachedWallet,
+} from "@/hooks/use-wallet-data";
 import { selectLinkedWallet, takePendingLink } from "@/lib/deep-link";
 import { OnboardingCard } from "@/components/onboarding/onboarding-card";
 
@@ -45,14 +49,14 @@ export function UnlockPage() {
     setBusy(true);
     setError(false);
     try {
-      const state = await unlockWallet(password);
+      await unlockWallet(password);
       // Reflect the now-unlocked session in the shared cache before navigating, so
       // the layout guard on the next screen doesn't read a stale lock and bounce
       // straight back here.
-      setCachedWallet(state);
+      setCachedWallet(await loadSelectedWallet());
       const link = takePendingLink();
       if (link) {
-        await selectLinkedWallet(link.walletId, state.walletId).catch(() => {});
+        await selectLinkedWallet(link.walletId).catch(() => {});
         navigate({
           to: "/tx/$txid",
           params: { txid: link.txid },

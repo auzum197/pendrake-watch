@@ -15,6 +15,6 @@ mod wallet_service;
 
 pub use notify::{Notifier, NullNotifier};
 pub use paths::{Meta, Paths};
-pub use run::{run, Config, ServiceHandle, StartError};
+pub use run::{run, Config, RpcConfig, ServiceHandle, StartError};
 pub use ufvk::{parse_ufvk, UfvkError};
-pub use wallet_service::WalletService;
+pub use wallet_service::{CallError, Session, WalletService};

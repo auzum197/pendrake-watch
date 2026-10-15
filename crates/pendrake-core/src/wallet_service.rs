@@ -8,9 +8,9 @@
 //! [`Notifier`] and a pushed event tagged with the Wallet's id, so the GUI sees
 //! progress and history update as blocks land rather than on a poll timer.
 //!
-//! The Selected Wallet is a pointer on disk (`selected_wallet_id`) and nothing
-//! more: it decides which Wallet the reads and the Settings methods address, and
-//! never which Wallets sync.
+//! The daemon has no notion of a selected Wallet (docs/adr/0014). Every
+//! wallet-scoped method takes a Wallet id. Which Wallet a screen shows is the
+//! client's decision.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
@@ -21,12 +21,12 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, Call, CommitBreakdown,
-    ExportUfvkArgs, GetTransactionArgs, ImportType, ImportUfvkArgs, Network, Note, NoteDirection,
-    NoteStatus, ParseUfvkArgs, ParseUfvkResult, Pool, PoolBalance, PricePoint, PriceSpot,
-    RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
+    ExportUfvkArgs, GetTransactionArgs, GetWalletStateArgs, ImportType, ImportUfvkArgs, Network,
+    Note, NoteDirection, NoteStatus, ParseUfvkArgs, ParseUfvkResult, Pool, PoolBalance, PricePoint,
+    PriceSpot, RemoveArgs, RescanArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
     SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncFault, SyncPhase, SyncState,
     SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode,
-    WalletAddress, WalletNote, WalletState, WalletSummary,
+    WalletAddress, WalletArgs, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -127,19 +127,12 @@ pub struct WalletService {
     /// than raised once per Wallet. A host leaves the set when any Wallet on it gets
     /// a round through, or when a Wallet is pointed at it afresh.
     unreachable_notified: std::sync::Mutex<HashSet<String>>,
-    /// The GUI session lock. True means a fresh GUI session must re-authenticate
-    /// before the daemon answers wallet reads, independent of whether the Wallets
-    /// are open: their clients and sync loops keep running while locked, so
-    /// background notifications survive a Sign Out or a GUI quit (docs/adr/0003).
-    /// Cleared only by a verified `unlock`; armed at startup when an encrypted
-    /// Wallet exists, by `lock`, and when the last GUI subscriber leaves.
-    session_locked: AtomicBool,
     /// Whether any Wallet on disk is encrypted. Plaintext (legacy) wallets have no
-    /// passphrase to verify, so a store holding only those is never session-locked.
+    /// passphrase to verify, so a store of only those never locks a [`Session`].
     encrypted: AtomicBool,
-    /// Live GUI event subscribers. The lock re-arms when this falls to zero, so
-    /// quitting the app (the last subscriber drops) relocks without stopping sync.
-    subscribers: AtomicUsize,
+    /// The number of unlocked sessions (docs/adr/0014). The price loop reads it and
+    /// parks at zero.
+    unlocked_sessions: AtomicUsize,
     /// The global passphrase for the session, held in memory once a wallet is
     /// imported or unlocked. It opens every Wallet (docs/adr/0011). Remove keeps
     /// it so a later Add wallet skips Set Password; Start over drops it
@@ -686,16 +679,14 @@ impl WalletService {
             price_cache: RwLock::new(price_cache),
             price_restart: Notify::new(),
             unreachable_notified: std::sync::Mutex::new(HashSet::new()),
-            session_locked: AtomicBool::new(false),
             encrypted: AtomicBool::new(false),
-            subscribers: AtomicUsize::new(0),
+            unlocked_sessions: AtomicUsize::new(0),
             session_passphrase: Mutex::new(None),
             verify_failures: Mutex::new(0),
             shutdown_tx: std::sync::Mutex::new(None),
             paths,
         });
 
-        let mut selected = service.paths.read_selected_id()?;
         let mut wallets = HashMap::new();
         for id in service.paths.list_wallet_ids()? {
             let scoped = service.paths.for_wallet(&id);
@@ -704,33 +695,19 @@ impl WalletService {
             };
             wallets.insert(id.clone(), Arc::new(LoadedWallet::new(id, scoped, meta)));
         }
-        // A missing or dangling pointer settles on the first Wallet, so the GUI
-        // never opens on nothing while Wallets exist.
-        if selected
-            .as_deref()
-            .is_none_or(|id| !wallets.contains_key(id))
-        {
-            let mut ids: Vec<&String> = wallets.keys().collect();
-            ids.sort();
-            selected = ids.first().map(|id| id.to_string());
-            match &selected {
-                Some(id) => service.paths.write_selected_id(id)?,
-                None => service.paths.clear_selected_id()?,
-            }
-        }
-
         // Discreet mode is app-wide (docs/adr/0009). Seed it from the shared
-        // settings file, falling back once to the selected wallet's legacy per-wallet
-        // flag so an existing user's choice carries over to the global setting.
+        // settings file, falling back once to any wallet's legacy per-wallet flag so
+        // an existing user's choice becomes the global setting.
         let settings_file = &service.paths.settings_file;
         let had_settings = settings_file.exists();
         let discreet = if had_settings {
             Settings::load(settings_file)?.discreet
         } else {
-            match &selected {
-                Some(id) => wallets[id].meta.read().await.discreet,
-                None => false,
+            let mut legacy = false;
+            for wallet in wallets.values() {
+                legacy |= wallet.meta.read().await.discreet;
             }
+            legacy
         };
         service.discreet.store(discreet, Ordering::SeqCst);
         if !had_settings && discreet {
@@ -758,12 +735,11 @@ impl WalletService {
             }
         }
         *service.wallets.write().await = wallets;
-        // An encrypted store starts the session locked: the metas are held but no
-        // encrypted client opens until the GUI sends the Passphrase via `unlock`.
+        // An encrypted store starts every session locked. The metas are in memory
+        // but no encrypted client opens until a client sends `unlock`.
         service.encrypted.store(any_encrypted, Ordering::SeqCst);
         if any_encrypted {
             tracing::info!("encrypted wallets on disk, waiting for unlock");
-            service.session_locked.store(true, Ordering::SeqCst);
         }
         service.spawn_price_loop();
         Ok(service)
@@ -778,18 +754,6 @@ impl WalletService {
             .ok_or_else(|| anyhow!("no wallet with id {id}"))
     }
 
-    /// The Selected Wallet, if the pointer names one the registry holds.
-    async fn selected(&self) -> Option<Arc<LoadedWallet>> {
-        let id = self.paths.read_selected_id().ok().flatten()?;
-        self.wallets.read().await.get(&id).cloned()
-    }
-
-    async fn selected_or_err(&self) -> Result<Arc<LoadedWallet>> {
-        self.selected()
-            .await
-            .ok_or_else(|| anyhow!("no wallet selected"))
-    }
-
     /// Every registered Wallet, in id order.
     async fn all_wallets(&self) -> Vec<Arc<LoadedWallet>> {
         let guard = self.wallets.read().await;
@@ -798,12 +762,11 @@ impl WalletService {
         wallets
     }
 
-    pub async fn list_wallets(&self) -> Result<Vec<WalletSummary>> {
-        let selected = self.paths.read_selected_id()?;
+    pub async fn list_wallets(&self, unlocked: bool) -> Result<Vec<WalletSummary>> {
         let mut out = Vec::new();
         for wallet in self.all_wallets().await {
             let meta = wallet.meta.read().await;
-            let sync = if wallet.is_open().await {
+            let sync = if unlocked && wallet.is_open().await {
                 Some(wallet.sync.read().await.clone())
             } else {
                 None
@@ -814,8 +777,11 @@ impl WalletService {
                 fingerprint: meta.fingerprint.clone(),
                 network: meta.network,
                 birthday_height: meta.birthday_height,
-                selected: selected.as_deref() == Some(wallet.id.as_str()),
-                last_balance: meta.last_balance.map(|b| b.to_string()),
+                last_balance: if unlocked {
+                    meta.last_balance.map(|b| b.to_string())
+                } else {
+                    None
+                },
                 sync,
                 unavailable: wallet.unavailable.read().await.clone(),
                 notifications_enabled: meta.notifications_enabled,
@@ -825,98 +791,117 @@ impl WalletService {
         Ok(out)
     }
 
-    /// Change the Selected Wallet. Every Wallet is already open under the held
-    /// Passphrase (docs/adr/0011), so this moves the pointer and nothing else: no
-    /// engine is loaded or dropped and no sync loop starts or stops.
-    pub async fn select_wallet(&self, id: &str) -> Result<WalletState> {
-        self.wallet(id).await?;
-        self.paths.write_selected_id(id)?;
-        Ok(self.wallet_state().await)
+    /// The result of one call for one session. First a session that was born
+    /// unlocked because the store was empty re-arms its lock once an encrypted
+    /// Wallet exists, the state a fresh session would start in. Then four gates
+    /// run. An
+    /// unauthenticated TCP session may only call `authenticate`. A locked session
+    /// may only call lifecycle and auth methods. `importUfvk` on a locked session is
+    /// refused once the store holds an encrypted Wallet, with or without a key in
+    /// memory, so a restart opens no window where any UFVK stands in for the
+    /// Passphrase. `startOver` is refused on a TCP session: it deletes
+    /// every Wallet without the Passphrase and belongs to the client that sits at
+    /// the machine, since a cookie-holder over a tunnel lacks even data-dir write
+    /// access.
+    pub async fn dispatch(
+        self: &Arc<Self>,
+        call: Call,
+        session: &mut Session,
+    ) -> Result<serde_json::Value, CallError> {
+        let encrypted = self.encrypted.load(Ordering::SeqCst);
+        if !session.authenticated && !matches!(call, Call::Authenticate(_)) {
+            return Err(CallError::Unauthenticated);
+        }
+        if !session.local && matches!(call, Call::StartOver) {
+            return Err(CallError::Failed(anyhow!(
+                "startOver deletes every Wallet and is refused on the TCP listener"
+            )));
+        }
+        if !session.unlocked_with(encrypted) && !call.allowed_while_locked() {
+            return Err(CallError::Locked);
+        }
+        if !session.unlocked_with(encrypted)
+            && matches!(call, Call::ImportUfvk(_))
+            && encrypted
+        {
+            return Err(CallError::Locked);
+        }
+        self.handle(call, session).await.map_err(CallError::Failed)
     }
 
-    pub async fn handle(self: &Arc<Self>, call: Call) -> Result<serde_json::Value> {
+    async fn handle(
+        self: &Arc<Self>,
+        call: Call,
+        session: &mut Session,
+    ) -> Result<serde_json::Value> {
         use serde_json::to_value;
-        // While the GUI session is locked the daemon answers only lifecycle and auth
-        // methods. Wallet reads are refused, so a locked screen (or any other peer on
-        // the socket) can't see balances or history while the session key is still
-        // held for background sync.
-        if self.session_locked.load(Ordering::SeqCst) && !call.allowed_while_locked() {
-            return Err(anyhow!("wallet is locked"));
-        }
         match call {
-            Call::GetWalletState => Ok(to_value(self.wallet_state().await)?),
-            Call::GetSyncStatus => {
-                let status = match self.selected().await {
-                    Some(w) => w.sync.read().await.clone(),
-                    None => SyncStatus::default(),
-                };
+            Call::GetWalletState(GetWalletStateArgs { id }) => {
+                let mut state = self.wallet_state(id.as_deref()).await?;
+                state.locked = state.exists && !session.unlocked;
+                Ok(to_value(state)?)
+            }
+            Call::GetSyncStatus(WalletArgs { id }) => {
+                let w = self.wallet(&id).await?;
+                let status = w.sync.read().await.clone();
                 Ok(to_value(status)?)
             }
             Call::SetWalletLabel(SetWalletLabelArgs { id, label }) => {
                 Ok(to_value(self.set_wallet_label(&id, &label).await?)?)
             }
-            Call::ListWallets => Ok(to_value(self.list_wallets().await?)?),
-            Call::SelectWallet(SelectWalletArgs { id }) => {
-                Ok(to_value(self.select_wallet(&id).await?)?)
-            }
-            // Wallet reads are served from the Selected Wallet's snapshot cache,
-            // never its `client` lock, so they don't queue behind the sync loop.
-            Call::GetBalance => {
-                let balance = match self.selected().await {
-                    Some(w) => w.balance.read().await.clone().unwrap_or_default(),
-                    None => Balance::default(),
-                };
+            Call::ListWallets => Ok(to_value(self.list_wallets(session.is_unlocked()).await?)?),
+            // Wallet reads are served from the Wallet's snapshot cache, never its
+            // `client` lock, so they don't queue behind the sync loop.
+            Call::GetBalance(WalletArgs { id }) => {
+                let w = self.wallet(&id).await?;
+                let balance = w.balance.read().await.clone().unwrap_or_default();
                 Ok(to_value(balance)?)
             }
-            Call::GetTransactions => {
-                let txs = match self.selected().await {
-                    Some(w) => w.txs.read().await.clone(),
-                    None => Vec::new(),
-                };
+            Call::GetTransactions(WalletArgs { id }) => {
+                let w = self.wallet(&id).await?;
+                let txs = w.txs.read().await.clone();
                 Ok(to_value(txs)?)
             }
-            Call::GetNotes => {
-                let notes = match self.selected().await {
-                    Some(w) => self.collect_notes(&w).await,
-                    None => Vec::new(),
-                };
-                Ok(to_value(notes)?)
+            Call::GetNotes(WalletArgs { id }) => {
+                let w = self.wallet(&id).await?;
+                Ok(to_value(self.collect_notes(&w).await)?)
             }
-            Call::GetAddresses => {
-                let addresses = match self.selected().await {
-                    Some(w) => w.addresses.read().await.clone(),
-                    None => Vec::new(),
-                };
+            Call::GetAddresses(WalletArgs { id }) => {
+                let w = self.wallet(&id).await?;
+                let addresses = w.addresses.read().await.clone();
                 Ok(to_value(addresses)?)
             }
-            Call::GetTransaction(GetTransactionArgs { txid }) => {
-                let found = match self.selected().await {
-                    Some(w) => w
-                        .txs
-                        .read()
-                        .await
-                        .iter()
-                        .find(|tx| tx.txid == txid)
-                        .cloned(),
-                    None => None,
-                };
+            Call::GetTransaction(GetTransactionArgs { id, txid }) => {
+                let w = self.wallet(&id).await?;
+                let found = w
+                    .txs
+                    .read()
+                    .await
+                    .iter()
+                    .find(|tx| tx.txid == txid)
+                    .cloned();
                 Ok(to_value(found)?)
             }
             Call::ParseUfvk(ParseUfvkArgs { ufvk }) => Ok(to_value(parse_ufvk_result(&ufvk))?),
-            Call::ImportUfvk(args) => Ok(to_value(self.import_ufvk(args).await?)?),
-            Call::SetIndexer(SetIndexerArgs { indexer_uri }) => {
-                Ok(to_value(self.set_indexer(indexer_uri).await?)?)
+            Call::ImportUfvk(args) => {
+                let state = self.import_ufvk(args).await?;
+                session.auto_unlocked = false;
+                session.unlock();
+                Ok(to_value(state)?)
             }
-            Call::SetNotifications(SetNotificationsArgs { enabled, id }) => Ok(to_value(
-                self.set_notifications(enabled, id.as_deref()).await?,
-            )?),
+            Call::SetIndexer(SetIndexerArgs { id, indexer_uri }) => {
+                Ok(to_value(self.set_indexer(&id, indexer_uri).await?)?)
+            }
+            Call::SetNotifications(SetNotificationsArgs { id, enabled }) => {
+                Ok(to_value(self.set_notifications(&id, enabled).await?)?)
+            }
             Call::ExportUfvk(ExportUfvkArgs { id, passphrase }) => {
                 let passphrase = Zeroizing::new(passphrase);
                 Ok(to_value(self.export_ufvk(&id, &passphrase).await?)?)
             }
             Call::RescanWallet(RescanArgs { id }) => Ok(to_value(self.rescan(&id).await?)?),
-            Call::SetFiatEnabled(SetFiatEnabledArgs { enabled }) => {
-                Ok(to_value(self.set_fiat_enabled(enabled).await?)?)
+            Call::SetFiatEnabled(SetFiatEnabledArgs { id, enabled }) => {
+                Ok(to_value(self.set_fiat_enabled(&id, enabled).await?)?)
             }
             Call::SetDiscreet(SetDiscreetArgs { enabled }) => {
                 Ok(to_value(self.set_discreet(enabled).await?)?)
@@ -924,25 +909,42 @@ impl WalletService {
             Call::GetSpotPrice => Ok(to_value(self.spot_price().await)?),
             Call::GetPriceHistory => Ok(to_value(self.price_history().await)?),
             Call::Unlock(UnlockArgs { passphrase }) => {
-                Ok(to_value(self.unlock(Zeroizing::new(passphrase)).await?)?)
+                let verifiable = self.encrypted.load(Ordering::SeqCst)
+                    || self.session_passphrase.lock().await.is_some();
+                let state = self.unlock(Zeroizing::new(passphrase)).await?;
+                if verifiable {
+                    session.auto_unlocked = false;
+                }
+                session.unlock();
+                Ok(to_value(state)?)
             }
             Call::Lock => {
-                self.lock_session();
+                session.lock();
                 Ok(serde_json::Value::Null)
             }
             Call::VerifyPassphrase(VerifyPassphraseArgs { passphrase }) => {
                 let passphrase = Zeroizing::new(passphrase);
                 Ok(to_value(self.verify_passphrase(&passphrase).await)?)
             }
-            Call::RemoveWallet(RemoveArgs { id, select }) => {
-                Ok(to_value(self.remove(&id, select.as_deref()).await?)?)
+            Call::RemoveWallet(RemoveArgs { id, passphrase }) => {
+                let passphrase = Zeroizing::new(passphrase);
+                if self.session_passphrase.lock().await.is_some()
+                    && !self.verify_passphrase(&passphrase).await
+                {
+                    return Err(anyhow!("incorrect passphrase"));
+                }
+                self.remove(&id).await?;
+                Ok(serde_json::Value::Null)
             }
             Call::StartOver => {
                 self.start_over().await?;
+                session.auto_unlocked = true;
+                session.unlock();
                 Ok(serde_json::Value::Null)
             }
-            // The push stream is wired up by the IPC layer, so the service just acks.
-            Call::SubscribeEvents => Ok(serde_json::Value::Null),
+            // The push stream and the cookie check live in the IPC layer; here both
+            // are a bare ack.
+            Call::SubscribeEvents | Call::Authenticate(_) => Ok(serde_json::Value::Null),
             Call::Shutdown => {
                 if let Ok(mut guard) = self.shutdown_tx.lock() {
                     if let Some(tx) = guard.take() {
@@ -959,15 +961,21 @@ impl WalletService {
         self.events.subscribe()
     }
 
-    async fn wallet_state(&self) -> WalletState {
-        let locked = self.session_locked.load(Ordering::SeqCst);
+    /// One Wallet's state, or the session-level state when `id` is `None`. `locked`
+    /// is always false here. `handle` fills it in per session.
+    async fn wallet_state(&self, id: Option<&str>) -> Result<WalletState> {
         let session_held = self.session_passphrase.lock().await.is_some();
-        match self.selected().await {
+        let wallet = match id {
+            Some(id) => Some(self.wallet(id).await?),
+            None => None,
+        };
+        let exists = wallet.is_some() || !self.wallets.read().await.is_empty();
+        Ok(match wallet {
             Some(w) => {
                 let m = w.meta.read().await;
                 WalletState {
                     exists: true,
-                    locked,
+                    locked: false,
                     session_held,
                     wallet_id: Some(w.id.clone()),
                     label: m.label.clone(),
@@ -984,7 +992,7 @@ impl WalletService {
                 }
             }
             None => WalletState {
-                exists: false,
+                exists,
                 locked: false,
                 session_held,
                 wallet_id: None,
@@ -1000,7 +1008,7 @@ impl WalletService {
                 discreet: self.discreet.load(Ordering::SeqCst),
                 unavailable: None,
             },
-        }
+        })
     }
 
     /// Enumerate every received output the Wallet controls, across pools, with its
@@ -1173,7 +1181,7 @@ impl WalletService {
         };
         meta.save(&w.paths.meta_file)?;
         drop(meta);
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(id)).await
     }
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
@@ -1196,10 +1204,17 @@ impl WalletService {
         let held = self.session_passphrase.lock().await.clone();
         let passphrase = match held {
             Some(p) => p,
-            None => Zeroizing::new(
-                args.passphrase
-                    .ok_or_else(|| anyhow!("no passphrase provided for the first import"))?,
-            ),
+            None => {
+                if self.encrypted.load(Ordering::SeqCst) {
+                    return Err(anyhow!(
+                        "the store holds encrypted Wallets, so the Passphrase must open them before an import"
+                    ));
+                }
+                Zeroizing::new(
+                    args.passphrase
+                        .ok_or_else(|| anyhow!("no passphrase provided for the first import"))?,
+                )
+            }
         };
 
         let chain = chain_of(args.network);
@@ -1208,10 +1223,7 @@ impl WalletService {
         // Pin the Initial-scan boundary at the current chain tip (ADR-0006). This
         // GetLightdInfo also fails fast on an unreachable or wrong Indexer, before the
         // wallet file is written.
-        let indexer_uri: http::Uri = args
-            .indexer_uri
-            .parse()
-            .map_err(|_| anyhow!("invalid indexer uri"))?;
+        let indexer_uri = parse_indexer_uri(&args.indexer_uri)?;
         let scan_target_height = indexer_tip(&indexer_uri).await?;
         // Record the Anchor (docs/adr/0010): the hash of the block at the birthday
         // (or the tip, for a birthday in the future), clamped to ≥1 since block 0
@@ -1282,11 +1294,9 @@ impl WalletService {
             .write()
             .await
             .insert(id.clone(), Arc::clone(&wallet));
-        self.paths.write_selected_id(&id)?;
 
         *self.session_passphrase.lock().await = Some(passphrase.clone());
         self.encrypted.store(true, Ordering::SeqCst);
-        self.session_locked.store(false, Ordering::SeqCst);
         // Prime the cache (empty history, fixed addresses, zero balance) so the
         // GUI's post-import queries don't block on the starting scan.
         self.refresh_snapshot(&wallet).await;
@@ -1296,7 +1306,7 @@ impl WalletService {
         let (opened, failed) = self.open_closed(&passphrase).await;
         self.start_opened(opened, failed).await;
 
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(&id)).await
     }
 
     /// Try the Passphrase on every encrypted Wallet still closed and not
@@ -1356,28 +1366,29 @@ impl WalletService {
     async fn unlock(self: &Arc<Self>, passphrase: Zeroizing<String>) -> Result<WalletState> {
         if self.session_passphrase.lock().await.is_some() {
             if self.verify_passphrase(&passphrase).await {
-                self.session_locked.store(false, Ordering::SeqCst);
-                return Ok(self.wallet_state().await);
+                return self.wallet_state(None).await;
             }
             return Err(anyhow!("incorrect passphrase"));
         }
         if !self.encrypted.load(Ordering::SeqCst) {
             // A plaintext-only store has no passphrase to check.
-            self.session_locked.store(false, Ordering::SeqCst);
-            return Ok(self.wallet_state().await);
+            return self.wallet_state(None).await;
         }
 
+        let mut failures = self.verify_failures.lock().await;
         let (opened, failed) = self.open_closed(&passphrase).await;
-        if opened.is_empty() && !failed.is_empty() {
+        if opened.is_empty() {
+            *failures += 1;
+            let delay = verify_delay(*failures);
+            tokio::time::sleep(delay).await;
             return Err(anyhow!("incorrect passphrase"));
         }
+        *failures = 0;
+        drop(failures);
 
         *self.session_passphrase.lock().await = Some(passphrase);
-        self.session_locked.store(false, Ordering::SeqCst);
-        // Nudge the price loop: if fiat was enabled, it was parked while locked.
-        self.price_restart.notify_one();
         self.start_opened(opened, failed).await;
-        Ok(self.wallet_state().await)
+        self.wallet_state(None).await
     }
 
     /// Point the Selected Wallet at a different Indexer (AUZ-47). The candidate is
@@ -1393,16 +1404,9 @@ impl WalletService {
     /// and a restart signal wakes the loop to begin a fresh round against the new
     /// Indexer at once. Keeping a single loop means the sync task is reaped
     /// normally, avoiding the stuck `SyncAlreadyRunning` a second loop would hit.
-    async fn set_indexer(&self, indexer_uri: String) -> Result<WalletState> {
-        let w = self.selected_or_err().await?;
-        if self.session_locked.load(Ordering::SeqCst) {
-            return Err(anyhow!(
-                "wallet is locked; unlock before changing the indexer"
-            ));
-        }
-        let uri: http::Uri = indexer_uri
-            .parse()
-            .map_err(|_| anyhow!("invalid indexer uri"))?;
+    async fn set_indexer(&self, id: &str, indexer_uri: String) -> Result<WalletState> {
+        let w = self.wallet(id).await?;
+        let uri = parse_indexer_uri(&indexer_uri)?;
 
         // Probe outside the client lock: a fresh connection plus one GetLightdInfo
         // and one GetBlock, so a slow or dead candidate doesn't block reads on the
@@ -1461,14 +1465,13 @@ impl WalletService {
         // Cut short any idle/backoff wait so the new round starts now.
         w.restart.notify_one();
 
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(id)).await
     }
 
     /// Drop a Wallet's scanned history and scan again from its Birthday. The flag
     /// is picked up by the next round; stopping the in-flight one and waking the
     /// loop makes that round start now. The engine does the clearing itself, so
-    /// nothing here touches the wallet file. The returned state is the Selected
-    /// Wallet's, whichever Wallet was rescanned.
+    /// nothing here touches the wallet file.
     async fn rescan(&self, id: &str) -> Result<WalletState> {
         let w = self.wallet(id).await?;
         if let Some(reason) = w.unavailable.read().await.as_deref() {
@@ -1488,33 +1491,27 @@ impl WalletService {
         })
         .await;
         w.restart.notify_one();
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(id)).await
     }
 
-    /// Toggle whether a Wallet's transaction and scan-complete toasts fire, the
-    /// Selected one when `id` is `None`. The in-memory atomic gates the hot notify
-    /// path; the meta flag persists the choice. The "Indexer unreachable" alert is
-    /// independent and keeps firing either way. The returned state is always the
-    /// Selected Wallet's, whichever Wallet was toggled.
-    async fn set_notifications(&self, enabled: bool, id: Option<&str>) -> Result<WalletState> {
-        let w = match id {
-            Some(id) => self.wallet(id).await?,
-            None => self.selected_or_err().await?,
-        };
+    /// One Wallet's notification setting. The atomic gates the notify path and the
+    /// meta flag persists the choice. The "Indexer unreachable" alert is not
+    /// affected.
+    async fn set_notifications(&self, id: &str, enabled: bool) -> Result<WalletState> {
+        let w = self.wallet(id).await?;
         let mut meta = w.meta.write().await;
         meta.notifications_enabled = enabled;
         meta.save(&w.paths.meta_file)?;
         drop(meta);
         w.notifications_enabled.store(enabled, Ordering::SeqCst);
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(id)).await
     }
 
-    /// Turn fiat price display on or off for the Selected Wallet. Enabling records
-    /// the user's consent to the price egress (docs/adr/0008) and wakes the price
-    /// loop so the first value lands promptly; disabling on the last consenting
-    /// Wallet parks the loop, stopping all price requests.
-    async fn set_fiat_enabled(&self, enabled: bool) -> Result<WalletState> {
-        let w = self.selected_or_err().await?;
+    /// One Wallet's Fiat value setting. Enabling records consent to the price
+    /// egress (docs/adr/0008) and wakes the price loop. Disabling the last
+    /// consenting Wallet parks the loop.
+    async fn set_fiat_enabled(&self, id: &str, enabled: bool) -> Result<WalletState> {
+        let w = self.wallet(id).await?;
         let mut meta = w.meta.write().await;
         meta.fiat_enabled = enabled;
         meta.save(&w.paths.meta_file)?;
@@ -1523,7 +1520,7 @@ impl WalletService {
         if enabled {
             self.price_restart.notify_one();
         }
-        Ok(self.wallet_state().await)
+        self.wallet_state(Some(id)).await
     }
 
     /// Turn Discreet mode on or off (docs/adr/0009). The GUI does its own masking off
@@ -1531,7 +1528,7 @@ impl WalletService {
     async fn set_discreet(&self, enabled: bool) -> Result<WalletState> {
         Settings { discreet: enabled }.save(&self.paths.settings_file)?;
         self.discreet.store(enabled, Ordering::SeqCst);
-        Ok(self.wallet_state().await)
+        self.wallet_state(None).await
     }
 
     /// The current reconciled spot, or `None` if nothing has been fetched yet. Stamps
@@ -1555,12 +1552,10 @@ impl WalletService {
             .collect()
     }
 
-    /// Remove one Wallet: retire its loop, drop it from the registry and wipe its
-    /// directory. The other Wallets keep syncing. When the removed one was
-    /// Selected, `select` (the GUI's most recently used other Wallet) takes over,
-    /// falling back to the first remaining one. The session Passphrase is kept so
-    /// a later Add wallet skips Set Password (docs/adr/0004).
-    async fn remove(&self, id: &str, select: Option<&str>) -> Result<WalletState> {
+    /// Removes one Wallet. Its loop, its registry entry and its directory go. The
+    /// other Wallets are untouched. The session Passphrase stays in memory
+    /// (docs/adr/0004).
+    async fn remove(&self, id: &str) -> Result<()> {
         let wallet = self
             .wallets
             .write()
@@ -1569,19 +1564,7 @@ impl WalletService {
             .ok_or_else(|| anyhow!("no wallet with id {id}"))?;
         wallet.retire().await;
         let _ = std::fs::remove_dir_all(self.paths.wallets_dir.join(id));
-
-        if self.paths.read_selected_id()?.as_deref() == Some(id) {
-            let remaining = self.all_wallets().await;
-            let next = select
-                .filter(|s| remaining.iter().any(|w| w.id == *s))
-                .map(str::to_owned)
-                .or_else(|| remaining.first().map(|w| w.id.clone()));
-            match next {
-                Some(next) => self.paths.write_selected_id(&next)?,
-                None => self.paths.clear_selected_id()?,
-            }
-        }
-        Ok(self.wallet_state().await)
+        Ok(())
     }
 
     /// Wipe every Wallet and forget the Passphrase: the way out of a forgotten
@@ -1593,13 +1576,11 @@ impl WalletService {
             let _ = std::fs::remove_dir_all(self.paths.wallets_dir.join(&wallet.id));
         }
         *self.session_passphrase.lock().await = None;
-        self.session_locked.store(false, Ordering::SeqCst);
         self.encrypted.store(false, Ordering::SeqCst);
         self.unreachable_notified
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();
-        self.paths.clear_selected_id()?;
         self.paths.ensure_dirs()?;
         Ok(())
     }
@@ -1655,33 +1636,35 @@ impl WalletService {
         Ok(ufvk.encode(&chain))
     }
 
-    /// Arm the GUI session lock without disturbing the open Wallets. Sign Out calls
-    /// this: the clients and sync loops keep running so notifications survive, but
-    /// the next GUI session must re-authenticate before any wallet read.
-    fn lock_session(&self) {
-        self.session_locked.store(true, Ordering::SeqCst);
-    }
-
-    /// Whether the GUI session is locked. Read by the IPC layer to gate pushed events.
-    pub fn session_locked(&self) -> bool {
-        self.session_locked.load(Ordering::SeqCst)
-    }
-
-    /// A GUI event subscriber connected.
-    pub fn subscriber_joined(&self) {
-        self.subscribers.fetch_add(1, Ordering::SeqCst);
-    }
-
-    /// A GUI event subscriber disconnected. When the last one leaves, an encrypted
-    /// store re-arms the session lock so the next GUI session re-authenticates. The
-    /// Wallets stay open and syncing. Plaintext wallets hold no passphrase, so they
-    /// don't relock.
-    pub fn subscriber_left(&self) {
-        if self.subscribers.fetch_sub(1, Ordering::SeqCst) == 1
-            && self.encrypted.load(Ordering::SeqCst)
-        {
-            self.session_locked.store(true, Ordering::SeqCst);
+    /// A session for a new connection. It starts locked when an encrypted Wallet
+    /// exists. A `local` session (the local socket) is born authenticated, since
+    /// the socket's file mode is the proof of local access; a TCP session presents
+    /// the cookie first.
+    pub fn session(self: &Arc<Self>, local: bool) -> Session {
+        let mut session = Session {
+            service: Arc::clone(self),
+            unlocked: false,
+            authenticated: local,
+            local,
+            auto_unlocked: false,
+        };
+        if !self.encrypted.load(Ordering::SeqCst) {
+            session.unlock();
+            session.auto_unlocked = true;
         }
+        session
+    }
+
+    /// Whether the Passphrase is in memory.
+    pub async fn session_key_held(&self) -> bool {
+        self.session_passphrase.lock().await.is_some()
+    }
+
+    /// Whether the store holds an encrypted Wallet. The IPC event loop reads this
+    /// to re-arm bystander sessions on the push path, where no request passes
+    /// through `dispatch`.
+    pub fn encrypted_store(&self) -> bool {
+        self.encrypted.load(Ordering::SeqCst)
     }
 
     fn spawn_sync_loop(self: &Arc<Self>, wallet: &Arc<LoadedWallet>) {
@@ -1720,10 +1703,10 @@ impl WalletService {
         };
         let mut last_daily: Option<String> = None;
         loop {
-            // No price egress while the session is locked: there's no fiat UI to feed, and
-            // the wallets should stay quiet to the price providers until the GUI is unlocked.
+            // No price egress if every session is locked. There is no fiat UI to feed,
+            // and the wallets stay quiet to the price providers until one unlocks.
             let active =
-                !self.session_locked.load(Ordering::SeqCst) && self.any_fiat_enabled().await;
+                self.unlocked_sessions.load(Ordering::SeqCst) > 0 && self.any_fiat_enabled().await;
             if !active {
                 tokio::select! {
                     _ = self.price_restart.notified() => {}
@@ -2349,7 +2332,7 @@ impl WalletService {
                     (format!("{label}: Funds sent"), format!("{amount} sent."))
                 }
             };
-            tracing::info!(id = %w.id, "new tx {txid} ({value} zat, received={received}), notifying");
+            tracing::debug!(id = %w.id, "new tx {txid} ({value} zat, received={received}), notifying");
             // Record the txid as notified only after delivery succeeds. A failure leaves
             // it out of the set, so a later rediscovery (at the latest, the next restart's
             // catch-up sync) tries again rather than losing it.
@@ -2536,16 +2519,117 @@ fn now_secs() -> u64 {
 /// Constant-time byte comparison, so re-auth doesn't leak the passphrase through
 /// early-exit timing. Differing lengths short-circuit, which only reveals length.
 /// The wait after the `failures`th consecutive miss: 250ms, 500ms, 1s, ... capped.
+/// One client connection's lock state and cookie state (docs/adr/0014). A new
+/// connection starts locked when an encrypted Wallet exists. `unlock` applies to
+/// this connection only. Dropping the session relocks it. `local` records the
+/// transport: the local socket is owner-only proof of local access, while a TCP
+/// session is anyone behind the cookie, which is not enough for the one method
+/// that deletes every Wallet. A session born while the store held no encrypted
+/// Wallet starts unlocked, and `auto_unlocked` marks it so the arrival of the
+/// first encrypted Wallet re-arms its lock on its next call, the same state a
+/// fresh session would start in.
+pub struct Session {
+    service: Arc<WalletService>,
+    unlocked: bool,
+    authenticated: bool,
+    local: bool,
+    auto_unlocked: bool,
+}
+
+impl Session {
+    pub fn is_unlocked(&self) -> bool {
+        self.unlocked
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.authenticated
+    }
+
+    /// The session's lock state, re-arming an empty-store bystander first when an
+    /// encrypted Wallet now exists. Every gate asks this, whether it sits on the
+    /// request path in `dispatch` or the push path in the IPC event loop, so a
+    /// session that only listens cannot outlive its bypass either.
+    pub fn unlocked_with(&mut self, encrypted: bool) -> bool {
+        if self.auto_unlocked && encrypted {
+            self.lock();
+            self.auto_unlocked = false;
+        }
+        self.unlocked
+    }
+
+    /// Marks the cookie as presented. Only the IPC layer calls this.
+    pub fn authenticate(&mut self) {
+        self.authenticated = true;
+    }
+
+    /// Unlocks this connection. The first unlocked session also wakes the price
+    /// loop.
+    pub fn unlock(&mut self) {
+        if self.unlocked {
+            return;
+        }
+        self.unlocked = true;
+        if self
+            .service
+            .unlocked_sessions
+            .fetch_add(1, Ordering::SeqCst)
+            == 0
+        {
+            self.service.price_restart.notify_one();
+        }
+    }
+
+    /// Locks this connection. The Wallets keep syncing and notifying.
+    pub fn lock(&mut self) {
+        if !self.unlocked {
+            return;
+        }
+        self.unlocked = false;
+        self.service
+            .unlocked_sessions
+            .fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.lock();
+    }
+}
+
+/// Why `dispatch` refused or failed a call. `Locked` and `Unauthenticated` have
+/// their own JSON-RPC codes. `Failed` is the method's own error.
+#[derive(Debug, thiserror::Error)]
+pub enum CallError {
+    #[error("wallet is locked")]
+    Locked,
+    #[error("not authenticated")]
+    Unauthenticated,
+    #[error(transparent)]
+    Failed(#[from] anyhow::Error),
+}
+
 fn verify_delay(failures: u32) -> Duration {
     let doublings = failures.saturating_sub(1).min(8);
     (VERIFY_DELAY_BASE * 2u32.pow(doublings)).min(VERIFY_DELAY_MAX)
 }
 
-fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
     a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Parse a caller-supplied Indexer uri. http and https only: the daemon dials
+/// whatever it is handed, so a broader scheme set would turn `setIndexer` and
+/// `importUfvk` into an arbitrary-dial primitive from the RPC surface.
+fn parse_indexer_uri(uri: &str) -> Result<http::Uri> {
+    let parsed: http::Uri = uri.parse().map_err(|_| anyhow!("invalid indexer uri"))?;
+    if !matches!(parsed.scheme_str(), Some("http") | Some("https")) {
+        return Err(anyhow!("the Indexer uri must be http or https"));
+    }
+    Ok(parsed)
 }
 
 fn pool_balance(confirmed: Option<Zatoshis>, total: Option<Zatoshis>) -> Option<PoolBalance> {
@@ -2850,7 +2934,7 @@ mod tests {
         wallet
     }
 
-    // A service backed by the spy with one Selected Wallet.
+    // A service backed by the spy with one registered Wallet, `w1`.
     async fn service_with_spy(
         name: &str,
         spy: Arc<SpyNotifier>,
@@ -2858,7 +2942,6 @@ mod tests {
     ) -> (Arc<WalletService>, Arc<LoadedWallet>) {
         let service = WalletService::load(test_paths(name), spy).await.unwrap();
         let wallet = register(&service, "w1", meta_with_target(target)).await;
-        service.paths.write_selected_id("w1").unwrap();
         (service, wallet)
     }
 
@@ -3436,49 +3519,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_notes_answers_an_empty_array_on_a_fresh_service() {
+    async fn get_notes_answers_an_empty_array_on_a_closed_wallet() {
         let service = WalletService::load(test_paths("notes-fresh"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        let result = service.handle(Call::GetNotes).await.unwrap();
+        register(&service, "w1", meta_with_target(100)).await;
+        let mut session = service.session(true);
+        let result = service
+            .dispatch(Call::GetNotes(WalletArgs { id: "w1".into() }), &mut session)
+            .await
+            .unwrap();
         assert_eq!(result, serde_json::json!([]));
     }
 
     #[tokio::test]
-    async fn remove_takes_one_wallet_out_and_selects_the_named_next() {
+    async fn remove_takes_one_wallet_out_and_keeps_the_passphrase() {
         let (service, _) = service_with_spy("remove-one", Arc::new(SpyNotifier::new()), 100).await;
         register(&service, "w2", meta_with_target(100)).await;
-        register(&service, "w3", meta_with_target(100)).await;
         *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
 
-        // Removing the Selected Wallet hands selection to the GUI's most recently
-        // used other Wallet, and its directory is gone.
-        let state = service.remove("w1", Some("w3")).await.unwrap();
-        assert_eq!(state.wallet_id.as_deref(), Some("w3"));
+        service.remove("w1").await.unwrap();
         assert!(!service.paths.wallets_dir.join("w1").exists());
         assert!(service.wallet("w1").await.is_err());
         assert!(service.wallet("w2").await.is_ok());
+        assert!(service.wallet_state(None).await.unwrap().exists);
 
-        // Removing a non-Selected Wallet leaves the selection alone.
-        let state = service.remove("w2", None).await.unwrap();
-        assert_eq!(state.wallet_id.as_deref(), Some("w3"));
-
-        // The last one out clears the pointer, and the passphrase survives so Add
-        // wallet skips Set Password (docs/adr/0004).
-        let state = service.remove("w3", None).await.unwrap();
+        service.remove("w2").await.unwrap();
+        let state = service.wallet_state(None).await.unwrap();
         assert!(!state.exists);
         assert!(state.session_held);
-        assert_eq!(service.paths.read_selected_id().unwrap(), None);
-    }
 
-    #[tokio::test]
-    async fn remove_falls_back_to_the_first_remaining_wallet() {
-        let (service, _) =
-            service_with_spy("remove-fallback", Arc::new(SpyNotifier::new()), 100).await;
-        register(&service, "w2", meta_with_target(100)).await;
-        // A stale `select` (a Wallet that no longer exists) is ignored.
-        let state = service.remove("w1", Some("gone")).await.unwrap();
-        assert_eq!(state.wallet_id.as_deref(), Some("w2"));
+        assert!(service.remove("gone").await.is_err());
     }
 
     #[tokio::test]
@@ -3486,73 +3557,48 @@ mod tests {
         let (service, _) = service_with_spy("start-over", Arc::new(SpyNotifier::new()), 100).await;
         register(&service, "w2", meta_with_target(100)).await;
         *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
-        service.session_locked.store(true, Ordering::SeqCst);
+        service.encrypted.store(true, Ordering::SeqCst);
+        let mut session = service.session(true);
+        assert!(!session.is_unlocked());
 
-        service.start_over().await.unwrap();
+        service
+            .dispatch(Call::StartOver, &mut session)
+            .await
+            .unwrap();
 
         assert!(service.wallets.read().await.is_empty());
         assert!(!service.paths.wallets_dir.join("w1").exists());
         assert!(!service.paths.wallets_dir.join("w2").exists());
         assert!(service.session_passphrase.lock().await.is_none());
-        assert!(!service.session_locked());
-        assert!(!service.wallet_state().await.exists);
+        assert!(session.is_unlocked());
+        assert!(!service.wallet_state(None).await.unwrap().exists);
     }
 
     #[tokio::test]
-    async fn select_wallet_moves_the_pointer_and_nothing_else() {
-        let (service, w1) = service_with_spy("select", Arc::new(SpyNotifier::new()), 100).await;
-        let w2 = register(&service, "w2", meta_with_target(100)).await;
-        let before = (
-            w1.generation.load(Ordering::SeqCst),
-            w2.generation.load(Ordering::SeqCst),
-        );
-
-        let state = service.select_wallet("w2").await.unwrap();
-        assert_eq!(state.wallet_id.as_deref(), Some("w2"));
-        // Neither loop is retired: every Wallet keeps syncing across a switch.
-        assert_eq!(
-            before,
-            (
-                w1.generation.load(Ordering::SeqCst),
-                w2.generation.load(Ordering::SeqCst)
-            )
-        );
-        assert!(service.select_wallet("nope").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn list_wallets_marks_the_selected_one_and_carries_unavailability() {
+    async fn list_wallets_carries_unavailability() {
         let (service, _) = service_with_spy("list", Arc::new(SpyNotifier::new()), 100).await;
         let w2 = register(&service, "w2", meta_with_target(100)).await;
         *w2.unavailable.write().await = Some("bad file".into());
 
-        let list = service.list_wallets().await.unwrap();
+        let list = service.list_wallets(true).await.unwrap();
         assert_eq!(list.len(), 2);
-        assert!(list[0].selected);
-        assert!(!list[1].selected);
         assert_eq!(list[1].unavailable.as_deref(), Some("bad file"));
         // Neither has an open client, so neither reports a live sync status.
         assert!(list.iter().all(|w| w.sync.is_none()));
     }
 
     #[tokio::test]
-    async fn set_notifications_addresses_a_named_wallet_without_selecting_it() {
+    async fn set_notifications_addresses_one_wallet_and_returns_its_state() {
         let (service, w1) = service_with_spy("notif-id", Arc::new(SpyNotifier::new()), 100).await;
         let w2 = register(&service, "w2", meta_with_target(100)).await;
 
-        let state = service.set_notifications(false, Some("w2")).await.unwrap();
-        // The toggled Wallet is off; the Selected one is untouched and still the
-        // Wallet the returned state describes.
+        let state = service.set_notifications("w2", false).await.unwrap();
         assert!(!w2.notifications_enabled.load(Ordering::SeqCst));
         assert!(w1.notifications_enabled.load(Ordering::SeqCst));
-        assert_eq!(state.wallet_id.as_deref(), Some("w1"));
-        assert!(state.notifications_enabled);
+        assert_eq!(state.wallet_id.as_deref(), Some("w2"));
+        assert!(!state.notifications_enabled);
 
-        // Omitting the id keeps the Selected-Wallet behaviour.
-        service.set_notifications(false, None).await.unwrap();
-        assert!(!w1.notifications_enabled.load(Ordering::SeqCst));
-
-        assert!(service.set_notifications(true, Some("nope")).await.is_err());
+        assert!(service.set_notifications("nope", true).await.is_err());
     }
 
     #[tokio::test]
@@ -3563,7 +3609,7 @@ mod tests {
         other.notifications_enabled = false;
         register(&service, "w2", other).await;
 
-        let list = service.list_wallets().await.unwrap();
+        let list = service.list_wallets(true).await.unwrap();
         assert!(list[0].notifications_enabled);
         assert_eq!(list[0].indexer_uri, "https://zec.rocks:443");
         assert!(!list[1].notifications_enabled);
@@ -3586,15 +3632,16 @@ mod tests {
         let w = service.wallet("broken").await.unwrap();
         assert!(w.unavailable.read().await.is_some());
         assert!(!w.is_open().await);
-        let state = service.wallet_state().await;
+        let state = service.wallet_state(Some("broken")).await.unwrap();
         assert!(state.exists);
         assert!(state.unavailable.is_some());
         assert!(!state.locked);
+        assert!(service.wallet_state(Some("nope")).await.is_err());
     }
 
     #[tokio::test]
-    async fn load_selects_the_first_wallet_when_the_pointer_dangles() {
-        let paths = test_paths("dangling");
+    async fn load_registers_every_wallet_and_drops_the_legacy_pointer() {
+        let paths = test_paths("legacy-pointer");
         paths.ensure_dirs().unwrap();
         for id in ["b", "a"] {
             let scoped = paths.for_wallet(id);
@@ -3603,81 +3650,310 @@ mod tests {
             meta.encrypted = true;
             meta.save(&scoped.meta_file).unwrap();
         }
-        paths.write_selected_id("gone").unwrap();
+        let pointer = paths.root.join("active_wallet_id");
+        std::fs::write(&pointer, "gone").unwrap();
 
         let service = WalletService::load(paths, Arc::new(NullNotifier))
             .await
             .unwrap();
-        assert_eq!(
-            service.paths.read_selected_id().unwrap().as_deref(),
-            Some("a")
-        );
+        assert_eq!(service.list_wallets(true).await.unwrap().len(), 2);
+        assert!(!pointer.exists());
         // Encrypted Wallets wait for the Passphrase behind the Session lock.
-        assert!(service.session_locked());
+        assert!(!service.session(true).is_unlocked());
     }
 
     #[tokio::test]
-    async fn lock_session_arms_gate_but_keeps_the_session_key() {
+    async fn lock_arms_the_sessions_gate_but_keeps_the_session_key() {
         let service = WalletService::load(test_paths("lock-session"), Arc::new(NullNotifier))
             .await
             .unwrap();
         *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
-        service.session_locked.store(false, Ordering::SeqCst);
+        service.encrypted.store(true, Ordering::SeqCst);
+        let mut session = service.session(true);
+        session.unlock();
 
-        service.lock_session();
+        service.dispatch(Call::Lock, &mut session).await.unwrap();
 
-        assert!(service.session_locked());
+        assert!(!session.is_unlocked());
         // The key is retained so background sync survives the lock.
         assert!(service.session_passphrase.lock().await.is_some());
     }
 
     #[tokio::test]
-    async fn handle_gates_wallet_reads_while_locked() {
+    async fn dispatch_gates_wallet_reads_while_locked() {
         let service = WalletService::load(test_paths("gate"), Arc::new(NullNotifier))
             .await
             .unwrap();
-        service.session_locked.store(true, Ordering::SeqCst);
+        service.encrypted.store(true, Ordering::SeqCst);
+        let mut session = service.session(true);
+        assert!(!session.is_unlocked());
 
         // Lifecycle and auth stay available so the GUI can route and re-authenticate.
-        assert!(service.handle(Call::GetWalletState).await.is_ok());
-        assert!(service.handle(Call::Lock).await.is_ok());
+        assert!(service
+            .dispatch(
+                Call::GetWalletState(GetWalletStateArgs::default()),
+                &mut session
+            )
+            .await
+            .is_ok());
+        assert!(service.dispatch(Call::Lock, &mut session).await.is_ok());
 
-        // Wallet reads are refused while the session is locked.
-        assert!(service.handle(Call::GetBalance).await.is_err());
-        assert!(service.handle(Call::GetTransactions).await.is_err());
-        assert!(service.handle(Call::GetAddresses).await.is_err());
+        let w1 = || WalletArgs { id: "w1".into() };
+        for call in [
+            Call::GetBalance(w1()),
+            Call::GetTransactions(w1()),
+            Call::GetAddresses(w1()),
+        ] {
+            assert!(matches!(
+                service.dispatch(call, &mut session).await,
+                Err(CallError::Locked)
+            ));
+        }
     }
 
     #[tokio::test]
-    async fn last_subscriber_relocks_an_encrypted_session_only() {
-        let service = WalletService::load(test_paths("relock-enc"), Arc::new(NullNotifier))
+    async fn an_import_cannot_stand_in_for_the_passphrase_once_the_store_holds_a_wallet() {
+        let service = WalletService::load(test_paths("import-gate"), Arc::new(NullNotifier))
             .await
             .unwrap();
         service.encrypted.store(true, Ordering::SeqCst);
-        service.session_locked.store(false, Ordering::SeqCst);
+        let mut session = service.session(true);
+        let import = Call::ImportUfvk(ImportUfvkArgs {
+            ufvk: "uview1...".into(),
+            birthday: pendrake_ipc::BirthdayInput::Default,
+            indexer_uri: "https://zec.rocks:443".into(),
+            network: Network::Mainnet,
+            passphrase: None,
+        });
 
-        // Two feeds: the first to leave is not the last, so it must not relock.
-        service.subscriber_joined();
-        service.subscriber_joined();
-        service.subscriber_left();
-        assert!(!service.session_locked());
-        // The last one out relocks, so the next GUI session re-authenticates.
-        service.subscriber_left();
-        assert!(service.session_locked());
+        assert!(matches!(
+            service.dispatch(import, &mut session).await,
+            Err(CallError::Locked)
+        ));
     }
 
     #[tokio::test]
-    async fn last_subscriber_does_not_relock_a_plaintext_session() {
+    async fn an_unauthenticated_session_gets_nothing_but_authenticate() {
+        let service = WalletService::load(test_paths("unauth"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        let mut session = service.session(false);
+
+        assert!(matches!(
+            service
+                .dispatch(
+                    Call::GetWalletState(GetWalletStateArgs::default()),
+                    &mut session
+                )
+                .await,
+            Err(CallError::Unauthenticated)
+        ));
+        session.authenticate();
+        assert!(service
+            .dispatch(
+                Call::GetWalletState(GetWalletStateArgs::default()),
+                &mut session
+            )
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test]
+    async fn remove_wallet_demands_the_passphrase_with_the_call() {
+        let (service, _) = service_with_spy("remove-pw", Arc::new(SpyNotifier::new()), 100).await;
+        *service.session_passphrase.lock().await = Some(Zeroizing::new("pw".into()));
+        let mut session = service.session(true);
+        session.unlock();
+
+        assert!(service
+            .dispatch(
+                Call::RemoveWallet(RemoveArgs {
+                    id: "w1".into(),
+                    passphrase: "nope".into(),
+                }),
+                &mut session
+            )
+            .await
+            .is_err());
+        assert!(service.wallet("w1").await.is_ok());
+
+        service
+            .dispatch(
+                Call::RemoveWallet(RemoveArgs {
+                    id: "w1".into(),
+                    passphrase: "pw".into(),
+                }),
+                &mut session,
+            )
+            .await
+            .unwrap();
+        assert!(service.wallet("w1").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_wrong_cold_unlock_costs_the_same_growing_delay() {
+        let (service, _) = service_with_spy("cold-unlock", Arc::new(SpyNotifier::new()), 100).await;
+        service.encrypted.store(true, Ordering::SeqCst);
+        let mut session = service.session(true);
+        assert!(!session.is_unlocked());
+
+        service
+            .dispatch(
+                Call::Unlock(UnlockArgs {
+                    passphrase: "nope".into(),
+                }),
+                &mut session,
+            )
+            .await
+            .unwrap_err();
+
+        let start = std::time::Instant::now();
+        service
+            .dispatch(
+                Call::Unlock(UnlockArgs {
+                    passphrase: "nope".into(),
+                }),
+                &mut session,
+            )
+            .await
+            .unwrap_err();
+        assert!(start.elapsed() >= std::time::Duration::from_millis(200));
+    }
+
+    #[tokio::test]
+    async fn an_indexer_uri_must_be_http_or_https() {
+        let (service, _) = service_with_spy("uri-scheme", Arc::new(SpyNotifier::new()), 100).await;
+        let mut session = service.session(true);
+
+        assert!(service
+            .dispatch(
+                Call::SetIndexer(SetIndexerArgs {
+                    id: "w1".into(),
+                    indexer_uri: "ftp://host:1".into(),
+                }),
+                &mut session
+            )
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn start_over_is_refused_on_a_tcp_session() {
+        let service = WalletService::load(test_paths("startover-tcp"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        let mut tcp = service.session(false);
+        tcp.authenticate();
+
+        assert!(matches!(
+            service.dispatch(Call::StartOver, &mut tcp).await,
+            Err(CallError::Failed(e)) if e.to_string().contains("TCP")
+        ));
+
+        let mut local = service.session(true);
+        assert!(service.dispatch(Call::StartOver, &mut local).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn an_empty_store_bystander_relocks_once_a_wallet_exists() {
+        let service = WalletService::load(test_paths("relock-bystander"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        let mut bystander = service.session(true);
+        assert!(bystander.is_unlocked());
+
+        service.encrypted.store(true, Ordering::SeqCst);
+
+        assert!(service
+            .dispatch(
+                Call::GetWalletState(GetWalletStateArgs::default()),
+                &mut bystander
+            )
+            .await
+            .is_ok());
+        assert!(!bystander.is_unlocked());
+        assert_eq!(service.unlocked_sessions.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_garbage_unlock_on_an_empty_store_lauunders_nothing() {
+        let service = WalletService::load(test_paths("unlock-launder"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        let mut bystander = service.session(true);
+
+        service
+            .dispatch(
+                Call::Unlock(UnlockArgs {
+                    passphrase: "garbage".into(),
+                }),
+                &mut bystander,
+            )
+            .await
+            .unwrap();
+
+        service.encrypted.store(true, Ordering::SeqCst);
+
+        assert!(matches!(
+            service
+                .dispatch(Call::GetBalance(WalletArgs { id: "w1".into() }), &mut bystander)
+                .await,
+            Err(CallError::Locked)
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_wallets_hides_balances_from_a_locked_session() {
+        let (service, w1) = service_with_spy("locked-list", Arc::new(SpyNotifier::new()), 100).await;
+        w1.meta.write().await.last_balance = Some(1_000_000);
+        service.encrypted.store(true, Ordering::SeqCst);
+        let mut locked = service.session(true);
+
+        let summary = service.dispatch(Call::ListWallets, &mut locked).await.unwrap();
+        assert!(summary
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|w| w["lastBalance"].is_null() && w.get("sync").is_none()));
+
+        let mut unlocked = service.session(true);
+        unlocked.unlock();
+        let summary = service
+            .dispatch(Call::ListWallets, &mut unlocked)
+            .await
+            .unwrap();
+        assert_eq!(
+            summary.as_array().unwrap()[0]["lastBalance"],
+            serde_json::json!("1000000")
+        );
+    }
+
+    #[tokio::test]
+    async fn each_session_holds_its_own_lock() {
+        let service = WalletService::load(test_paths("per-session"), Arc::new(NullNotifier))
+            .await
+            .unwrap();
+        service.encrypted.store(true, Ordering::SeqCst);
+
+        let mut first = service.session(true);
+        first.unlock();
+        let second = service.session(true);
+        assert!(first.is_unlocked());
+        assert!(!second.is_unlocked());
+        assert_eq!(service.unlocked_sessions.load(Ordering::SeqCst), 1);
+        drop(first);
+        assert_eq!(service.unlocked_sessions.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_plaintext_store_never_locks_a_session() {
         let service = WalletService::load(test_paths("relock-plain"), Arc::new(NullNotifier))
             .await
             .unwrap();
         service.encrypted.store(false, Ordering::SeqCst);
-        service.session_locked.store(false, Ordering::SeqCst);
 
-        service.subscriber_joined();
-        service.subscriber_left();
-        // A plaintext wallet has no passphrase to demand, so it stays open.
-        assert!(!service.session_locked());
+        // A plaintext wallet has no passphrase to demand, so a session opens unlocked.
+        assert!(service.session(true).is_unlocked());
     }
 
     use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};

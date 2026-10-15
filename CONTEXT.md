@@ -75,24 +75,32 @@ _Avoid_: checkpoint, pin, genesis hash
 The single secret set during onboarding. It encrypts every Wallet file at rest, and re-entering it is what clears the Session lock. The same one applies to every Wallet, validated against each Wallet file's header. In v0 it lives only in the daemon's memory for the session, so a full restart returns to the unlock screen. A later option to remember it across restarts, trading away the unlock step, is post-v0.
 _Avoid_: password, PIN
 
+**Session**:
+One client connection to the daemon, from connect to hangup. The GUI holds one for the life of its window, and a script or bot over the RPC holds its own. Each Session carries its own Session lock and, on the TCP listener, its own cookie check, so what one client unlocks or signs out of never changes what another sees (docs/adr/0014).
+_Avoid_: connection (as the concept name), client (for the lock's owner)
+
 **Session lock**:
-The gate that holds the app on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether Wallets are syncing: every Wallet keeps syncing and notifying while locked, so a Sign Out or a closed window still catches new transactions. It arms at startup, on Sign Out, and when the app's window goes away, and is cleared only by entering the Passphrase.
+The gate that holds a Session on the unlock screen until the Passphrase is re-entered. It is a separate thing from whether Wallets are syncing: every Wallet keeps syncing and notifying while locked, so a Sign Out or a closed window still catches new transactions. A new Session starts locked whenever an encrypted Wallet exists, Sign Out arms it, and only entering the Passphrase clears it, for that Session alone. A closed connection takes its lock with it, which is why closing the window returns to the unlock screen.
 _Avoid_: logout, timeout, screen lock
+
+**RPC**:
+The daemon's JSON-RPC 2.0 interface, the same one the GUI uses, over the local socket or an optional loopback TCP listener (docs/adr/0014). Pushed events ride the same connection as JSON-RPC notifications, so a client that subscribes learns of a transaction the moment the daemon does. The TCP listener is off by default and, when on, demands a per-run cookie before anything else.
+_Avoid_: API (as the concept name), HTTP API, REST
 
 **Sign Out**:
 Arming the Session lock by hand, from the sidebar. It returns to the unlock screen while every Wallet keeps syncing in the background, so re-entry needs the Passphrase but nothing is wiped. Distinct from Start over, which deletes, and from Replace, which swaps the Wallet.
 _Avoid_: log out, lock
 
 **Switch Wallet**:
-Selecting another Wallet from the switcher. It changes the Selected Wallet without touching the Session lock and without starting or stopping any sync: every Wallet is already open under the one held Passphrase, so no unlock screen appears and nothing is loaded or dropped. One Passphrase unlocks the whole app, not each Wallet in turn. Distinct from Replace, which imports and wipes, and from Sign Out, which arms the lock.
+Selecting another Wallet from the switcher. It changes the Selected Wallet without touching the Session lock and without starting or stopping any sync: every Wallet is already open under the one held Passphrase, so no unlock screen appears and nothing is loaded or dropped. It is a change in this client alone (docs/adr/0015): the daemon is asked for the new Wallet's state and told nothing. One Passphrase unlocks the whole app, not each Wallet in turn. Distinct from Replace, which imports and wipes, and from Sign Out, which arms the lock.
 _Avoid_: change wallet, log in again, re-unlock
 
 **Selected Wallet**:
-The one Wallet the screen shows. Its balance, transactions, analytics, and Settings fill the window, and the sidebar card and notification deep links name it. Selection is only about what is on screen: every other Wallet keeps syncing and notifying behind it, and a Received notification from another Wallet carries that Wallet's label. Changed by Switch Wallet.
+The one Wallet this client's screen shows. Its balance, transactions, analytics, and Settings fill the window, and the sidebar card and notification deep links name it. Selection is only about what is on screen: every other Wallet keeps syncing and notifying behind it, and a Received notification from another Wallet carries that Wallet's label. It lives in the client, never in the daemon (docs/adr/0015): every wallet read names its Wallet by Fingerprint, so two clients can show two different Wallets at once. Changed by Switch Wallet.
 _Avoid_: active wallet, current wallet, open wallet, focused wallet
 
 **Remove**:
-The wipe of a single Wallet and its state, from Settings, behind a confirmation. The other Wallets remain and keep syncing. When the removed one was the Selected Wallet, the most recently used other Wallet becomes Selected. When none remain, the app returns to onboarding. Import is additive, so Remove and Add wallet are the two list operations, and there is no swap.
+The wipe of a single Wallet and its state, from Settings, behind a confirmation. The other Wallets remain and keep syncing. When the removed one was the Selected Wallet, this client selects its most recently used other Wallet; the daemon picks nothing. When none remain, the app returns to onboarding. Import is additive, so Remove and Add wallet are the two list operations, and there is no swap.
 _Avoid_: delete, forget, replace
 
 **Replace**:

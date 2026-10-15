@@ -58,7 +58,10 @@ export function TxDetailPage() {
   useEffect(() => {
     let active = true;
     async function find() {
-      const found = await getTransaction(txid).catch(() => null);
+      const walletId = getCachedWallet()?.walletId;
+      const found = walletId
+        ? await getTransaction(walletId, txid).catch(() => null)
+        : null;
       if (!active) return;
       // Keep a cache-seeded render if the daemon hasn't repopulated it yet, so a
       // background refetch never blanks a tx that's already on screen.
@@ -201,7 +204,7 @@ export function TxDetailPage() {
           the explorer, everything the masks above hide. */}
       {!masked && (
         <a
-          href={`https://cipherscan.app/tx/${txid}`}
+          href={`https://cipherscan.app/tx/${encodeURIComponent(txid)}`}
           target="_blank"
           rel="noreferrer"
           className="text-sm text-primary underline-offset-4 hover:underline"

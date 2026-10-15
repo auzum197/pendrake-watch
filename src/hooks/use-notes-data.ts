@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { getNotes, onSyncEvent, type WalletNote } from "@/lib/ipc";
-import { onWalletReload, onWalletSwitchStart } from "@/hooks/use-wallet-data";
+import {
+  getCachedWallet,
+  onWalletReload,
+  onWalletSwitchStart,
+} from "@/hooks/use-wallet-data";
 
 export type NotesData = {
   notes: WalletNote[];
@@ -28,8 +32,10 @@ export function useNotesData(): NotesData {
     let active = true;
 
     async function refetch() {
+      const walletId = getCachedWallet()?.walletId;
+      if (!walletId) return;
       try {
-        const next = await getNotes();
+        const next = await getNotes(walletId);
         if (!active) return;
         cache = next;
         setNotes(next);

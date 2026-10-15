@@ -13,11 +13,13 @@ import {
 import { Button } from "@/components/ui/button/button";
 import { LifeHashIcon } from "@/components/onboarding/lifehash";
 import {
+  getWalletState,
   listWallets,
   removeWallet,
   verifyPassphrase,
   type Network,
 } from "@/lib/ipc";
+import { getSelectedId, setSelectedId } from "@/lib/selection";
 import { mostRecentOther } from "@/lib/wallet-recency";
 import { showSelectedWallet } from "@/hooks/use-wallet-data";
 import { cn } from "@/lib/utils";
@@ -89,14 +91,18 @@ export function RemoveDialog({
         return;
       }
       const wallets = await listWallets().catch(() => []);
-      const state = await removeWallet(
-        walletId,
-        mostRecentOther(wallets, walletId),
-      );
-      if (state.exists) {
-        showSelectedWallet(state);
+      const shown = getSelectedId();
+      const next =
+        shown !== walletId && wallets.some((w) => w.id === shown)
+          ? shown
+          : mostRecentOther(wallets, walletId);
+      await removeWallet(walletId, passphrase);
+      if (next) {
+        setSelectedId(next);
+        showSelectedWallet(await getWalletState(next));
         onOpenChange(false);
       } else {
+        setSelectedId(null);
         navigate({ to: "/onboarding" });
       }
     } catch (e) {

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { hydrateDiscreet } from "@/lib/discreet";
+import { resolveSelectedId } from "@/lib/selection";
 import {
   getAddresses,
   getBalance,
   getSyncStatus,
   getTransactions,
   getWalletState,
+  listWallets,
   onSyncEvent,
   type Balance,
   type SyncStatus,
@@ -101,6 +103,13 @@ export function getCachedWallet(): WalletState | null {
   return cache.wallet;
 }
 
+export async function loadSelectedWallet(): Promise<WalletState> {
+  const session = await getWalletState();
+  if (!session.exists) return session;
+  const id = resolveSelectedId(await listWallets());
+  return id ? getWalletState(id) : session;
+}
+
 export function getCachedTx(txid: string): Tx | null {
   return cache.txs.find((tx) => tx.txid === txid) ?? null;
 }
@@ -142,10 +151,11 @@ export function useWalletData(): WalletData {
 
   const load = useCallback(async () => {
     try {
-      const state = await getWalletState();
+      const state = await loadSelectedWallet();
       hydrateDiscreet(state.discreet ?? false);
       setError(null);
-      if (!state.exists) {
+      const id = state.walletId;
+      if (!state.exists || !id) {
         applySnapshot({
           wallet: state,
           balance: null,
@@ -156,10 +166,10 @@ export function useWalletData(): WalletData {
         return;
       }
       const [addrs, bal, history, status] = await Promise.all([
-        getAddresses().catch(() => [] as WalletAddress[]),
-        getBalance().catch(() => null),
-        getTransactions().catch(() => null),
-        getSyncStatus().catch(() => null),
+        getAddresses(id).catch(() => [] as WalletAddress[]),
+        getBalance(id).catch(() => null),
+        getTransactions(id).catch(() => null),
+        getSyncStatus(id).catch(() => null),
       ]);
       applySnapshot({
         wallet: state,
@@ -181,10 +191,12 @@ export function useWalletData(): WalletData {
     let active = true;
 
     async function refetch() {
+      const id = cache.wallet?.walletId;
+      if (!id) return;
       const [bal, history, status] = await Promise.all([
-        getBalance().catch(() => null),
-        getTransactions().catch(() => null),
-        getSyncStatus().catch(() => null),
+        getBalance(id).catch(() => null),
+        getTransactions(id).catch(() => null),
+        getSyncStatus(id).catch(() => null),
       ]);
       if (!active) return;
       if (bal) {
