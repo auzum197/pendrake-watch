@@ -314,7 +314,7 @@ export class FakeDaemon {
   isLocked = (): boolean => this.locked;
 
   eventsOf(id: string): TxEvent[] {
-    return this.find(id).events;
+    return this.lookup(id).events;
   }
 
   patchApp(patch: AppPatch): void {
@@ -336,7 +336,7 @@ export class FakeDaemon {
   // so a hand-edited history survives a change of pools or birthday. A condition
   // change restarts that Wallet's runtime sync from the chosen state.
   patchWallet(id: string, patch: WalletPatch): void {
-    const w = this.find(id);
+    const w = this.lookup(id);
     const { persona, ...rest } = patch;
     w.spec = {
       ...w.spec,
@@ -351,7 +351,7 @@ export class FakeDaemon {
   }
 
   setEvents(id: string, events: TxEvent[]): void {
-    const w = this.find(id);
+    const w = this.lookup(id);
     w.spec = { ...w.spec, events };
     w.events = events;
     this.rebuild(w, this.clock(), false);
@@ -359,7 +359,7 @@ export class FakeDaemon {
   }
 
   regenerate(id: string): void {
-    const w = this.find(id);
+    const w = this.lookup(id);
     const { events: _dropped, ...spec } = w.spec;
     w.spec = spec;
     w.events = generateEvents(w.spec.persona, this.clock());
@@ -397,7 +397,7 @@ export class FakeDaemon {
   }
 
   deleteWallet(id: string): void {
-    this.find(id);
+    this.lookup(id);
     this.wallets = this.wallets.filter((w) => w.id !== id);
     if (this.selectedId === id) this.selectedId = this.wallets[0]?.id ?? null;
     this.changed();
@@ -431,11 +431,11 @@ export class FakeDaemon {
       case "list_wallets":
         return this.wallets.map((w) => this.summary(w));
       case "select_wallet":
-        this.selectedId = this.find(str(args, "id")).id;
+        this.selectedId = this.lookup(str(args, "id")).id;
         this.changed();
         return this.state();
       case "set_wallet_label": {
-        const w = this.find(str(args, "id"));
+        const w = this.lookup(str(args, "id"));
         const label = str(args, "label").trim();
         w.spec = { ...w.spec, label: label || undefined };
         this.changed();
@@ -443,7 +443,7 @@ export class FakeDaemon {
       }
       case "set_notifications": {
         const id = optStr(args, "id");
-        const w = id ? this.find(id) : this.selected();
+        const w = id ? this.lookup(id) : this.selected();
         w.spec = { ...w.spec, notificationsEnabled: bool(args, "enabled") };
         this.changed();
         return this.state();
@@ -504,7 +504,7 @@ export class FakeDaemon {
         return str(args, "passphrase") === this.passphrase;
       case "export_ufvk": {
         this.checkPassphrase(args);
-        const w = this.find(str(args, "id"));
+        const w = this.lookup(str(args, "id"));
         return fakeUfvk(w.id, w.spec.persona.network);
       }
       case "parse_ufvk":
@@ -512,7 +512,7 @@ export class FakeDaemon {
       case "import_ufvk":
         return this.importUfvk(args, now);
       case "remove_wallet": {
-        const id = this.find(str(args, "id")).id;
+        const id = this.lookup(str(args, "id")).id;
         this.wallets = this.wallets.filter((w) => w.id !== id);
         if (this.selectedId === id) {
           this.selectedId =
@@ -522,7 +522,7 @@ export class FakeDaemon {
         return this.state();
       }
       case "rescan_wallet": {
-        const w = this.find(str(args, "id"));
+        const w = this.lookup(str(args, "id"));
         this.startScan(w, w.spec.persona.birthdayHeight, RESCAN_SECONDS);
         return this.state();
       }
@@ -642,7 +642,7 @@ export class FakeDaemon {
     if (str(args, "passphrase") !== this.passphrase) throw "wrong passphrase";
   }
 
-  private find(id: string): FakeWallet {
+  private lookup(id: string): FakeWallet {
     const w = this.wallets.find((x) => x.id === id);
     if (!w) throw `no Wallet with id ${id}`;
     return w;
@@ -650,7 +650,7 @@ export class FakeDaemon {
 
   private selected(): FakeWallet {
     if (this.selectedId === null) throw "no Wallet exists";
-    return this.find(this.selectedId);
+    return this.lookup(this.selectedId);
   }
 
   private unavailableOf(w: FakeWallet): string | undefined {

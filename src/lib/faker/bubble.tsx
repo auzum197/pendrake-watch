@@ -83,6 +83,7 @@ type TextProps = {
   type?: "text" | "number" | "datetime-local";
   placeholder?: string;
   step?: string;
+  label?: string;
 };
 
 // Commits on blur or Enter, so a label is not rebuilt on every keystroke. Keyed on
@@ -98,6 +99,7 @@ function Draft({
   type = "text",
   placeholder,
   step,
+  label,
 }: TextProps) {
   const [draft, setDraft] = useState(value);
   return (
@@ -107,6 +109,7 @@ function Draft({
       step={step}
       value={draft}
       placeholder={placeholder}
+      aria-label={label}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
         if (draft !== value) onCommit(draft);
@@ -122,15 +125,18 @@ function Num({
   value,
   onCommit,
   step,
+  label,
 }: {
   value: number;
   onCommit: (next: number) => void;
   step?: string;
+  label?: string;
 }) {
   return (
     <Text
       type="number"
       step={step}
+      label={label}
       value={String(value)}
       onCommit={(s) => {
         const n = Number(s);
@@ -169,14 +175,17 @@ function Pick<T extends string>({
   value,
   options,
   onChange,
+  label,
 }: {
   value: T;
   options: readonly T[];
   onChange: (next: T) => void;
+  label: string;
 }) {
   return (
     <select
       className="lab-input"
+      aria-label={label}
       value={value}
       onChange={(e) => {
         const next = options.find((o) => o === e.target.value);
@@ -566,6 +575,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 <td>
                   <Text
                     type="datetime-local"
+                    label="When"
                     value={toLocalInput(ev.secs)}
                     onCommit={(s) => {
                       const secs = fromLocalInput(s);
@@ -575,6 +585,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 </td>
                 <td>
                   <Pick
+                    label="Kind"
                     value={ev.kind}
                     options={KINDS}
                     onChange={(kind) => update(ev, { kind })}
@@ -583,6 +594,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 <td>
                   <Num
                     step="0.0001"
+                    label="ZEC"
                     value={ev.valueZat / 1e8}
                     onCommit={(zec) =>
                       update(ev, {
@@ -593,6 +605,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 </td>
                 <td>
                   <Pick
+                    label="Pool"
                     value={ev.pool}
                     options={POOLS}
                     onChange={(pool) => update(ev, { pool })}
@@ -600,6 +613,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 </td>
                 <td>
                   <Text
+                    label="Memo"
                     value={ev.memo ?? ""}
                     onCommit={(memo) =>
                       update(ev, { memo: memo === "" ? undefined : memo })
@@ -608,6 +622,7 @@ function EventsTable({ id, pools }: { id: string; pools: Pool[] }) {
                 </td>
                 <td className="text-center">
                   <Switch
+                    aria-label="Pending"
                     checked={ev.pending ?? false}
                     onCheckedChange={(pending) => update(ev, { pending })}
                   />
@@ -767,6 +782,7 @@ function Transfer() {
         <div className="lab-scrim space-y-1.5">
           <textarea
             className="lab-input lab-textarea"
+            aria-label="Scenario JSON"
             placeholder="Paste a scenario JSON"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -833,12 +849,7 @@ export function FakerBubble() {
         <IconFlask size={20} />
       </button>
       {state !== "closed" && (
-        <div
-          role="dialog"
-          aria-label="Lab"
-          className="lab-panel"
-          data-state={state}
-        >
+        <dialog open aria-label="Lab" className="lab-panel" data-state={state}>
           <div className="lab-head">
             <IconFlask size={15} className="text-amber-400" />
             <span className="lab-title">Lab</span>
@@ -872,7 +883,7 @@ export function FakerBubble() {
             <AppSection />
             <WalletsSection />
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

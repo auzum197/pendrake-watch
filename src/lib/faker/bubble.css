@@ -62,9 +62,11 @@
    scale. The close is the same path, shorter. */
 .lab-panel {
 	position: fixed;
-	right: 0.75rem;
-	bottom: 6.5rem;
+	inset: auto 0.75rem 6.5rem auto;
 	z-index: 50;
+	margin: 0;
+	padding: 0;
+	color: var(--foreground);
 	display: flex;
 	flex-direction: column;
 	width: 40rem;
