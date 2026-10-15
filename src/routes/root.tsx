@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Outlet, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -6,6 +6,15 @@ import { listen } from "@tauri-apps/api/event";
 import { getWalletState } from "@/lib/ipc";
 import { selectLinkedWallet, stashPendingLink } from "@/lib/deep-link";
 import { openSettings } from "@/lib/settings-modal";
+import { FAKER } from "@/lib/transport";
+
+// The faker editor rides along only in faker mode; the lazy import is dead code
+// in a production build, where FAKER folds to false.
+const FakerBubble = FAKER
+  ? lazy(() =>
+      import("@/lib/faker/bubble").then((m) => ({ default: m.FakerBubble })),
+    )
+  : null;
 
 export function RootLayout() {
   const navigate = useNavigate();
@@ -59,10 +68,10 @@ export function RootLayout() {
     getCurrent()
       .then(go)
       .catch(() => {});
-    const unlistenOpen = onOpenUrl(go);
+    const unlistenOpen = onOpenUrl(go).catch(() => () => {});
     const unlistenForwarded = listen<string[]>("deep-link", (e) =>
       go(e.payload),
-    );
+    ).catch(() => () => {});
     return () => {
       unlistenOpen.then((fn) => fn()).catch(() => {});
       unlistenForwarded.then((fn) => fn()).catch(() => {});
@@ -99,6 +108,11 @@ function Layout() {
 
       {import.meta.env.DEV && (
         <TanStackRouterDevtools position="bottom-right" />
+      )}
+      {FakerBubble && (
+        <Suspense>
+          <FakerBubble />
+        </Suspense>
       )}
     </div>
   );

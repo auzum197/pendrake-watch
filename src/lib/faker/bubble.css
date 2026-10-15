@@ -1,0 +1,492 @@
+/* The lab: the faker's floating editor. Styled after the wallet palette (same ink,
+   hairline and shadow) so it reads as part of the app, with amber as the one
+   signal that it is a dev surface. Motion is transform and opacity only, on the
+   app's own curves. `.lab-reduce` is set from the app's reduce-motion preference
+   (which already folds in the OS setting) and drops every movement, keeping the
+   fades. */
+
+.lab {
+	--lab-amber: #fbbf24;
+	--lab-line: rgba(255, 255, 255, 0.08);
+	--lab-line-strong: rgba(255, 255, 255, 0.14);
+	--lab-fill: rgba(255, 255, 255, 0.04);
+	--lab-fill-hover: rgba(255, 255, 255, 0.08);
+	--lab-ease: cubic-bezier(0.23, 1, 0.32, 1);
+	font-size: 0.75rem;
+	color: var(--foreground);
+}
+
+.lab-trigger {
+	position: fixed;
+	right: 0.75rem;
+	bottom: 3.5rem;
+	z-index: 50;
+	display: grid;
+	place-items: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: var(--color-ink-soft);
+	color: var(--lab-amber);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+	transition:
+		transform 160ms var(--ease-out-soft),
+		border-color 120ms ease,
+		background-color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lab-trigger:hover {
+		background: #232327;
+		border-color: color-mix(in srgb, var(--lab-amber) 50%, transparent);
+	}
+}
+
+.lab-trigger:active {
+	transform: scale(0.94);
+}
+
+.lab-trigger[aria-expanded="true"] {
+	border-color: color-mix(in srgb, var(--lab-amber) 60%, transparent);
+}
+
+.lab-trigger:focus-visible {
+	outline: none;
+	box-shadow:
+		0 0 0 2px var(--color-brand),
+		0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Enters from its trigger: origin bottom right, a short rise and a near-full
+   scale. The close is the same path, shorter. */
+.lab-panel {
+	position: fixed;
+	right: 0.75rem;
+	bottom: 6.5rem;
+	z-index: 50;
+	display: flex;
+	flex-direction: column;
+	width: 40rem;
+	max-width: calc(100vw - 1.5rem);
+	max-height: min(42rem, calc(100vh - 8rem));
+	overflow: hidden;
+	border-radius: 1rem;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: var(--color-ink-soft);
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.4),
+		0 24px 64px rgba(0, 0, 0, 0.6);
+	transform-origin: bottom right;
+	transition:
+		opacity 150ms var(--lab-ease),
+		transform 150ms var(--lab-ease);
+
+	@starting-style {
+		opacity: 0;
+		transform: translateY(6px) scale(0.97);
+	}
+}
+
+.lab-panel[data-state="closing"] {
+	opacity: 0;
+	transform: translateY(6px) scale(0.97);
+	transition-duration: 120ms;
+	pointer-events: none;
+}
+
+.lab-head {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.625rem 0.75rem 0.625rem 1rem;
+}
+
+.lab-title {
+	font-family: var(--font-heading);
+	font-size: 0.875rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.lab-body {
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.lab-section {
+	padding: 0.75rem 1rem 0.875rem;
+	border-top: 1px solid var(--lab-line);
+}
+
+.lab-kicker {
+	font-size: 0.625rem;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted-foreground);
+}
+
+.lab-field {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 1.75rem;
+}
+
+.lab-field > span:first-child {
+	flex-shrink: 0;
+	width: 6.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--muted-foreground);
+}
+
+.lab-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.375rem;
+	height: 1.75rem;
+	padding: 0 0.625rem;
+	border-radius: 0.5rem;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: var(--lab-fill);
+	color: var(--foreground);
+	white-space: nowrap;
+	transition:
+		transform 160ms var(--ease-out-soft),
+		background-color 120ms ease,
+		border-color 120ms ease;
+}
+
+.lab-btn[data-icon] {
+	width: 1.75rem;
+	padding: 0;
+}
+
+.lab-btn[data-tone="danger"] {
+	color: var(--destructive);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lab-btn:hover {
+		background: var(--lab-fill-hover);
+	}
+}
+
+.lab-btn:active {
+	transform: scale(0.97);
+}
+
+.lab-btn:focus-visible,
+.lab-chip:focus-visible,
+.lab-wallet-head:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--color-brand);
+}
+
+/* A pressable pill for a boolean. Its colour is the thing it switches on, so a
+   Pool chip lights in that Pool's colour and the app flags in brand blue. */
+.lab-chip {
+	--chip: var(--color-brand);
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	height: 1.625rem;
+	padding: 0 0.625rem;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: var(--lab-fill);
+	color: var(--muted-foreground);
+	white-space: nowrap;
+	transition:
+		transform 160ms var(--ease-out-soft),
+		background-color 120ms ease,
+		border-color 120ms ease,
+		color 120ms ease;
+}
+
+.lab-chip::before {
+	content: "";
+	width: 0.375rem;
+	height: 0.375rem;
+	border-radius: 999px;
+	background: currentColor;
+	opacity: 0.35;
+	transition: opacity 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lab-chip:hover {
+		background: var(--lab-fill-hover);
+		color: var(--foreground);
+	}
+}
+
+.lab-chip:active {
+	transform: scale(0.96);
+}
+
+.lab-chip[aria-pressed="true"] {
+	color: var(--chip);
+	background: color-mix(in srgb, var(--chip) 14%, transparent);
+	border-color: color-mix(in srgb, var(--chip) 45%, transparent);
+}
+
+.lab-chip[aria-pressed="true"]::before {
+	opacity: 1;
+}
+
+/* Quiet inputs: a faint well at rest, a hairline on hover, brand on focus. In the
+   history table they sit flush so the grid reads as data until it is touched. */
+.lab-input {
+	height: 1.75rem;
+	width: 100%;
+	min-width: 0;
+	padding: 0 0.5rem;
+	border-radius: 0.5rem;
+	border: 1px solid transparent;
+	background: var(--lab-fill);
+	color: var(--foreground);
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	outline: none;
+	transition:
+		border-color 120ms ease,
+		background-color 120ms ease;
+}
+
+.lab-input::placeholder {
+	color: rgba(255, 255, 255, 0.3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lab-input:hover {
+		border-color: rgba(255, 255, 255, 0.12);
+	}
+}
+
+.lab-input:focus {
+	border-color: color-mix(in srgb, var(--color-brand) 60%, transparent);
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.lab-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+	opacity: 0.4;
+	filter: invert(1);
+}
+
+select.lab-input {
+	appearance: none;
+	padding-right: 1.375rem;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239b9ba1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.5rem center;
+}
+
+.lab-textarea {
+	height: 8rem;
+	padding: 0.375rem 0.5rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	resize: vertical;
+}
+
+.lab-mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.6875rem;
+	color: var(--muted-foreground);
+}
+
+/* One Wallet: a head that always shows, and a body that mounts on open and
+   unfolds from its own height. Closing unmounts at once; the exit is the faster
+   half of the pair. */
+.lab-wallet {
+	border-radius: 0.75rem;
+	border: 1px solid var(--lab-line);
+	background: rgba(255, 255, 255, 0.02);
+	transition: border-color 120ms ease;
+}
+
+.lab-wallet[data-open="true"] {
+	border-color: var(--lab-line-strong);
+}
+
+.lab-wallet-head {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	width: 100%;
+	padding: 0.5rem 0.625rem;
+	border-radius: inherit;
+	text-align: left;
+	transition: background-color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lab-wallet-head:hover {
+		background: var(--lab-fill);
+	}
+}
+
+.lab-wallet[data-open="true"] .lab-wallet-head {
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
+.lab-chevron {
+	flex-shrink: 0;
+	color: var(--muted-foreground);
+	transition: transform 180ms var(--ease-out-soft);
+}
+
+.lab-wallet[data-open="true"] .lab-chevron {
+	transform: rotate(90deg);
+}
+
+.lab-wallet-body {
+	display: grid;
+	grid-template-rows: 1fr;
+	transition: grid-template-rows 200ms var(--lab-ease);
+
+	@starting-style {
+		grid-template-rows: 0fr;
+	}
+}
+
+.lab-wallet-body > div {
+	min-height: 0;
+	overflow: hidden;
+}
+
+.lab-wallet-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.25rem 0.625rem 0.75rem;
+	border-top: 1px solid var(--lab-line);
+}
+
+/* Condition dot. Scanning breathes, because that Wallet is the one moving; the
+   rest hold still. */
+.lab-dot {
+	flex-shrink: 0;
+	width: 0.375rem;
+	height: 0.375rem;
+	border-radius: 999px;
+	background: currentColor;
+}
+
+.lab-dot[data-kind="synced"] {
+	color: var(--color-brand);
+}
+
+.lab-dot[data-kind="scanning"] {
+	color: var(--lab-amber);
+	animation: lab-breathe 1400ms ease-in-out infinite;
+}
+
+.lab-dot[data-kind="unreachable"] {
+	color: var(--destructive);
+}
+
+.lab-dot[data-kind="unavailable"] {
+	color: var(--muted-foreground);
+}
+
+@keyframes lab-breathe {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.lab-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.lab-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 0.375rem 0.375rem;
+	background: var(--color-ink-soft);
+	text-align: left;
+	font-weight: 600;
+	font-size: 0.625rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted-foreground);
+}
+
+.lab-table td {
+	padding: 0.125rem 0.125rem;
+	border-top: 1px solid var(--lab-line);
+}
+
+.lab-table .lab-input {
+	background: transparent;
+}
+
+/* A row added by hand settles in from just above its slot. */
+.lab-row {
+	transition:
+		opacity 200ms ease-out,
+		transform 200ms var(--lab-ease);
+
+	@starting-style {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+.lab-scrim {
+	position: absolute;
+	inset: 0.75rem 0.75rem auto;
+	top: 2.75rem;
+	z-index: 2;
+	padding: 0.5rem;
+	border-radius: 0.75rem;
+	border: 1px solid var(--lab-line-strong);
+	background: var(--color-ink-soft);
+	box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+	transform-origin: top right;
+	transition:
+		opacity 150ms var(--lab-ease),
+		transform 150ms var(--lab-ease);
+
+	@starting-style {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.98);
+	}
+}
+
+.lab-reduce .lab-panel,
+.lab-reduce .lab-scrim {
+	transition: opacity 120ms ease;
+	transform: none;
+}
+
+.lab-reduce .lab-panel[data-state="closing"] {
+	transform: none;
+}
+
+.lab-reduce .lab-wallet-body,
+.lab-reduce .lab-chevron,
+.lab-reduce .lab-row,
+.lab-reduce .lab-btn,
+.lab-reduce .lab-chip,
+.lab-reduce .lab-trigger {
+	transition-duration: 0ms;
+}
+
+.lab-reduce .lab-dot[data-kind="scanning"] {
+	animation: none;
+}
