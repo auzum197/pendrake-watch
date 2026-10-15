@@ -1,0 +1,32 @@
+{
+  "components": {
+    "components-ui-input": {
+      "id": "components-ui-input",
+      "name": "Input",
+      "path": "./src/components/ui/input/input.stories.tsx",
+      "import": "import { Input } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-input--default": {
+          "id": "components-ui-input--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Input placeholder=\"https://zec.rocks:443\" />;"
+        },
+        "components-ui-input--password": {
+          "id": "components-ui-input--password",
+          "name": "Password",
+          "snippet": "const Password = () => <Input placeholder=\"Enter your passphrase\" type=\"password\" />;"
+        },
+        "components-ui-input--disabled": {
+          "id": "components-ui-input--disabled",
+          "name": "Disabled",
+          "snippet": "const Disabled = () => <Input placeholder=\"https://zec.rocks:443\" disabled value=\"Locked\" />;"
+        },
+        "components-ui-input--invalid": {
+          "id": "components-ui-input--invalid",
+          "name": "Invalid",
+          "snippet": "const Invalid = () => <Input placeholder=\"https://zec.rocks:443\" aria-invalid value=\"not a url\" />;"
+        }
+      }
+    }
+  }
+}

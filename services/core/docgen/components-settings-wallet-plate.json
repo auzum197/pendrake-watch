@@ -1,0 +1,79 @@
+{
+  "components": {
+    "components-settings-wallet-plate": {
+      "id": "components-settings-wallet-plate",
+      "name": "WalletPlate",
+      "path": "./src/components/settings/wallet-plate.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "WalletPlate",
+        "exportName": "WalletPlate",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/settings/wallet-plate.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "wallet": {
+            "name": "wallet",
+            "required": true,
+            "type": {
+              "name": "WalletSummary"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/wallet-plate.tsx"
+              }
+            ]
+          },
+          "onChanged": {
+            "name": "onChanged",
+            "required": true,
+            "type": {
+              "name": "() => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/wallet-plate.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "wallet": {
+          "name": "wallet",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletSummary"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletSummary"
+            }
+          }
+        },
+        "onChanged": {
+          "name": "onChanged",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "() => void"
+          },
+          "table": {
+            "type": {
+              "summary": "() => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

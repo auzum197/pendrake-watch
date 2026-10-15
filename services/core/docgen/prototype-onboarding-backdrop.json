@@ -1,0 +1,187 @@
+{
+  "components": {
+    "prototype-onboarding-backdrop": {
+      "id": "prototype-onboarding-backdrop",
+      "name": "BackdropScene",
+      "path": "./src/components/onboarding/backdrop-prototype/backdrop.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "BackdropScene",
+        "exportName": "BackdropScene",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/onboarding/backdrop-prototype/backdrop-scene.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "wind": {
+            "name": "wind",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "1"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/backdrop-prototype/backdrop-scene.tsx"
+              }
+            ]
+          },
+          "hidden": {
+            "name": "hidden",
+            "required": false,
+            "type": {
+              "name": "(\"sky\" | \"far\" | \"near\" | \"water\" | \"house\" | \"ground\")[]"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "[]"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/backdrop-prototype/backdrop-scene.tsx"
+              }
+            ]
+          },
+          "trees": {
+            "name": "trees",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "true"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/backdrop-prototype/backdrop-scene.tsx"
+              }
+            ]
+          },
+          "dither": {
+            "name": "dither",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/backdrop-prototype/backdrop-scene.tsx"
+              }
+            ]
+          },
+          "inverted": {
+            "name": "inverted",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/backdrop-prototype/backdrop-scene.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "wind": {
+          "name": "wind",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "1"
+            }
+          }
+        },
+        "hidden": {
+          "name": "hidden",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "(\"sky\" | \"far\" | \"near\" | \"water\" | \"house\" | \"ground\")[]"
+          },
+          "table": {
+            "type": {
+              "summary": "(\"sky\" | \"far\" | \"near\" | \"water\" | \"house\" | \"ground\")[]"
+            },
+            "defaultValue": {
+              "summary": "[]"
+            }
+          }
+        },
+        "trees": {
+          "name": "trees",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "true"
+            }
+          }
+        },
+        "dither": {
+          "name": "dither",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        },
+        "inverted": {
+          "name": "inverted",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        }
+      }
+    }
+  }
+}

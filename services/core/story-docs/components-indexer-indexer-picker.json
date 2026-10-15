@@ -1,0 +1,32 @@
+{
+  "components": {
+    "components-indexer-indexer-picker": {
+      "id": "components-indexer-indexer-picker",
+      "name": "IndexerPicker",
+      "path": "./src/components/indexer/indexer-picker.stories.tsx",
+      "import": "import { IndexerPicker } from 'pendrake-watch';\nimport { DEFAULT_INDEXER } from '@/lib/ipc';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-indexer-indexer-picker--mainnet": {
+          "id": "components-indexer-indexer-picker--mainnet",
+          "name": "Mainnet",
+          "snippet": "const Mainnet = () => <Demo network=\"mainnet\" start={DEFAULT_INDEXER} />;"
+        },
+        "components-indexer-indexer-picker--mainnet-custom": {
+          "id": "components-indexer-indexer-picker--mainnet-custom",
+          "name": "Mainnet Custom",
+          "snippet": "const MainnetCustom = () => <Demo network=\"mainnet\" start={CUSTOM_INDEXER} />;"
+        },
+        "components-indexer-indexer-picker--regtest": {
+          "id": "components-indexer-indexer-picker--regtest",
+          "name": "Regtest",
+          "snippet": "const Regtest = () => <Demo network=\"regtest\" start={CUSTOM_INDEXER} />;"
+        },
+        "components-indexer-indexer-picker--onboarding": {
+          "id": "components-indexer-indexer-picker--onboarding",
+          "name": "Onboarding",
+          "snippet": "const Onboarding = () => (\n  <Demo\n    network=\"mainnet\"\n    start={CUSTOM_INDEXER}\n    inputClassName=\"h-12 rounded-xl border-ink-line bg-ink-soft px-4 text-sm\"\n  />\n);"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "components": {
+    "components-settings-wallet-plate": {
+      "id": "components-settings-wallet-plate",
+      "name": "WalletPlate",
+      "path": "./src/components/settings/wallet-plate.stories.tsx",
+      "import": "import { WalletPlate } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-settings-wallet-plate--selected": {
+          "id": "components-settings-wallet-plate--selected",
+          "name": "Selected",
+          "snippet": "const Selected = () => <WalletPlate\n    wallet={{\n      id: FINGERPRINT,\n      label: \"Cold storage\",\n      fingerprint: FINGERPRINT,\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT`, `SYNCED` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--other": {
+          "id": "components-settings-wallet-plate--other",
+          "name": "Other",
+          "snippet": "const Other = () => <WalletPlate\n    wallet={{\n        id: FINGERPRINT,\n        label: FINGERPRINT.slice(0, 8),\n        fingerprint: FINGERPRINT,\n        network: \"mainnet\",\n        birthdayHeight: 419_200,\n        selected: false,\n        lastBalance: \"897091655\",\n\n        sync: {\n            state: \"syncing\",\n            syncedHeight: 2_400_000,\n            chainTip: 2_400_000,\n            percent: 42,\n            lastSyncedAt: 1_700_000_000\n        },\n\n        notificationsEnabled: true,\n        indexerUri: \"https://zec.rocks:443\"\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--unavailable": {
+          "id": "components-settings-wallet-plate--unavailable",
+          "name": "Unavailable",
+          "snippet": "const Unavailable = () => <WalletPlate\n    wallet={{\n        id: FINGERPRINT,\n        label: \"Cold storage\",\n        fingerprint: FINGERPRINT,\n        network: \"mainnet\",\n        birthdayHeight: 419_200,\n        selected: false,\n        lastBalance: \"897091655\",\n        sync: undefined,\n        notificationsEnabled: true,\n        indexerUri: \"https://zec.rocks:443\",\n        unavailable: \"wallet file could not be read\"\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--rename": {
+          "id": "components-settings-wallet-plate--rename",
+          "name": "Rename",
+          "snippet": "const Rename = () => <WalletPlate\n    wallet={{\n      id: FINGERPRINT,\n      label: \"Cold storage\",\n      fingerprint: FINGERPRINT,\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT`, `SYNCED` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--rescan": {
+          "id": "components-settings-wallet-plate--rescan",
+          "name": "Rescan",
+          "snippet": "const Rescan = () => <WalletPlate\n    wallet={{\n      id: FINGERPRINT,\n      label: \"Cold storage\",\n      fingerprint: FINGERPRINT,\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT`, `SYNCED` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--unlock-viewing-key": {
+          "id": "components-settings-wallet-plate--unlock-viewing-key",
+          "name": "Unlock Viewing Key",
+          "snippet": "const UnlockViewingKey = () => <WalletPlate\n    wallet={{\n      id: FINGERPRINT,\n      label: \"Cold storage\",\n      fingerprint: FINGERPRINT,\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT`, `SYNCED` could not be resolved statically."
+        },
+        "components-settings-wallet-plate--wrong-passphrase": {
+          "id": "components-settings-wallet-plate--wrong-passphrase",
+          "name": "Wrong Passphrase",
+          "snippet": "const WrongPassphrase = () => <WalletPlate\n    wallet={{\n      id: FINGERPRINT,\n      label: \"Cold storage\",\n      fingerprint: FINGERPRINT,\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }}\n    onChanged={fn()} />;",
+          "warning": "Incomplete snippet: `FINGERPRINT`, `SYNCED` could not be resolved statically."
+        }
+      }
+    }
+  }
+}
