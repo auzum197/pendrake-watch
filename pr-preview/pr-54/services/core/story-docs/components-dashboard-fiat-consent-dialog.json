@@ -9,7 +9,7 @@
         "components-dashboard-fiat-consent-dialog--default": {
           "id": "components-dashboard-fiat-consent-dialog--default",
           "name": "Default",
-          "snippet": "const Default = () => {\n  const [open, setOpen] = useState(false);\n  return (\n    <>\n      <Button onClick={() => setOpen(true)}>Show balances in USD</Button>\n      <FiatConsentDialog\n        open={open}\n        onOpenChange={setOpen}\n        onAccept={() =>\n          new Promise((resolve) => setTimeout(resolve, 800))\n        }\n      />\n    </>\n  );\n};"
+          "snippet": "const Default = () => {\n  const [open, setOpen] = useState(false);\n  return (\n    <>\n      <Button onClick={() => setOpen(true)}>Show balances in USD</Button>\n      <FiatConsentDialog\n        open={open}\n        onOpenChange={setOpen}\n        onAccept={() => new Promise((resolve) => setTimeout(resolve, 800))}\n      />\n    </>\n  );\n};"
         },
         "components-dashboard-fiat-consent-dialog--open": {
           "id": "components-dashboard-fiat-consent-dialog--open",

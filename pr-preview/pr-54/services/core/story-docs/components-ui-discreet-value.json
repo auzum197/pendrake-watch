@@ -19,12 +19,12 @@
         "components-ui-discreet-value--peek": {
           "id": "components-ui-discreet-value--peek",
           "name": "Peek",
-          "snippet": "const Peek = () => (\n    <span className=\"font-mono text-sm\">\n        Balance: <DiscreetPeek value=\"1,234.5678\" mask=\"█████\" /> ZEC\n    </span>\n);"
+          "snippet": "const Peek = () => (\n  <span className=\"font-mono text-sm\">\n    Balance: <DiscreetPeek value=\"1,234.5678\" mask=\"█████\" /> ZEC\n  </span>\n);"
         },
         "components-ui-discreet-value--mask": {
           "id": "components-ui-discreet-value--mask",
           "name": "Mask",
-          "snippet": "const Mask = () => (\n    <span className=\"discreet-peekable font-mono text-sm\">\n        <DiscreetMask text=\"█████\" />\n    </span>\n);"
+          "snippet": "const Mask = () => (\n  <span className=\"discreet-peekable font-mono text-sm\">\n    <DiscreetMask text=\"█████\" />\n  </span>\n);"
         }
       }
     }

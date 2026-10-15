@@ -25,6 +25,11 @@
           "id": "components-app-tx-list--interactive",
           "name": "Interactive",
           "snippet": "const Interactive = () => <InteractiveDemo />;"
+        },
+        "components-app-tx-list--discreet": {
+          "id": "components-app-tx-list--discreet",
+          "name": "Discreet",
+          "snippet": "const Discreet = () => <DiscreetDemo />;"
         }
       }
     }

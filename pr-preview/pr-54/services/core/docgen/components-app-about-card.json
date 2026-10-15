@@ -11,9 +11,91 @@
         "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/about-card/about-card.tsx",
         "description": "",
         "jsDocTags": {},
-        "props": {}
+        "props": {
+          "address": {
+            "name": "address",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"u1ev2ccxmpu98txsr7tpfrzysjqxmcss62vgy687wrp5jjmp3knw8arz9gazxlk0xsglefpat6lpxrvx87rahpvuueahmsp5n7zcqam4l2\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/about-card/about-card.tsx"
+              }
+            ]
+          },
+          "initialFace": {
+            "name": "initialFace",
+            "required": false,
+            "type": {
+              "name": "enum",
+              "raw": "\"about\" | \"support\"",
+              "value": [
+                {
+                  "value": "\"about\""
+                },
+                {
+                  "value": "\"support\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"about\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/about-card/about-card.tsx"
+              }
+            ]
+          }
+        }
       },
-      "argTypes": {}
+      "argTypes": {
+        "address": {
+          "name": "address",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            },
+            "defaultValue": {
+              "summary": "\"\\\"u1ev2ccxmpu98txsr7tpfrzysjqxmcss62vgy687wrp5jjmp3knw8arz9gazxlk0xsglefpat6lpxrvx87rahpvuueahmsp5n7zcqam4l2\\\"\""
+            }
+          }
+        },
+        "initialFace": {
+          "name": "initialFace",
+          "description": "",
+          "type": {
+            "required": false,
+            "raw": "\"about\" | \"support\"",
+            "name": "enum",
+            "value": [
+              "about",
+              "support"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"about\" | \"support\""
+            },
+            "defaultValue": {
+              "summary": "\"\\\"about\\\"\""
+            }
+          }
+        }
+      }
     }
   }
 }

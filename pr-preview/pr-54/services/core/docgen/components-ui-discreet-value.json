@@ -17,8 +17,11 @@
             "required": true,
             "type": {
               "name": "enum",
-              "raw": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\"",
+              "raw": "\"address\" | \"txid\" | \"date\" | \"label\" | \"zec\" | \"usd\" | \"block\" | \"memo\"",
               "value": [
+                {
+                  "value": "\"address\""
+                },
                 {
                   "value": "\"txid\""
                 },
@@ -26,16 +29,13 @@
                   "value": "\"date\""
                 },
                 {
+                  "value": "\"label\""
+                },
+                {
                   "value": "\"zec\""
                 },
                 {
                   "value": "\"usd\""
-                },
-                {
-                  "value": "\"address\""
-                },
-                {
-                  "value": "\"label\""
                 },
                 {
                   "value": "\"block\""
@@ -109,22 +109,22 @@
           "description": "",
           "type": {
             "required": true,
-            "raw": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\"",
+            "raw": "\"address\" | \"txid\" | \"date\" | \"label\" | \"zec\" | \"usd\" | \"block\" | \"memo\"",
             "name": "enum",
             "value": [
+              "address",
               "txid",
               "date",
+              "label",
               "zec",
               "usd",
-              "address",
-              "label",
               "block",
               "memo"
             ]
           },
           "table": {
             "type": {
-              "summary": "\"txid\" | \"date\" | \"zec\" | \"usd\" | \"address\" | \"label\" | \"block\" | \"memo\""
+              "summary": "\"address\" | \"txid\" | \"date\" | \"label\" | \"zec\" | \"usd\" | \"block\" | \"memo\""
             }
           }
         },
