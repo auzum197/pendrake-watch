@@ -951,7 +951,9 @@ pub enum NoteStatus {
 /// single transaction's detail, this is a wallet-wide row: it carries the
 /// confirming `height`, the `txid` it landed in, whether it's `change`, and the
 /// height it was spent at when that spend is confirmed. `height` and `spentHeight`
-/// are null when unknown (an unconfirmed note, or an in-flight spend). Values are
+/// are null when unknown (an unconfirmed note, or an in-flight spend), and `time`
+/// and `spentTime` are the matching block times in Unix seconds, null under the
+/// same conditions, so the GUI can show either column as a local time. Values are
 /// zatoshi strings, matching the rest of the wire.
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
@@ -963,9 +965,11 @@ pub struct WalletNote {
     pub value_zat: String,
     pub status: NoteStatus,
     pub height: Option<u32>,
+    pub time: Option<u64>,
     pub txid: String,
     pub change: bool,
     pub spent_height: Option<u32>,
+    pub spent_time: Option<u64>,
 }
 
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]

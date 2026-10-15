@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import { invoke, listen } from "./transport";
 
 // The wire types are generated from the daemon's pendrake-ipc crate by
 // `just bindings`, so the two sides cannot drift. They are re-exported here as
@@ -180,7 +180,10 @@ export function selectWallet(id: string): Promise<WalletState> {
 }
 
 // Set or clear a user-facing wallet name. Empty string clears (short fingerprint).
-export function setWalletLabel(id: string, label: string): Promise<WalletState> {
+export function setWalletLabel(
+  id: string,
+  label: string,
+): Promise<WalletState> {
   return invoke("set_wallet_label", { id, label });
 }
 

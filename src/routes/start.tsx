@@ -18,7 +18,11 @@ export function StartGate() {
         // A deep link handled during the probe may have already routed away from
         // the gate; don't override its destination with the default landing.
         if (router.state.location.pathname !== "/") return;
-        const to = !s.exists ? "/onboarding" : s.locked ? "/unlock" : "/dashboard";
+        const to = !s.exists
+          ? "/onboarding"
+          : s.locked
+            ? "/unlock"
+            : "/dashboard";
         navigate({ to, replace: true });
       })
       .catch(() => {

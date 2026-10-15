@@ -105,7 +105,7 @@ export type BalancePoint = {
   jump?: number;
 };
 
-function shortDate(epoch: number): string {
+export function shortDate(epoch: number): string {
   const ms = epoch < 1e12 ? epoch * 1000 : epoch;
   return new Date(ms).toLocaleDateString(undefined, {
     month: "short",
@@ -249,7 +249,10 @@ function priceInterpolator(
   toUnit: (ms: number) => number,
 ): ((t: number) => number) | null {
   const days = prices
-    .map((p) => ({ t: toUnit(Date.parse(`${p.date}T00:00:00Z`)), usd: p.usdPerZec }))
+    .map((p) => ({
+      t: toUnit(Date.parse(`${p.date}T00:00:00Z`)),
+      usd: p.usdPerZec,
+    }))
     .filter((d) => Number.isFinite(d.t))
     .sort((a, b) => a.t - b.t);
   if (days.length === 0) return null;
@@ -316,7 +319,13 @@ export function fiatSeries(
     const p = priceAt(tc);
     const oldZec = balance[i - 1].value;
     const newZec = balance[i].value;
-    out.push({ key: `${balance[i].key}:pre`, t: tc, value: oldZec * p, zec: oldZec, label: "" });
+    out.push({
+      key: `${balance[i].key}:pre`,
+      t: tc,
+      value: oldZec * p,
+      zec: oldZec,
+      label: "",
+    });
     out.push({
       key: balance[i].key,
       t: tc,
@@ -373,6 +382,19 @@ export function formatBlock(height: number | undefined): string {
   return height ? height.toLocaleString() : "—";
 }
 
+export function formatBlockTime(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+export function blockTimeIso(epoch: number): string {
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toISOString();
+}
+
 export function formatTxDate(epoch: number): string {
   const ms = epoch < 1e12 ? epoch * 1000 : epoch;
   return new Date(ms).toLocaleDateString(undefined, {
@@ -385,7 +407,10 @@ export function formatTxDate(epoch: number): string {
 export function zatToZecPlain(zat: bigint): string {
   const neg = zat < 0n;
   const abs = neg ? -zat : zat;
-  const frac = (abs % 100_000_000n).toString().padStart(8, "0").replace(/0+$/, "");
+  const frac = (abs % 100_000_000n)
+    .toString()
+    .padStart(8, "0")
+    .replace(/0+$/, "");
   return `${neg ? "-" : ""}${abs / 100_000_000n}${frac ? `.${frac}` : ""}`;
 }
 

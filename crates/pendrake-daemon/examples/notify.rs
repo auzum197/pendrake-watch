@@ -30,11 +30,8 @@ fn main() -> anyhow::Result<()> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     DesktopNotifier.notify(
-        "Funds received",
-        &format!(
-            "0.{:05} ZEC received in your wallet.",
-            42_000 + unique % 1_000
-        ),
+        "Main: Funds received",
+        &format!("0.{:05} ZEC arrived.", 42_000 + unique % 1_000),
         &format!("pendrake://tx?txid={unique:064x}"),
     )?;
 

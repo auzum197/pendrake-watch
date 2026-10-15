@@ -36,7 +36,7 @@ The state of a Wallet whose file could not be opened at startup. It stays in the
 _Avoid_: broken, corrupt, failed wallet
 
 **Received / Sent**:
-The direction of a transaction relative to the Wallet. The same two words are used everywhere, in the transaction list and in notification text ("Received 1.5 ZEC", "Sent 0.2 ZEC").
+The direction of a transaction relative to the Wallet. The same two words are used everywhere they are written, in notification text ("Received 1.5 ZEC", "Sent 0.2 ZEC") and in the transaction detail. The transaction list draws direction as an arrow with the word as its accessible label (docs/adr/0013).
 _Avoid_: incoming, outgoing, payment, transfer
 
 **Confirmed / Pending**:
@@ -120,7 +120,7 @@ How much a Fiat value can be trusted. High when several Price sources agreed on 
 _Avoid_: accuracy, quality, trust score
 
 **Discreet mode**:
-The toggle that obscures sensitive data from onlookers: amounts (ZEC and Fiat value), transaction dates, transaction block heights, txids and explorer links (a txid resolves to everything else on a block explorer), Memo text, and addresses. Direction, status, sync progress, the ATH standing, and the balance chart's curve remain visible. It applies everywhere the data appears, including desktop notifications, which drop amount and direction while it is on. It is app-wide, not per-wallet: the choice belongs to whoever is at the screen, so it holds across wallet switches and persists across restarts. A shield against shoulder surfing and screen shares rather than a cryptographic protection, and unrelated to the Session lock.
+The toggle that obscures sensitive data from onlookers: amounts (ZEC and Fiat value), transaction dates, transaction block heights, txids and explorer links (a txid resolves to everything else on a block explorer), the Pools a transaction touches (each name collapses to a grey disc, so only the count stays legible), Memo text, and addresses. Direction, status, sync progress, the ATH standing, and the balance chart's curve remain visible. It applies everywhere the data appears, including desktop notifications, which drop amount and direction while it is on. It is app-wide, not per-wallet: the choice belongs to whoever is at the screen, so it holds across wallet switches and persists across restarts. A shield against shoulder surfing and screen shares rather than a cryptographic protection, and unrelated to the Session lock.
 _Avoid_: privacy mode, hidden balances, incognito
 
 **Peek**:

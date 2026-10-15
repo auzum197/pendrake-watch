@@ -57,7 +57,7 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 
 ### Code (all languages)
 
-- Comment what, not why. No line-by-line narration of obvious operations.
+- Never add inline comments.
 - No tutorial narration ("Now we...", "Step 1:", "First, let's...") and no banner comments (`// ===== HELPERS =====`).
 - No docstrings that just restate the signature.
 - Names: concise and domain-specific. Avoid generic placeholders (`data`, `result`, `output`, `item`, `value`, `temp`, `handleData`, a helper named `helper`) and avoid over-long descriptive names where a short one is idiomatic.
@@ -99,6 +99,11 @@ Goal: produce prose and code that reads as if written by a specific, competent h
 ### Tooling
 
 - No heredocs (<< EOF, << 'EOF') in bash or other shell scripts. They're hard to read, break on escaping, and bury content that should be its own file. Use a real file, a templating step, or printf with explicit lines instead.
+
+### Pull requests
+
+- Title in conventional commit form (`feat: …`, `fix: …`), short and broad: `feat: collapsible sidebar`, `fix: wallet switcher dismissal`. Say what the change is about, not how it works. No jargon that the reader has to decode.
+- Body: one high-level sentence. Details belong in the commits and the ADR. For a stacked PR, start the sentence with "Stacked on #N:".
 
 ## Agent skills
 

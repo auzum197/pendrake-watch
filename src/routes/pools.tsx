@@ -13,11 +13,11 @@ import {
 } from "@tabler/icons-react";
 import { HeartwoodIcon } from "@/components/pools/heartwood-icon";
 import { RingsIcon } from "@/components/pools/rings-icon";
-import { Sparkline } from "@/components/pools/sparkline";
+import { DitherArea } from "@/components/dashboard/dither/dither-area";
 import "@/components/pools/pool-tile.css";
 import { useNotesData } from "@/hooks/use-notes-data";
 import { useWalletData } from "@/hooks/use-wallet-data";
-import { formatNoteAmount, formatZec } from "@/lib/format";
+import { type BalancePoint, formatNoteAmount, formatZec } from "@/lib/format";
 import {
   DiscreetValue,
   type DiscreetKind,
@@ -148,8 +148,12 @@ function PoolCard({ stat }: { stat: PoolStat }) {
             A pool that never moved off zero has nothing to plot, so it shows a
             "No data" box in the same slot. */}
         {stat.trend.length >= 2 && Math.max(...stat.trend) > 0 ? (
-          <Sparkline
-            values={stat.trend}
+          <DitherArea
+            points={trendPoints(stat.trend)}
+            axes={false}
+            interactive={false}
+            animate={false}
+            sparkles={false}
             className="hidden h-20 w-1/2 shrink-0 md:block"
           />
         ) : (
@@ -205,6 +209,10 @@ function PoolCard({ stat }: { stat: PoolStat }) {
       </div>
     </section>
   );
+}
+
+function trendPoints(trend: number[]): BalancePoint[] {
+  return trend.map((value, i) => ({ key: String(i), t: i, value, label: "" }));
 }
 
 function Stat({

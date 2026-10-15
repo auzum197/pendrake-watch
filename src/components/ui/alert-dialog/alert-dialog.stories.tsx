@@ -30,8 +30,8 @@ function Demo() {
         <AlertDialogHeader>
           <AlertDialogTitle>Remove this Wallet?</AlertDialogTitle>
           <AlertDialogDescription>
-            The synced history is erased. It's watch-only, so re-importing the UFVK
-            restores it.
+            The synced history is erased. It's watch-only, so re-importing the
+            UFVK restores it.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -49,7 +49,9 @@ export const Opened: Story = {
   render: () => <Demo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole("button", { name: /remove wallet/i }));
+    await userEvent.click(
+      canvas.getByRole("button", { name: /remove wallet/i }),
+    );
     // The dialog portals to the document body, outside the story canvas.
     const dialog = within(document.body);
     await expect(

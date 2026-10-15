@@ -121,11 +121,15 @@ function IndexerRow({
       >
         <span className="flex min-w-0 flex-col">
           <span className="text-sm font-medium text-foreground">{label}</span>
-          <span className="truncate font-mono text-xs text-muted-foreground">{sub}</span>
+          <span className="truncate font-mono text-xs text-muted-foreground">
+            {sub}
+          </span>
         </span>
         <span
           className={`ml-auto flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-            selected ? "border-brand bg-brand text-white" : "border-muted-foreground/40"
+            selected
+              ? "border-brand bg-brand text-white"
+              : "border-muted-foreground/40"
           }`}
         >
           {selected && <IconCheck className="size-3.5" />}

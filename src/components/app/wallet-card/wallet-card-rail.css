@@ -1,0 +1,93 @@
+/* The card in the sidebar's icon rail. --rail comes from the sidebar (0 open,
+   1 rail, see use-rail.ts) and --t is the fold. The card stays mounted and its
+   slab is reshaped through three states:
+
+   - circle: a 42px circle around the avatar, when the rail is closed.
+   - pill: on hover the circle grows 4px and shows the chevron at the right of
+     the avatar. --peek and --peek-side are the two springs in use-fold.ts.
+   - card: a click opens the fold and the pill grows, in place, into the full
+     card over the content, with an 8px inset around the avatar and corners
+     concentric with it.
+
+   --c is how far the slab is collapsed to the avatar. --shift is how far the
+   slab's corner moves in from the open card's corner: 16px for the circle,
+   12px for the pill, 8px for the card in the rail, 0 in the open sidebar. The
+   head moves back by the same amount, which keeps the avatar where it is and
+   clips that much of its 16px padding. The two only cancel if they round to
+   the same pixel, so --shift is a whole number of pixels and both are layout
+   offsets. 232px is the slab's width in the open sidebar and -5px puts the
+   avatar on the rail's centre line. In the open sidebar every value here is
+   the same as the base rules. */
+.wallet-card-slab {
+	--peek: 0;
+	--peek-side: 0;
+	--c: calc(var(--rail, 0) * (1 - var(--t)));
+	--q: calc(var(--c) * var(--peek));
+	--s: calc(var(--c) * var(--peek-side));
+	--lift: calc(var(--t) + var(--q) * 0.35);
+	--shift: round(
+		calc(
+			var(--rail, 0) * 8px + var(--c) * (16px - var(--rail, 0) * 8px) -
+				var(--q) * 4px
+		),
+		1px
+	);
+	inset-inline: auto;
+	left: calc(var(--rail, 0) * -5px + var(--shift));
+	top: var(--shift);
+	width: calc(
+		232px - var(--c) * 190px + var(--q) * 8px + var(--s) * 28px
+	);
+	border-radius: min(
+		calc(1rem + var(--rail, 0) * 13px + var(--c) * 42px),
+		calc(37px - var(--shift))
+	);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.1),
+		0 calc(var(--lift) * 12px) calc(var(--lift) * 32px)
+			rgba(0, 0, 0, calc(var(--lift) * 0.5));
+}
+
+.wallet-card-slab:has(.wallet-card-head:focus-visible) {
+	outline: 2px solid var(--color-brand);
+	outline-offset: 2px;
+}
+
+.wallet-card-head:focus-visible {
+	outline: none;
+}
+
+.wallet-card-head {
+	position: relative;
+	left: calc(-1 * var(--shift));
+	top: calc(-1 * var(--shift));
+	width: calc(230px + var(--shift));
+	padding-right: calc(1rem + 28px);
+	margin-bottom: calc(-2 * var(--shift));
+}
+
+.wallet-card-body {
+	position: relative;
+	left: calc(-1 * var(--shift));
+	width: calc(230px + var(--shift));
+}
+
+.wallet-card-head > :not(.wallet-avatar) {
+	opacity: calc(1 - var(--c));
+}
+
+.wallet-card-head > .wallet-card-chevron {
+	position: absolute;
+	top: 50%;
+	left: calc(198px + var(--shift) - var(--c) * (136px + var(--shift)));
+	transform: translateY(-50%) rotate(calc(var(--t) * 180deg));
+	opacity: calc(1 - var(--c) + var(--s));
+}
+
+/* A click on the closed circle opens the switcher, so the ⋯ menu that the
+   avatar shows on hover is off until the card is open. */
+.app-sidebar[data-rail="true"]
+	.wallet-card-slab[data-open="false"]
+	.wallet-avatar-overlay {
+	display: none;
+}

@@ -92,7 +92,7 @@
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.625rem 1rem;
+	padding: 0.625rem 1rem 0.625rem 27px;
 	font-size: 12px;
 	font-weight: 500;
 	color: rgba(255, 255, 255, 0.75);

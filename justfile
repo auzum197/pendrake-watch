@@ -39,6 +39,16 @@ stage-daemon: daemon
     mkdir -p src-tauri/binaries
     TRIPLE=$(rustc -vV | sed -n 's/host: //p'); EXT=""; case "$TRIPLE" in *windows*) EXT=".exe";; esac; cp "crates/target/release/pendraked$EXT" "src-tauri/binaries/pendraked-$TRIPLE$EXT"
 
+# The release workflow uses this for both macOS architectures, and
+# `pnpm tauri build --target <triple>` finds the result. A cross build needs
+# `rustup target add <triple>` first. Extra arguments go to cargo (`--locked` in CI).
+# Build the daemon for a target triple and stage it as that triple's sidecar.
+[group('build')]
+stage-daemon-target triple *cargo_args:
+    cd crates && cargo build --release -p pendrake-daemon --target {{triple}} {{cargo_args}}
+    mkdir -p src-tauri/binaries
+    EXT=""; case "{{triple}}" in *windows*) EXT=".exe";; esac; cp "crates/target/{{triple}}/release/pendraked$EXT" "src-tauri/binaries/pendraked-{{triple}}$EXT"
+
 # Build the GUI as a .app bundle (skips the DMG). Stages the daemon first so the
 # externalBin sidecar resolves during the build.
 [group('build')]
@@ -60,8 +70,19 @@ package: stage-daemon
 
 # Run the app with hot reload, pinned to the freshly-built pendraked engine.
 [group('run')]
-dev: daemon
+dev: stage-daemon
     PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
+
+# Run `dev` with react-scan outlining each component as it re-renders.
+[group('run')]
+dev-scan: stage-daemon
+    VITE_REACT_SCAN=1 PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
+
+# Run the GUI in the browser against an in-memory fake daemon seeded with a spread
+# of Wallets. For the same inside the Tauri shell, run `VITE_FAKER=1 just dev`.
+[group('run')]
+dev-faker:
+    VITE_FAKER=1 pnpm dev
 
 # Regenerate the GUI's wire types (src/lib/generated/wire.ts) from pendrake-ipc.
 # Run after changing any type the daemon serializes.
@@ -81,3 +102,20 @@ check: bindings
 fmt:
     cd crates && cargo fmt
     cd src-tauri && cargo fmt
+
+# Print the app version, failing if any of its six declarations disagree.
+[group('release')]
+version:
+    node scripts/version.mjs check
+
+# Refreshes both lockfiles without a build and checks every declaration agrees
+# before committing. Tagging is a separate step, see the README's release section.
+# Set the version everywhere it is declared and commit the bump.
+[group('release')]
+bump version:
+    node scripts/version.mjs set {{version}}
+    cd crates && cargo update --workspace --offline
+    cd src-tauri && cargo update --workspace --offline
+    node scripts/version.mjs check {{version}}
+    git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock crates/Cargo.toml crates/Cargo.lock platform/macos/PendrakeSync/Info.plist packaging/arch/PKGBUILD
+    git commit -m "chore: bump version to {{version}}"

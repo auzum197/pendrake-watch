@@ -4,7 +4,13 @@ import { BatchScanViz } from "./BatchScanViz";
 const meta = {
   component: BatchScanViz,
   args: { active: true, sparkSeq: 0, canSpark: true },
-  decorators: [(Story) => <div className="w-80"><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div className="w-80">
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof BatchScanViz>;
 
 export default meta;

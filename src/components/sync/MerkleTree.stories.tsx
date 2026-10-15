@@ -4,7 +4,13 @@ import { MerkleTree } from "./MerkleTree";
 const meta = {
   component: MerkleTree,
   args: { frac: 0.5, pulseSeq: 0, active: true, synced: false },
-  decorators: [(Story) => <div className="w-96"><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div className="w-96">
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof MerkleTree>;
 
 export default meta;

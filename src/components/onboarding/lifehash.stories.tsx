@@ -15,7 +15,11 @@ export const Row: Story = {
   render: () => (
     <div className="flex gap-4">
       {["zec-rocks", "pendrake", "watch-only", "a1b2c3d4"].map((fp) => (
-        <LifeHashIcon key={fp} fingerprint={fp} className="size-16 rounded-full" />
+        <LifeHashIcon
+          key={fp}
+          fingerprint={fp}
+          className="size-16 rounded-full"
+        />
       ))}
     </div>
   ),

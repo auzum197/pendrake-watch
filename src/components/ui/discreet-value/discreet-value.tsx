@@ -9,7 +9,6 @@ import { useMasked } from "@/lib/discreet";
 import { animationsEnabled } from "@/lib/motion";
 import "./discreet-value.css";
 
-
 export type DiscreetKind =
   | "zec"
   | "usd"
@@ -88,15 +87,17 @@ function runScramble(
     }
     const resolved = Math.floor(easeOut(p) * to.length);
     set(
-      Array.from(to, (c, i) => (i < resolved || c === " " ? c : glyphs[i])).join(
-        "",
-      ),
+      Array.from(to, (c, i) =>
+        i < resolved || c === " " ? c : glyphs[i],
+      ).join(""),
     );
   });
   return stop;
 }
 
-const HOLD_MS = 250;
+// How long a pointer has to stay down before a hidden value peeks. Shared with the
+// transaction list's pool stack, so every peek in the app feels the same.
+export const PEEK_HOLD_MS = 250;
 
 export function DiscreetMask({
   text,
@@ -153,7 +154,7 @@ export function DiscreetPeek({
       peekedOnce.current = true;
       prevWidth.current = wrap.current?.offsetWidth ?? null;
       setPeeked(true);
-    }, HOLD_MS);
+    }, PEEK_HOLD_MS);
   }
 
   function release() {

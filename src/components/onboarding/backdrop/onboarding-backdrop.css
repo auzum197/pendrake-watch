@@ -1,0 +1,8 @@
+.onboarding-backdrop {
+  container-type: size;
+}
+
+.onboarding-backdrop-stage {
+  aspect-ratio: 1717 / 916;
+  width: max(100cqw, calc(100cqh * 1717 / 916));
+}

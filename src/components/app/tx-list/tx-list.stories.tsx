@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import type { Tx, TxKind, TxStatus } from "@/lib/ipc";
+import { hydrateDiscreet, isMasked, useMasked } from "@/lib/discreet";
 import { TxList } from "./tx-list";
 import { withRouter } from "@/stories/with-router";
 import { txs } from "@/stories/fixtures";
@@ -20,10 +21,7 @@ export const Preview: Story = {
 
 export const Full: Story = {
   render: (args) => (
-    <div
-      data-scroll-restoration-id="app-main"
-      className="h-96 overflow-y-auto"
-    >
+    <div data-scroll-restoration-id="app-main" className="h-96 overflow-y-auto">
       <TxList {...args} />
     </div>
   ),
@@ -32,6 +30,9 @@ export const Full: Story = {
 export const Empty: Story = {
   args: { txs: [], limit: 5 },
 };
+
+const button =
+  "rounded-lg border border-border px-3 py-1.5 text-xs font-medium";
 
 function InteractiveDemo() {
   const [rows, setRows] = useState<Tx[]>(txs);
@@ -45,32 +46,40 @@ function InteractiveDemo() {
     setRows((r) => [
       ...r,
       {
-        txid: Math.random().toString(16).slice(2, 14),
+        txid: Math.random().toString(16).slice(2).padEnd(64, "0"),
         datetime: Math.floor(Date.now() / 1000),
         blockHeight: status === "confirmed" ? height : undefined,
         kind,
         valueZat,
         netZat: kind === "received" ? valueZat : `-${valueZat}`,
         status,
-        notes: [
-          { pool: "orchard", direction: kind, outputIndex: 0, valueZat },
-        ],
+        notes: [{ pool: "orchard", direction: kind, outputIndex: 0, valueZat }],
       },
     ]);
   }
 
-  const button =
-    "rounded-lg border border-border px-3 py-1.5 text-xs font-medium";
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <button type="button" className={button} onClick={() => add("received", "confirmed")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("received", "confirmed")}
+        >
           Receive
         </button>
-        <button type="button" className={button} onClick={() => add("sent", "confirmed")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("sent", "confirmed")}
+        >
           Send
         </button>
-        <button type="button" className={button} onClick={() => add("received", "pending")}>
+        <button
+          type="button"
+          className={button}
+          onClick={() => add("received", "pending")}
+        >
           Pending
         </button>
       </div>
@@ -81,4 +90,32 @@ function InteractiveDemo() {
 
 export const Interactive: Story = {
   render: () => <InteractiveDemo />,
+};
+
+// Flips the Discreet store directly. The real eye button goes through IPC, which
+// storybook mocks to undefined, so it would bounce back.
+function DiscreetDemo() {
+  const masked = useMasked();
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className={button}
+          aria-pressed={masked}
+          onClick={() => hydrateDiscreet(!isMasked())}
+        >
+          {masked ? "Show values" : "Hide values"}
+        </button>
+        <span className="text-xs text-muted-foreground">
+          Hold a pool stack to peek.
+        </span>
+      </div>
+      <TxList txs={txs} limit={10} />
+    </div>
+  );
+}
+
+export const Discreet: Story = {
+  render: () => <DiscreetDemo />,
 };

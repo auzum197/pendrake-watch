@@ -1,0 +1,12 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "adoptExistingLintConfig": false,
+  "ignore": {
+    "files": [
+      "**/*-prototype/**"
+    ]
+  },
+  "rules": {
+    "react-doctor/only-export-components": "off"
+  }
+}

@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react";
 import { getCachedWallet, setCachedWallet } from "@/hooks/use-wallet-data";
 import { setDiscreet } from "./ipc";
 
-
 let hidden = false;
 let inFlight = 0;
 
@@ -28,7 +27,11 @@ export function useMasked(): boolean {
 }
 
 export function useDiscreet(): boolean {
-  return useSyncExternalStore(subscribe, () => hidden, () => false);
+  return useSyncExternalStore(
+    subscribe,
+    () => hidden,
+    () => false,
+  );
 }
 
 export function hydrateDiscreet(on: boolean): void {

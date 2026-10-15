@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  useCanGoBack,
-  useParams,
-  useRouter,
-} from "@tanstack/react-router";
+import { useCanGoBack, useParams, useRouter } from "@tanstack/react-router";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { getTransaction, onSyncEvent, type Note, type Tx } from "@/lib/ipc";
 import { formatUsd, formatZec, priceLookup, splitAddress } from "@/lib/format";
@@ -101,8 +97,10 @@ export function TxDetailPage() {
   const received = tx?.kind === "received";
   const masked = useMasked();
   const byIndex = (a: Note, b: Note) => a.outputIndex - b.outputIndex;
-  const receivedNotes = tx?.notes.filter((n) => n.direction === "received").sort(byIndex) ?? [];
-  const sentNotes = tx?.notes.filter((n) => n.direction === "sent").sort(byIndex) ?? [];
+  const receivedNotes =
+    tx?.notes.filter((n) => n.direction === "received").sort(byIndex) ?? [];
+  const sentNotes =
+    tx?.notes.filter((n) => n.direction === "sent").sort(byIndex) ?? [];
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
@@ -264,7 +262,9 @@ function NoteCard({ note }: { note: Note }) {
       )}
       {note.memo && (
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Memo</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Memo
+          </span>
           <p className="whitespace-pre-wrap wrap-break-word rounded-lg bg-muted/60 px-3 py-2 text-sm text-foreground select-text">
             <DiscreetValue kind="memo">{note.memo}</DiscreetValue>
           </p>

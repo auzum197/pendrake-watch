@@ -4,7 +4,13 @@ import { BatchCommitViz } from "./BatchCommitViz";
 const meta = {
   component: BatchCommitViz,
   args: { committing: true, frac: 0.6 },
-  decorators: [(Story) => <div className="w-64"><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div className="w-64">
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof BatchCommitViz>;
 
 export default meta;

@@ -11,9 +11,11 @@ function note(part: Partial<WalletNote>): WalletNote {
     valueZat: "0",
     status: "unspent",
     height: 100,
+    time: 1_700_000_000,
     txid: "aa",
     change: false,
     spentHeight: null,
+    spentTime: null,
     ...part,
   };
 }
