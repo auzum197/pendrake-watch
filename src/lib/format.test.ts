@@ -32,8 +32,14 @@ function sync(part: Partial<SyncStatus>): SyncStatus {
 }
 
 describe("isSynced", () => {
-  it("is synced when the daemon reports idle", () => {
-    expect(isSynced(sync({ state: "idle" }))).toBe(true);
+  it("is synced when the daemon reports idle at a known tip", () => {
+    expect(
+      isSynced(sync({ state: "idle", syncedHeight: 100, chainTip: 100 })),
+    ).toBe(true);
+  });
+
+  it("is not synced when idle before any round has run", () => {
+    expect(isSynced(sync({ state: "idle" }))).toBe(false);
   });
 
   it("is not synced when an error is set", () => {

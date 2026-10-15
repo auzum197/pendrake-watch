@@ -4,7 +4,6 @@
 //!
 //! ```text
 //! $PENDRAKE_DATA_DIR/
-//!   active_wallet_id      # the Selected Wallet's id (file name kept for old installs)
 //!   daemon.sock
 //!   price_cache.json      # shared; public ZEC/USD only
 //!   settings.json         # app-wide prefs (Discreet mode); shared
@@ -30,6 +29,9 @@ use serde::{Deserialize, Serialize};
 pub struct Paths {
     pub root: PathBuf,
     pub socket: PathBuf,
+    /// The JSON-RPC cookie file. It exists only
+    /// if the TCP listener is enabled.
+    pub rpc_cookie_file: PathBuf,
     /// Reconciled spot + daily price series (AUZ-83). Shared across wallets.
     pub price_cache_file: PathBuf,
     /// App-wide preferences shared across wallets (docs/adr/0009). Currently just
@@ -37,8 +39,6 @@ pub struct Paths {
     pub settings_file: PathBuf,
     /// `$root/wallets`.
     pub wallets_dir: PathBuf,
-    /// File holding the Selected Wallet's id (one line).
-    pub selected_id_file: PathBuf,
     /// Set when this `Paths` is scoped to a wallet via [`Self::for_wallet`].
     pub wallet_id: Option<String>,
     /// zingolib wallet directory for the scoped wallet.
@@ -64,9 +64,9 @@ impl Paths {
         let wallets_dir = root.join("wallets");
         Self {
             socket: root.join("daemon.sock"),
+            rpc_cookie_file: root.join("rpc.cookie"),
             price_cache_file: root.join("price_cache.json"),
             settings_file: root.join("settings.json"),
-            selected_id_file: root.join("active_wallet_id"),
             wallets_dir,
             wallet_id: None,
             // Placeholders until `for_wallet` / migration; legacy names kept so
@@ -108,31 +108,6 @@ impl Paths {
         Ok(())
     }
 
-    pub fn read_selected_id(&self) -> Result<Option<String>> {
-        match std::fs::read_to_string(&self.selected_id_file) {
-            Ok(s) => {
-                let id = s.trim();
-                Ok((!id.is_empty()).then(|| id.to_string()))
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e).context("reading the selected wallet id"),
-        }
-    }
-
-    pub fn write_selected_id(&self, id: &str) -> Result<()> {
-        std::fs::write(&self.selected_id_file, id.as_bytes())
-            .context("writing the selected wallet id")?;
-        Ok(())
-    }
-
-    pub fn clear_selected_id(&self) -> Result<()> {
-        match std::fs::remove_file(&self.selected_id_file) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e).context("clearing the selected wallet id"),
-        }
-    }
-
     pub fn list_wallet_ids(&self) -> Result<Vec<String>> {
         let mut ids = Vec::new();
         let entries = match std::fs::read_dir(&self.wallets_dir) {
@@ -154,12 +129,13 @@ impl Paths {
     ///
     /// Returns the new wallet id when a migration ran.
     pub fn migrate_legacy_if_needed(&self) -> Result<Option<String>> {
+        let _ = std::fs::remove_file(self.root.join("active_wallet_id"));
         let legacy_meta = self.root.join("meta.json");
         if !legacy_meta.exists() {
             return Ok(None);
         }
         // Already on the multi-wallet layout.
-        if self.read_selected_id()?.is_some() {
+        if !self.list_wallet_ids()?.is_empty() {
             return Ok(None);
         }
         let meta =
@@ -183,7 +159,6 @@ impl Paths {
         if legacy_notified.exists() {
             let _ = std::fs::rename(&legacy_notified, &dest.notified_file);
         }
-        self.write_selected_id(&id)?;
         tracing::info!(%id, "migrated legacy wallet into wallets/<id>");
         Ok(Some(id))
     }

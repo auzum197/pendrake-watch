@@ -7,8 +7,10 @@
 //! Usage:
 //!   pendraked                       run the daemon
 //!   pendraked call <method> [json]  debug client: send one request, print the reply
+//!   pendraked watch [flags]         debug client: print every pushed event
 
 mod notify;
+mod watch;
 
 use std::sync::Arc;
 
@@ -28,9 +30,17 @@ fn main() -> Result<()> {
         .init();
 
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) == Some("call") {
-        let rt = tokio::runtime::Runtime::new()?;
-        return rt.block_on(run_client(&Paths::resolve()?, &args[2..]));
+    match args.get(1).map(String::as_str) {
+        Some("call") => {
+            let rt = tokio::runtime::Runtime::new()?;
+            return rt.block_on(run_client(&Paths::resolve()?, &args[2..]));
+        }
+        Some("watch") => {
+            let opts = watch::parse_args(&args[2..])?;
+            let rt = tokio::runtime::Runtime::new()?;
+            return rt.block_on(watch::run(&Paths::resolve()?, opts));
+        }
+        _ => {}
     }
 
     // Brand desktop toasts as "Pendrake" with our icon under our own AUMID.
@@ -71,7 +81,7 @@ async fn run_client(paths: &Paths, args: &[String]) -> Result<()> {
     let stream = transport::connect(&paths.endpoint()).await?;
     let (read_half, mut write_half) = tokio::io::split(stream);
 
-    let req = serde_json::to_string(&Request { id: 1, call })?;
+    let req = serde_json::to_string(&Request::new(1, call))?;
     write_half.write_all(format!("{req}\n").as_bytes()).await?;
 
     // `subscribeEvents` turns the connection into a live feed, so keep printing

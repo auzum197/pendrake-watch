@@ -1,5 +1,18 @@
 # Pendrake Watch — Update log
 
+## 2026-10-13: JSON-RPC, a loopback listener, and a lock per connection
+
+The daemon's protocol is now JSON-RPC 2.0 on the same newline-delimited stream (`docs/adr/0014`). The method names are unchanged. A reply carries `result` or an `error` object with a code, and pushed events are JSON-RPC notifications named `event.<kind>`, so any JSON-RPC client can drive the daemon and still receive transactions as they land.
+
+- `PENDRAKE_RPC_LISTEN=127.0.0.1:<port>` opens a loopback TCP listener beside the socket. It refuses non-loopback addresses. A connection must present the per-run `rpc.cookie` from the data dir, written owner-only at startup, before any other call.
+- The Session lock belongs to the connection. A new connection starts locked whenever an encrypted Wallet exists, `unlock` and Sign Out act on that connection alone, and closing it relocks it. The subscriber count that re-armed a daemon-wide flag is gone, as is the hole where an import on a locked session with a held key cleared the lock.
+- The GUI holds one connection for the life of the window, multiplexing requests by id and reading notifications off the same stream, instead of opening one per request.
+- `PENDRAKE_RPC_COOKIE_UNLOCKS=1` lets a cookie-authenticated TCP connection start unlocked while the Passphrase is held, for headless clients. Off by default.
+- `pendraked watch` logs every pushed event from the socket or the TCP listener, with `--unlock` to see wallet events and `--json` for raw lines. The daemon logs each request's method and outcome at debug level, parameters excluded.
+- The Selected Wallet moved out of the daemon (`docs/adr/0015`). Every wallet read and per-Wallet setting takes the Wallet's Fingerprint, `selectWallet` and the `selected` flag on `listWallets` are gone, and `removeWallet` no longer picks a successor. The GUI keeps its selection in local storage and reconciles it against the daemon's list on every load, so two clients can show two different Wallets at once.
+
+---
+
 ## 2026-09-23: signed installers from a tag
 
 Pushing a `vX.Y.Z` tag now builds every installer and publishes one GitHub release with all of them attached and a `SHA256SUMS` manifest. Before, each platform job created its own release and raced the others for the release object.

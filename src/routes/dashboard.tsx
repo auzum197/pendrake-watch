@@ -195,7 +195,8 @@ function ChartCard({
   }
 
   async function acceptConsent() {
-    const state = await setFiatEnabled(true);
+    if (!wallet?.walletId) return;
+    const state = await setFiatEnabled(wallet.walletId, true);
     setCachedWallet(state);
     setEnabledLocal(true);
     setDenom("usd");

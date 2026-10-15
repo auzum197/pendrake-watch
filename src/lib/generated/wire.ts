@@ -231,10 +231,14 @@ export type WalletAddress = { ua: string, transparent?: string, };
  */
 export type WalletNote = { idx: number, pool: Pool, valueZat: string, status: NoteStatus, height: number | null, time: number | null, txid: string, change: boolean, spentHeight: number | null, spentTime: number | null, };
 
-export type WalletState = { exists: boolean, 
+export type WalletState = { 
 /**
- * True when the wallet file is encrypted and the daemon hasn't been given the
- * passphrase yet, so the GUI must collect it via `unlock` before anything works.
+ * Whether any Wallet exists. Asked without an id, this is the whole answer.
+ */
+exists: boolean, 
+/**
+ * True when the asking session is locked, so the client must collect the
+ * Passphrase via `unlock` before any wallet read (docs/adr/0014).
  */
 locked: boolean, 
 /**
@@ -244,7 +248,8 @@ locked: boolean,
  */
 sessionHeld: boolean, 
 /**
- * The Selected Wallet's id under `wallets/<id>/`. `None` when no wallet exists.
+ * The described Wallet's id under `wallets/<id>/`. `None` when the state was
+ * asked for without an id, or no wallet exists.
  */
 walletId?: string, 
 /**
@@ -280,8 +285,8 @@ fiatEnabled?: boolean,
  */
 discreet?: boolean, 
 /**
- * Why the Selected Wallet's file could not be opened, when it could not. The
- * GUI explains the failure and offers Remove instead of the dashboard.
+ * Why this Wallet's file could not be opened, when it could not. The GUI
+ * explains the failure and offers Remove instead of the dashboard.
  */
 unavailable?: string, };
 
@@ -290,10 +295,6 @@ export type WalletSummary = { id: string,
  * Resolved display name: custom label, or short fingerprint when unset.
  */
 label: string, fingerprint: string | null, network: Network, birthdayHeight: number, 
-/**
- * Whether this is the Selected Wallet, the one the GUI shows.
- */
-selected: boolean, 
 /**
  * Last-synced confirmed balance in zatoshis (stringified), or `None` for a Wallet
  * that has not synced since this was tracked. Refreshed after every round, so

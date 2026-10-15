@@ -80,6 +80,7 @@ pub fn start(
 ) -> Result<Arc<ServiceHandle>, FfiError> {
     let core_config = CoreConfig {
         data_dir: config.data_dir.map(Into::into),
+        rpc: None,
     };
     let handle = pendrake_core::run(core_config, Arc::new(NotifierAdapter(notifier)))?;
     Ok(Arc::new(ServiceHandle {

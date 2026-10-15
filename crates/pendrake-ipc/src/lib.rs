@@ -1,16 +1,16 @@
-//! Wire protocol between the Pendrake daemon and the GUI client.
+//! Wire protocol between the Pendrake daemon and its clients (docs/adr/0014).
 //!
-//! Transport is a Unix-domain socket carrying newline-delimited JSON: one
-//! [`Request`] per line from the client, one [`Response`] per line back, matched
-//! by `id`. After a client sends `subscribeEvents`, the daemon also pushes
-//! [`SyncEvent`] lines down that same connection as the wallet scans. A pushed
-//! event carries `event`; a reply carries `ok`/`id`, so a reader tells them apart
-//! without a wrapper frame. The SPEC's eventual length-prefixed bincode codec and
-//! auth-token handshake land in later milestones.
+//! The protocol is JSON-RPC 2.0 with one message per line. It runs on a stream
+//! transport: the local Unix socket or Windows named pipe, or the optional
+//! loopback TCP listener. A client sends one [`Request`] per line and receives
+//! one [`Response`] per line, matched by `id`. After `subscribeEvents` the daemon
+//! also sends one [`Notification`] per [`SyncEvent`] on the same connection. A
+//! reply has an `id` and a notification has none.
 //!
 //! Domain types use camelCase so they map field-for-field onto the GUI's
 //! TypeScript contract.
 
+use serde::de::Error as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -25,13 +25,108 @@ fn enabled() -> bool {
     true
 }
 
-/// One line from a client: an `id` the reply echoes, and the call itself, spread
-/// into `method` and `params` beside it.
+/// The `jsonrpc` member. It is always `"2.0"`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Version;
+
+impl Serialize for Version {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str("2.0")
+    }
+}
+
+impl<'de> Deserialize<'de> for Version {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let version = String::deserialize(deserializer)?;
+        if version == "2.0" {
+            Ok(Version)
+        } else {
+            Err(D::Error::custom(format!(
+                "unsupported jsonrpc version {version:?}"
+            )))
+        }
+    }
+}
+
+/// A request id. JSON-RPC allows a number or a string.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Id {
+    Number(u64),
+    Text(String),
+}
+
+impl From<u64> for Id {
+    fn from(n: u64) -> Self {
+        Id::Number(n)
+    }
+}
+
+/// One request line. `call` is flattened into `method` and `params`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
-    pub id: u64,
+    pub jsonrpc: Version,
+    pub id: Id,
     #[serde(flatten)]
     pub call: Call,
+}
+
+impl Request {
+    pub fn new(id: impl Into<Id>, call: Call) -> Self {
+        Self {
+            jsonrpc: Version,
+            id: id.into(),
+            call,
+        }
+    }
+
+    /// Parses one line. On failure the error includes the request's `id` when it
+    /// could be read. The codes are `-32700` for invalid JSON, `-32600` for a
+    /// malformed request, `-32601` for an unknown method and `-32602` for invalid
+    /// params.
+    pub fn parse(line: &str) -> Result<Self, (Option<Id>, RpcError)> {
+        #[derive(Deserialize)]
+        struct Envelope {
+            #[allow(dead_code)]
+            jsonrpc: Version,
+            id: Id,
+            method: String,
+            #[serde(default)]
+            params: Value,
+        }
+        let raw: Value = serde_json::from_str(line).map_err(|e| {
+            (
+                None,
+                RpcError::new(RpcError::PARSE, format!("parse error: {e}")),
+            )
+        })?;
+        let id = raw
+            .get("id")
+            .and_then(|id| serde_json::from_value(id.clone()).ok());
+        let envelope: Envelope = serde_json::from_value(raw).map_err(|e| {
+            (
+                id.clone(),
+                RpcError::new(RpcError::INVALID_REQUEST, format!("invalid request: {e}")),
+            )
+        })?;
+        let call = serde_json::from_value(serde_json::json!({
+            "method": envelope.method,
+            "params": envelope.params,
+        }))
+        .map_err(|e: serde_json::Error| {
+            let error = if e.to_string().starts_with("unknown variant") {
+                RpcError::new(RpcError::METHOD_NOT_FOUND, "method not found")
+            } else {
+                RpcError::new(RpcError::INVALID_PARAMS, format!("invalid params: {e}"))
+            };
+            (Some(envelope.id.clone()), error)
+        })?;
+        Ok(Self {
+            jsonrpc: Version,
+            id: envelope.id,
+            call,
+        })
+    }
 }
 
 /// Every method the daemon answers, with its typed parameters. Adding a variant
@@ -41,16 +136,15 @@ pub struct Request {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum Call {
-    GetWalletState,
-    GetSyncStatus,
+    GetWalletState(GetWalletStateArgs),
+    GetSyncStatus(WalletArgs),
     ListWallets,
-    SelectWallet(SelectWalletArgs),
     SetWalletLabel(SetWalletLabelArgs),
-    GetBalance,
-    GetTransactions,
+    GetBalance(WalletArgs),
+    GetTransactions(WalletArgs),
     GetTransaction(GetTransactionArgs),
-    GetNotes,
-    GetAddresses,
+    GetNotes(WalletArgs),
+    GetAddresses(WalletArgs),
     ParseUfvk(ParseUfvkArgs),
     ImportUfvk(ImportUfvkArgs),
     SetIndexer(SetIndexerArgs),
@@ -67,23 +161,57 @@ pub enum Call {
     RemoveWallet(RemoveArgs),
     StartOver,
     SubscribeEvents,
+    Authenticate(AuthenticateArgs),
     Shutdown,
 }
 
 impl Call {
+    /// The wire name of this method. It is available without serializing the
+    /// params. The params may contain the passphrase or the cookie.
+    pub fn method_name(&self) -> &'static str {
+        match self {
+            Call::GetWalletState(_) => "getWalletState",
+            Call::GetSyncStatus(_) => "getSyncStatus",
+            Call::ListWallets => "listWallets",
+            Call::SetWalletLabel(_) => "setWalletLabel",
+            Call::GetBalance(_) => "getBalance",
+            Call::GetTransactions(_) => "getTransactions",
+            Call::GetTransaction(_) => "getTransaction",
+            Call::GetNotes(_) => "getNotes",
+            Call::GetAddresses(_) => "getAddresses",
+            Call::ParseUfvk(_) => "parseUfvk",
+            Call::ImportUfvk(_) => "importUfvk",
+            Call::SetIndexer(_) => "setIndexer",
+            Call::SetNotifications(_) => "setNotifications",
+            Call::ExportUfvk(_) => "exportUfvk",
+            Call::RescanWallet(_) => "rescanWallet",
+            Call::SetFiatEnabled(_) => "setFiatEnabled",
+            Call::SetDiscreet(_) => "setDiscreet",
+            Call::GetSpotPrice => "getSpotPrice",
+            Call::GetPriceHistory => "getPriceHistory",
+            Call::Unlock(_) => "unlock",
+            Call::Lock => "lock",
+            Call::VerifyPassphrase(_) => "verifyPassphrase",
+            Call::RemoveWallet(_) => "removeWallet",
+            Call::StartOver => "startOver",
+            Call::SubscribeEvents => "subscribeEvents",
+            Call::Authenticate(_) => "authenticate",
+            Call::Shutdown => "shutdown",
+        }
+    }
+
     /// Whether a GUI client should start the daemon to make this call. Reads that
     /// must see on-disk wallets after a stop-on-close quit, and every lifecycle
     /// method, qualify. Wallet reads do not: the GUI opening is not a reason to
     /// begin background work.
     pub fn may_spawn(&self) -> bool {
         match self {
-            Call::GetWalletState
+            Call::GetWalletState(_)
             | Call::ListWallets
-            | Call::GetSyncStatus
+            | Call::GetSyncStatus(_)
             | Call::ParseUfvk(_)
             | Call::ImportUfvk(_)
             | Call::Unlock(_)
-            | Call::SelectWallet(_)
             | Call::RemoveWallet(_)
             | Call::StartOver
             | Call::SetIndexer(_)
@@ -93,27 +221,27 @@ impl Call {
             | Call::SetWalletLabel(_)
             | Call::RescanWallet(_)
             | Call::Shutdown => true,
-            Call::GetBalance
-            | Call::GetTransactions
+            Call::GetBalance(_)
+            | Call::GetTransactions(_)
             | Call::GetTransaction(_)
-            | Call::GetNotes
-            | Call::GetAddresses
+            | Call::GetNotes(_)
+            | Call::GetAddresses(_)
             | Call::ExportUfvk(_)
             | Call::GetSpotPrice
             | Call::GetPriceHistory
             | Call::Lock
             | Call::VerifyPassphrase(_)
+            | Call::Authenticate(_)
             | Call::SubscribeEvents => false,
         }
     }
 
-    /// Whether the daemon answers this while the GUI session is locked. Only
-    /// lifecycle and authentication go through; anything that would reveal a
-    /// balance, a key, or history waits for `unlock`.
+    /// Whether the daemon answers this on a locked session. Only lifecycle and
+    /// authentication go through. Anything that would reveal a balance, a key, or
+    /// history waits for `unlock`.
     pub fn allowed_while_locked(&self) -> bool {
         match self {
-            Call::GetWalletState
-            | Call::GetSyncStatus
+            Call::GetWalletState(_)
             | Call::ParseUfvk(_)
             | Call::ImportUfvk(_)
             | Call::Unlock(_)
@@ -121,15 +249,16 @@ impl Call {
             | Call::VerifyPassphrase(_)
             | Call::StartOver
             | Call::SubscribeEvents
+            | Call::Authenticate(_)
             | Call::ListWallets
             | Call::Shutdown => true,
-            Call::SelectWallet(_)
-            | Call::SetWalletLabel(_)
-            | Call::GetBalance
-            | Call::GetTransactions
+            Call::SetWalletLabel(_)
+            | Call::GetBalance(_)
+            | Call::GetSyncStatus(_)
+            | Call::GetTransactions(_)
             | Call::GetTransaction(_)
-            | Call::GetNotes
-            | Call::GetAddresses
+            | Call::GetNotes(_)
+            | Call::GetAddresses(_)
             | Call::SetIndexer(_)
             | Call::SetNotifications(_)
             | Call::ExportUfvk(_)
@@ -143,33 +272,134 @@ impl Call {
     }
 }
 
-#[derive(Debug, Serialize)]
+/// One reply line. Exactly one of `result` and `error` is set. `id` is `None`
+/// when the request's id could not be read.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
-    pub id: u64,
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jsonrpc: Version,
+    pub id: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<RpcError>,
 }
 
 impl Response {
-    pub fn ok(id: u64, result: Value) -> Self {
+    pub fn ok(id: Id, result: Value) -> Self {
         Self {
-            id,
-            ok: true,
+            jsonrpc: Version,
+            id: Some(id),
             result: Some(result),
             error: None,
         }
     }
 
-    pub fn err(id: u64, error: impl Into<String>) -> Self {
+    pub fn err(id: Option<Id>, error: RpcError) -> Self {
         Self {
+            jsonrpc: Version,
             id,
-            ok: false,
             result: None,
-            error: Some(error.into()),
+            error: Some(error),
         }
+    }
+
+    /// The result, or the error.
+    pub fn into_result(self) -> Result<Value, RpcError> {
+        match self.error {
+            Some(error) => Err(error),
+            None => Ok(self.result.unwrap_or(Value::Null)),
+        }
+    }
+}
+
+/// A JSON-RPC error object. Codes below `-32000` are reserved by the spec. The
+/// daemon's own codes are in the `-32000..-32099` range.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RpcError {
+    pub code: i64,
+    pub message: String,
+}
+
+impl RpcError {
+    pub const PARSE: i64 = -32700;
+    pub const INVALID_REQUEST: i64 = -32600;
+    pub const METHOD_NOT_FOUND: i64 = -32601;
+    pub const INVALID_PARAMS: i64 = -32602;
+    /// The method ran and failed. The message says why.
+    pub const CALL_FAILED: i64 = -32000;
+    /// The session is locked and the method reads wallet data.
+    pub const LOCKED: i64 = -32001;
+    /// The TCP session has not presented a valid cookie.
+    pub const UNAUTHENTICATED: i64 = -32002;
+
+    pub fn new(code: i64, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub fn call_failed(message: impl Into<String>) -> Self {
+        Self::new(Self::CALL_FAILED, message)
+    }
+
+    pub fn locked() -> Self {
+        Self::new(Self::LOCKED, "wallet is locked")
+    }
+
+    pub fn unauthenticated(message: impl Into<String>) -> Self {
+        Self::new(Self::UNAUTHENTICATED, message)
+    }
+}
+
+impl std::fmt::Display for RpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for RpcError {}
+
+/// The method prefix of every pushed event, for example `event.transaction`.
+pub const EVENT_METHOD_PREFIX: &str = "event.";
+
+/// A server-to-client push. In JSON-RPC this is a request with a `method` and no
+/// `id`. The daemon sends one per [`SyncEvent`] to every subscribed session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Notification {
+    pub jsonrpc: Version,
+    pub method: String,
+    pub params: Value,
+}
+
+impl Notification {
+    /// The notification for an event. The method is the event's tag under
+    /// [`EVENT_METHOD_PREFIX`]. The `params` are the event's fields.
+    pub fn from_event(event: &SyncEvent) -> Self {
+        let mut fields = match serde_json::to_value(event) {
+            Ok(Value::Object(fields)) => fields,
+            _ => serde_json::Map::new(),
+        };
+        let tag = match fields.remove("event") {
+            Some(Value::String(tag)) => tag,
+            _ => String::new(),
+        };
+        Self {
+            jsonrpc: Version,
+            method: format!("{EVENT_METHOD_PREFIX}{tag}"),
+            params: Value::Object(fields),
+        }
+    }
+
+    /// The tagged object the GUI reads, for an `event.*` notification. `None` for
+    /// any other method.
+    pub fn into_event_value(self) -> Option<Value> {
+        let tag = self.method.strip_prefix(EVENT_METHOD_PREFIX)?;
+        let Value::Object(mut fields) = self.params else {
+            return None;
+        };
+        fields.insert("event".into(), Value::String(tag.into()));
+        Some(Value::Object(fields))
     }
 }
 
@@ -205,15 +435,16 @@ pub enum ViewMode {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletState {
+    /// Whether any Wallet exists.
     pub exists: bool,
-    /// True when the wallet file is encrypted and the daemon hasn't been given the
-    /// passphrase yet, so the GUI must collect it via `unlock` before anything works.
+    /// Whether the asking session is locked (docs/adr/0014).
     pub locked: bool,
     /// True when the daemon holds the session passphrase in memory. Lets onboarding
     /// tell a post-Replace empty-but-unlocked daemon from a cold one and skip Set
     /// Password (docs/adr/0004).
     pub session_held: bool,
-    /// The Selected Wallet's id under `wallets/<id>/`. `None` when no wallet exists.
+    /// The Wallet's id under `wallets/<id>/`. `None` when no id was asked for or no
+    /// Wallet exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub wallet_id: Option<String>,
@@ -245,8 +476,7 @@ pub struct WalletState {
     /// new-transaction notification text (docs/adr/0009). Off stays off the wire.
     #[serde(default, skip_serializing_if = "is_false")]
     pub discreet: bool,
-    /// Why the Selected Wallet's file could not be opened, when it could not. The
-    /// GUI explains the failure and offers Remove instead of the dashboard.
+    /// Why this Wallet's file could not be opened, when it could not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional))]
     pub unavailable: Option<String>,
@@ -263,15 +493,14 @@ pub struct WalletSummary {
     pub fingerprint: Option<String>,
     pub network: Network,
     pub birthday_height: u32,
-    /// Whether this is the Selected Wallet, the one the GUI shows.
-    pub selected: bool,
     /// Last-synced confirmed balance in zatoshis (stringified), or `None` for a Wallet
     /// that has not synced since this was tracked. Refreshed after every round, so
     /// the switcher shows a live figure for an open Wallet and the last known one for
-    /// a Wallet that is locked or Unavailable.
+    /// a Wallet that is locked or Unavailable. A locked asking session reads `None`,
+    /// since a balance waits for `unlock`.
     pub last_balance: Option<String>,
     /// This Wallet's own sync status while it is open, `None` while it waits for the
-    /// Passphrase or is Unavailable.
+    /// Passphrase, is Unavailable, or the asking session is locked.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "bindings", ts(optional, as = "Option<SyncStatusWire>"))]
     pub sync: Option<SyncStatus>,
@@ -291,8 +520,17 @@ pub struct WalletSummary {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SelectWalletArgs {
+/// The Wallet a wallet-scoped method addresses, by Fingerprint (docs/adr/0014).
+pub struct WalletArgs {
     pub id: String,
+}
+
+/// The optional id of `getWalletState`. With an id the result is that Wallet's
+/// state. Without one it is the session-level state.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct GetWalletStateArgs {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -306,6 +544,7 @@ pub struct SetWalletLabelArgs {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionArgs {
+    pub id: String,
     pub txid: String,
 }
 
@@ -411,17 +650,15 @@ pub struct ImportUfvkArgs {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetIndexerArgs {
+    pub id: String,
     pub indexer_uri: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetNotificationsArgs {
+    pub id: String,
     pub enabled: bool,
-    /// Which Wallet to toggle. Absent addresses the Selected Wallet, so Settings can
-    /// flip any Wallet without switching to it first.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
 }
 
 /// Drop one Wallet's scanned history and scan again from its Birthday. Settings
@@ -443,6 +680,7 @@ pub struct ExportUfvkArgs {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SetFiatEnabledArgs {
+    pub id: String,
     pub enabled: bool,
 }
 
@@ -499,6 +737,13 @@ pub struct UnlockArgs {
     pub passphrase: String,
 }
 
+/// The cookie a TCP session presents before any other call (docs/adr/0014). The
+/// daemon writes it to `rpc.cookie` in the data dir at startup.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AuthenticateArgs {
+    pub cookie: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifyPassphraseArgs {
     pub passphrase: String,
@@ -507,13 +752,14 @@ pub struct VerifyPassphraseArgs {
 /// Remove one Wallet. The session passphrase is kept, so a later Add wallet skips
 /// Set Password (docs/adr/0004). `select` names the Wallet to show next when the
 /// removed one was Selected: the GUI passes its most recently used other Wallet,
-/// and the daemon falls back to the first remaining one.
+/// and the daemon falls back to the first remaining one. `passphrase` is verified
+/// against the held one before anything is deleted, so the call carries its own
+/// proof and not just an earlier unlock.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveArgs {
     pub id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub select: Option<String>,
+    pub passphrase: String,
 }
 
 /// The `state` tag on the wire, and what the GUI switches on. The daemon works
@@ -1024,41 +1270,53 @@ mod tests {
     // send `params: null` or leave it out; a typo is refused at parse time.
     #[test]
     fn request_wire_shape() {
-        let req: Request =
-            serde_json::from_str(r#"{"id":7,"method":"getWalletState","params":null}"#).unwrap();
-        assert_eq!(req.id, 7);
-        assert!(matches!(req.call, Call::GetWalletState));
+        let req: Request = serde_json::from_str(
+            r#"{"jsonrpc":"2.0","id":7,"method":"getWalletState","params":{}}"#,
+        )
+        .unwrap();
+        assert_eq!(req.id, Id::Number(7));
+        assert!(matches!(
+            req.call,
+            Call::GetWalletState(GetWalletStateArgs { id: None })
+        ));
 
-        let req: Request = serde_json::from_str(r#"{"id":1,"method":"lock"}"#).unwrap();
+        let req: Request =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","id":1,"method":"lock"}"#).unwrap();
         assert!(matches!(req.call, Call::Lock));
 
         let req: Request = serde_json::from_str(
-            r#"{"id":2,"method":"exportUfvk","params":{"id":"w1","passphrase":"pw"}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"method":"exportUfvk","params":{"id":"w1","passphrase":"pw"}}"#,
         )
         .unwrap();
         assert!(matches!(req.call, Call::ExportUfvk(ExportUfvkArgs { ref id, .. }) if id == "w1"));
 
-        assert!(serde_json::from_str::<Request>(r#"{"id":3,"method":"getBalanec"}"#).is_err());
+        assert!(serde_json::from_str::<Request>(
+            r#"{"jsonrpc":"2.0","id":3,"method":"getBalanec","params":{"id":"w1"}}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<Request>(
+            r#"{"id":3,"method":"getBalance","params":{"id":"w1"}}"#
+        )
+        .is_err());
 
-        let line = serde_json::to_string(&Request {
-            id: 4,
-            call: Call::RemoveWallet(RemoveArgs {
+        let line = serde_json::to_string(&Request::new(
+            4,
+            Call::RemoveWallet(RemoveArgs {
                 id: "w1".into(),
-                select: None,
+                passphrase: "pw".into(),
             }),
-        })
+        ))
         .unwrap();
         assert_eq!(
             line,
-            r#"{"id":4,"method":"removeWallet","params":{"id":"w1"}}"#
+            r#"{"jsonrpc":"2.0","id":4,"method":"removeWallet","params":{"id":"w1","passphrase":"pw"}}"#
         );
 
-        let line = serde_json::to_string(&Request {
-            id: 5,
-            call: Call::SubscribeEvents,
-        })
-        .unwrap();
-        assert_eq!(line, r#"{"id":5,"method":"subscribeEvents"}"#);
+        let line = serde_json::to_string(&Request::new(5, Call::SubscribeEvents)).unwrap();
+        assert_eq!(
+            line,
+            r#"{"jsonrpc":"2.0","id":5,"method":"subscribeEvents"}"#
+        );
     }
 
     fn call(method: &str) -> Call {
@@ -1071,9 +1329,14 @@ mod tests {
                 "network": "mainnet",
             }),
             "unlock" | "verifyPassphrase" => serde_json::json!({ "passphrase": "pw" }),
-            "getTransaction" => serde_json::json!({ "txid": "ab" }),
-            "setIndexer" => serde_json::json!({ "indexerUri": "https://zec.rocks:443" }),
-            "removeWallet" | "selectWallet" | "rescanWallet" => serde_json::json!({ "id": "w1" }),
+            "getTransaction" => serde_json::json!({ "id": "w1", "txid": "ab" }),
+            "setIndexer" => {
+                serde_json::json!({ "id": "w1", "indexerUri": "https://zec.rocks:443" })
+            }
+            "getWalletState" => serde_json::json!({}),
+            "getSyncStatus" | "getBalance" | "getTransactions" | "getAddresses" | "getNotes"
+            | "removeWallet" => serde_json::json!({ "id": "w1", "passphrase": "pw" }),
+            | "rescanWallet" => serde_json::json!({ "id": "w1" }),
             "exportUfvk" => serde_json::json!({ "id": "w1", "passphrase": "pw" }),
             _ => Value::Null,
         };
@@ -1081,10 +1344,44 @@ mod tests {
     }
 
     #[test]
-    fn allowlist_permits_lifecycle_and_denies_wallet_reads() {
+    fn method_name_matches_the_serde_tag_for_every_variant() {
         for m in [
             "getWalletState",
             "getSyncStatus",
+            "listWallets",
+            "getBalance",
+            "getTransactions",
+            "getTransaction",
+            "getNotes",
+            "getAddresses",
+            "parseUfvk",
+            "importUfvk",
+            "setIndexer",
+            "exportUfvk",
+            "rescanWallet",
+            "getSpotPrice",
+            "getPriceHistory",
+            "unlock",
+            "lock",
+            "verifyPassphrase",
+            "removeWallet",
+            "startOver",
+            "subscribeEvents",
+            "shutdown",
+        ] {
+            let c = call(m);
+            let tag = serde_json::to_value(&c).unwrap()["method"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            assert_eq!(c.method_name(), tag, "{m}");
+        }
+    }
+
+    #[test]
+    fn allowlist_permits_lifecycle_and_denies_wallet_reads() {
+        for m in [
+            "getWalletState",
             "parseUfvk",
             "importUfvk",
             "unlock",
@@ -1105,9 +1402,9 @@ mod tests {
             "getTransactions",
             "getAddresses",
             "getTransaction",
+            "getSyncStatus",
             "setIndexer",
             "removeWallet",
-            "selectWallet",
             "exportUfvk",
             "rescanWallet",
         ] {
@@ -1178,5 +1475,93 @@ mod tests {
         let args: ImportUfvkArgs = serde_json::from_str(json).unwrap();
         assert_eq!(args.birthday, BirthdayInput::Date(1_700_000_000));
         assert!(args.passphrase.is_none());
+    }
+
+    #[test]
+    fn a_request_round_trips_through_the_jsonrpc_envelope() {
+        let req = Request::new(
+            7,
+            Call::GetTransaction(GetTransactionArgs {
+                id: "w1".into(),
+                txid: "ab".into(),
+            }),
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        assert_eq!(
+            json,
+            r#"{"jsonrpc":"2.0","id":7,"method":"getTransaction","params":{"id":"w1","txid":"ab"}}"#
+        );
+        let parsed = Request::parse(&json).unwrap();
+        assert_eq!(parsed.id, Id::Number(7));
+        assert!(matches!(parsed.call, Call::GetTransaction(_)));
+
+        let unit = Request::parse(r#"{"jsonrpc":"2.0","id":"a","method":"lock"}"#).unwrap();
+        assert_eq!(unit.id, Id::Text("a".into()));
+        assert!(matches!(unit.call, Call::Lock));
+    }
+
+    #[test]
+    fn parse_failures_carry_the_spec_codes_and_the_request_id() {
+        let (id, err) = Request::parse("{nope").unwrap_err();
+        assert_eq!((id, err.code), (None, RpcError::PARSE));
+
+        let (id, err) = Request::parse(r#"{"id":3,"method":"lock"}"#).unwrap_err();
+        assert_eq!(
+            (id, err.code),
+            (Some(Id::Number(3)), RpcError::INVALID_REQUEST)
+        );
+
+        let (id, err) = Request::parse(r#"{"jsonrpc":"2.0","id":4,"method":"fly"}"#).unwrap_err();
+        assert_eq!(
+            (id, err.code),
+            (Some(Id::Number(4)), RpcError::METHOD_NOT_FOUND)
+        );
+
+        let (id, err) = Request::parse(r#"{"jsonrpc":"2.0","id":5,"method":"unlock","params":{}}"#)
+            .unwrap_err();
+        assert_eq!(
+            (id, err.code),
+            (Some(Id::Number(5)), RpcError::INVALID_PARAMS)
+        );
+    }
+
+    #[test]
+    fn responses_carry_exactly_one_of_result_and_error() {
+        let ok =
+            serde_json::to_string(&Response::ok(1.into(), serde_json::json!({"a": 1}))).unwrap();
+        assert_eq!(ok, r#"{"jsonrpc":"2.0","id":1,"result":{"a":1}}"#);
+        let err = serde_json::to_string(&Response::err(None, RpcError::locked())).unwrap();
+        assert_eq!(
+            err,
+            r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32001,"message":"wallet is locked"}}"#
+        );
+        let parsed: Response = serde_json::from_str(&err).unwrap();
+        assert_eq!(parsed.into_result().unwrap_err().code, RpcError::LOCKED);
+    }
+
+    #[test]
+    fn an_event_becomes_a_notification_and_folds_back() {
+        let event = SyncEvent::Transaction {
+            wallet_id: "w1".into(),
+            txid: "ab".into(),
+            kind: TxKind::Received,
+            value_zat: "5".into(),
+            received: true,
+        };
+        let note = Notification::from_event(&event);
+        assert_eq!(note.method, "event.transaction");
+        assert_eq!(
+            serde_json::to_string(&note).unwrap(),
+            r#"{"jsonrpc":"2.0","method":"event.transaction","params":{"kind":"received","received":true,"txid":"ab","valueZat":"5","walletId":"w1"}}"#
+        );
+        let folded = note.into_event_value().unwrap();
+        assert_eq!(folded, serde_json::to_value(&event).unwrap());
+
+        let other = Notification {
+            jsonrpc: Version,
+            method: "ping".into(),
+            params: Value::Null,
+        };
+        assert!(other.into_event_value().is_none());
     }
 }

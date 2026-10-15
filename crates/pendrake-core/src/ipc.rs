@@ -1,90 +1,225 @@
-//! IPC server. Newline-delimited JSON, one task per client, over the platform
-//! transport (Unix socket or Windows named pipe, see [`crate::transport`]).
+//! The JSON-RPC server (docs/adr/0014). It speaks newline-delimited JSON-RPC 2.0
+//! on the platform transport ([`crate::transport`]) and on the optional loopback
+//! TCP listener, with one task per client.
 //!
-//! A connection is request/response until it sends `subscribeEvents`; from then
-//! on the daemon also pushes [`SyncEvent`] lines as the wallet scans, interleaved
-//! with any further replies on the same connection.
+//! Each connection owns a [`Session`]. Until the client sends `subscribeEvents`
+//! the daemon sends only replies. After that it also sends one [`Notification`]
+//! per [`SyncEvent`].
 
+use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use pendrake_ipc::{Call, Request, Response, SyncEvent};
-use tokio::io::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf,
-    WriteHalf,
-};
-use tokio::sync::broadcast::error::RecvError;
+use pendrake_ipc::{Call, Id, Notification, Request, Response, RpcError, SyncEvent};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::net::TcpListener;
+use tokio::sync::broadcast::{self, error::RecvError};
 use zeroize::Zeroizing;
 
 use crate::paths::Paths;
 use crate::transport::Listener;
-use crate::wallet_service::WalletService;
+use crate::wallet_service::{ct_eq, CallError, Session, WalletService};
 
 /// The longest request line accepted. An import carries a UFVK of a few hundred
 /// bytes, so this is generous; it exists so a peer that never sends a newline
 /// cannot grow the read buffer until the daemon dies.
 const MAX_LINE_BYTES: usize = 64 * 1024;
 
-pub async fn serve(service: Arc<WalletService>, paths: Paths) -> Result<()> {
+/// The delay after a wrong cookie.
+const BAD_COOKIE_DELAY: Duration = Duration::from_millis(250);
+
+/// The TCP listener configuration. `cookie` is the secret a session must present
+/// first. `cookie_unlocks` means a session that presented it starts unlocked if
+/// the daemon has the Passphrase in memory.
+pub struct RpcListen {
+    pub addr: SocketAddr,
+    pub cookie: Zeroizing<String>,
+    pub cookie_unlocks: bool,
+}
+
+pub async fn serve(
+    service: Arc<WalletService>,
+    paths: Paths,
+    rpc: Option<Arc<RpcListen>>,
+) -> Result<()> {
     let endpoint = paths.endpoint();
-    let mut listener =
+    let mut local =
         Listener::bind(&endpoint).with_context(|| format!("binding endpoint {endpoint}"))?;
     tracing::info!("listening on {endpoint}");
+
+    if let Some(rpc) = rpc {
+        let tcp = TcpListener::bind(rpc.addr)
+            .await
+            .with_context(|| format!("binding rpc listener {}", rpc.addr))?;
+        tracing::info!("rpc listening on {}", rpc.addr);
+        let service = Arc::clone(&service);
+        tokio::spawn(async move {
+            loop {
+                let conn = match tcp.accept().await {
+                    Ok((conn, _peer)) => conn,
+                    Err(e) => {
+                        tracing::warn!("rpc accept failed: {e}");
+                        continue;
+                    }
+                };
+                let session = service.session(false);
+                spawn_conn(conn, Arc::clone(&service), session, Some(Arc::clone(&rpc)));
+            }
+        });
+    }
 
     loop {
         // An accept error is one failed connection (the OS aborts handshakes
         // under load), not a reason to go deaf: a daemon that keeps syncing but
         // refuses every connection strands the GUI with no way back short of a
         // kill. Log and keep accepting.
-        let conn = match listener.accept().await {
+        let conn = match local.accept().await {
             Ok(conn) => conn,
             Err(e) => {
                 tracing::warn!("accept failed: {e}");
                 continue;
             }
         };
-        let service = Arc::clone(&service);
-        tokio::spawn(async move {
-            if let Err(e) = handle_conn(conn, service).await {
-                tracing::debug!("connection closed: {e}");
-            }
-        });
+        let session = service.session(true);
+        spawn_conn(conn, Arc::clone(&service), session, None);
     }
 }
 
-async fn handle_conn<S>(stream: S, service: Arc<WalletService>) -> Result<()>
+fn spawn_conn<S>(
+    stream: S,
+    service: Arc<WalletService>,
+    session: Session,
+    rpc: Option<Arc<RpcListen>>,
+) where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    tokio::spawn(async move {
+        if let Err(e) = handle_conn(stream, service, session, rpc).await {
+            tracing::debug!("connection closed: {e}");
+        }
+    });
+}
+
+/// Serves one connection until it closes. Dropping the connection drops the session
+/// and relocks it.
+async fn handle_conn<S>(
+    stream: S,
+    service: Arc<WalletService>,
+    mut session: Session,
+    rpc: Option<Arc<RpcListen>>,
+) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Send + 'static,
 {
     let (read_half, mut write_half) = tokio::io::split(stream);
     let mut reader = BufReader::new(read_half);
     let mut buf = Vec::new();
+    let mut events: Option<broadcast::Receiver<SyncEvent>> = None;
 
-    while let Some(line) = read_frame(&mut reader, &mut buf).await? {
-        // A line may carry the passphrase, so it is wiped once handled.
-        let line = Zeroizing::new(line);
-        if line.trim().is_empty() {
-            continue;
-        }
-        let (resp, subscribe) = match serde_json::from_str::<Request>(&line) {
-            Ok(req) => {
-                let subscribe = matches!(req.call, Call::SubscribeEvents);
-                let resp = match service.handle(req.call).await {
-                    Ok(result) => Response::ok(req.id, result),
-                    Err(e) => Response::err(req.id, e.to_string()),
+    loop {
+        tokio::select! {
+            frame = read_frame(&mut reader, &mut buf) => {
+                let Some(line) = frame? else { break };
+                // A line may contain the passphrase or the cookie, so it is wiped once handled.
+                let line = Zeroizing::new(line);
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let (resp, subscribe) = match Request::parse(&line) {
+                    Ok(req) => answer(req, &service, &mut session, rpc.as_deref()).await,
+                    Err((id, error)) => (Response::err(id, error), false),
                 };
-                (resp, subscribe)
+                write_line(&mut write_half, &resp).await?;
+                if subscribe && events.is_none() {
+                    events = Some(service.subscribe());
+                }
             }
-            Err(e) => (Response::err(0, format!("bad request: {e}")), false),
-        };
-        write_line(&mut write_half, &resp).await?;
 
-        // The ack is the last reply before this connection becomes an event feed.
-        if subscribe {
-            return stream_events(reader, write_half, service).await;
+            event = recv(&mut events), if events.is_some() => match event {
+                // A locked session receives no wallet data. An Error (connectivity)
+                // is safe to surface to the unlock screen.
+                Ok(event) => {
+                    if session.unlocked_with(service.encrypted_store())
+                        || matches!(event, SyncEvent::Error { .. })
+                    {
+                        write_line(&mut write_half, &Notification::from_event(&event)).await?;
+                    }
+                }
+                // A slow reader fell behind; the next Progress snapshot resyncs it.
+                Err(RecvError::Lagged(_)) => {}
+                Err(RecvError::Closed) => break,
+            },
         }
     }
     Ok(())
+}
+
+async fn recv(events: &mut Option<broadcast::Receiver<SyncEvent>>) -> Result<SyncEvent, RecvError> {
+    match events {
+        Some(events) => events.recv().await,
+        None => std::future::pending().await,
+    }
+}
+
+/// The reply to one request, and whether the request was an accepted
+/// `subscribeEvents`. `authenticate` is checked here because this is where the
+/// cookie lives. On the local socket it is a plain ack.
+async fn answer(
+    req: Request,
+    service: &Arc<WalletService>,
+    session: &mut Session,
+    rpc: Option<&RpcListen>,
+) -> (Response, bool) {
+    let Request { id, call, .. } = req;
+    if let Call::Authenticate(args) = &call {
+        if let Some(rpc) = rpc {
+            if !session.is_authenticated() {
+                return (
+                    authenticate(id, &args.cookie, rpc, service, session).await,
+                    false,
+                );
+            }
+        }
+    }
+    let subscribe = matches!(call, Call::SubscribeEvents);
+    let method = call.method_name();
+    let resp = match service.dispatch(call, session).await {
+        Ok(result) => Response::ok(id, result),
+        Err(CallError::Locked) => Response::err(Some(id), RpcError::locked()),
+        Err(CallError::Unauthenticated) => {
+            Response::err(Some(id), RpcError::unauthenticated("not authenticated"))
+        }
+        Err(CallError::Failed(e)) => Response::err(Some(id), RpcError::call_failed(e.to_string())),
+    };
+    match &resp.error {
+        None => tracing::debug!(method, id = ?resp.id, "rpc ok"),
+        Some(e) => {
+            tracing::debug!(method, id = ?resp.id, code = e.code, error = %e.message, "rpc error")
+        }
+    }
+    let accepted = resp.error.is_none();
+    (resp, subscribe && accepted)
+}
+
+async fn authenticate(
+    id: Id,
+    cookie: &str,
+    rpc: &RpcListen,
+    service: &WalletService,
+    session: &mut Session,
+) -> Response {
+    if !ct_eq(cookie.as_bytes(), rpc.cookie.as_bytes()) {
+        tracing::debug!(method = "authenticate", id = ?id, "rpc error: invalid cookie");
+        tokio::time::sleep(BAD_COOKIE_DELAY).await;
+        return Response::err(Some(id), RpcError::unauthenticated("invalid cookie"));
+    }
+    tracing::debug!(method = "authenticate", id = ?id, "rpc ok");
+    session.authenticate();
+    if rpc.cookie_unlocks && service.session_key_held().await {
+        session.unlock();
+    }
+    Response::ok(id, serde_json::Value::Null)
 }
 
 /// One newline-delimited frame, or `None` once the peer has closed. A final line
@@ -114,69 +249,6 @@ where
         if buf.len() > MAX_LINE_BYTES {
             bail!("request line exceeds {MAX_LINE_BYTES} bytes");
         }
-    }
-}
-
-/// Drain the service's event stream onto a subscribed connection, still answering
-/// any requests the client sends alongside the push feed.
-async fn stream_events<S>(
-    mut reader: BufReader<ReadHalf<S>>,
-    mut write_half: WriteHalf<S>,
-    service: Arc<WalletService>,
-) -> Result<()>
-where
-    S: AsyncRead + AsyncWrite,
-{
-    let mut buf = Vec::new();
-    // Track this subscriber so the service relocks when the last GUI feed drops: a
-    // Sign Out is explicit, this catches a plain quit. The guard decrements on every
-    // exit path.
-    service.subscriber_joined();
-    let _subscriber = SubscriberGuard(Arc::clone(&service));
-
-    let mut events = service.subscribe();
-    loop {
-        tokio::select! {
-            frame = read_frame(&mut reader, &mut buf) => {
-                let Some(line) = frame? else { break };
-                let line = Zeroizing::new(line);
-                if line.trim().is_empty() {
-                    continue;
-                }
-                let resp = match serde_json::from_str::<Request>(&line) {
-                    Ok(req) => match service.handle(req.call).await {
-                        Ok(result) => Response::ok(req.id, result),
-                        Err(e) => Response::err(req.id, e.to_string()),
-                    },
-                    Err(e) => Response::err(0, format!("bad request: {e}")),
-                };
-                write_line(&mut write_half, &resp).await?;
-            }
-
-            event = events.recv() => match event {
-                // While the session is locked, push nothing wallet-bearing; only an
-                // Error (connectivity) is safe to surface to the unlock screen.
-                Ok(event) => {
-                    if !service.session_locked() || matches!(event, SyncEvent::Error { .. }) {
-                        write_line(&mut write_half, &event).await?;
-                    }
-                }
-                // A slow reader fell behind; the next Progress snapshot resyncs it.
-                Err(RecvError::Lagged(_)) => {}
-                Err(RecvError::Closed) => break,
-            },
-        }
-    }
-    Ok(())
-}
-
-/// Decrements the service's subscriber count when a feed ends, relocking on the last
-/// one out. A guard, so every exit path (clean return, error, or panic) is covered.
-struct SubscriberGuard(Arc<WalletService>);
-
-impl Drop for SubscriberGuard {
-    fn drop(&mut self) {
-        self.0.subscriber_left();
     }
 }
 
