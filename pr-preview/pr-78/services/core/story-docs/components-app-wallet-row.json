@@ -1,0 +1,110 @@
+{
+  "components": {
+    "components-app-wallet-row": {
+      "id": "components-app-wallet-row",
+      "name": "Row",
+      "path": "./src/components/app/wallet-row/wallet-row.stories.tsx",
+      "import": "import { InlineName, WalletMenu, WalletRow } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-app-wallet-row--playground": {
+          "id": "components-app-wallet-row--playground",
+          "name": "Playground",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--selected": {
+          "id": "components-app-wallet-row--selected",
+          "name": "Selected",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--syncing": {
+          "id": "components-app-wallet-row--syncing",
+          "name": "Syncing",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--sync-error": {
+          "id": "components-app-wallet-row--sync-error",
+          "name": "Sync Error",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--wrong-chain": {
+          "id": "components-app-wallet-row--wrong-chain",
+          "name": "Wrong Chain",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--unavailable": {
+          "id": "components-app-wallet-row--unavailable",
+          "name": "Unavailable",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--closed": {
+          "id": "components-app-wallet-row--closed",
+          "name": "Closed",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--unnamed": {
+          "id": "components-app-wallet-row--unnamed",
+          "name": "Unnamed",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--with-menu": {
+          "id": "components-app-wallet-row--with-menu",
+          "name": "With Menu",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--renaming": {
+          "id": "components-app-wallet-row--renaming",
+          "name": "Renaming",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--never-synced": {
+          "id": "components-app-wallet-row--never-synced",
+          "name": "Never Synced",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "components-app-wallet-row--live": {
+          "id": "components-app-wallet-row--live",
+          "name": "Live",
+          "snippet": "const Live = () => <>\n    <Cycling\n        state=\"synced\"\n        selected={false}\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        states={[\"synced\", \"syncing\"]}\n        every={1600} />\n    <Cycling\n        state=\"synced\"\n        selected={false}\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        states={CYCLE}\n        every={1600}\n        named={false} />\n</>;"
+        },
+        "components-app-wallet-row--gallery": {
+          "id": "components-app-wallet-row--gallery",
+          "name": "Gallery",
+          "snippet": "const Gallery = () => <>\n    <Row\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"synced\"\n        selected />\n    <Row\n        selected={false}\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"syncing\" />\n    <Row\n        selected={false}\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"error\" />\n    <Row\n        selected={false}\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"wrongChain\" />\n    <Row\n        selected={false}\n        named\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"unavailable\" />\n    <Row\n        selected={false}\n        hasBalance\n        disabled={false}\n        menu={false}\n        renaming={false}\n        onPick={fn()}\n        state=\"closed\"\n        named={false} />\n</>;"
+        }
+      }
+    }
+  }
+}

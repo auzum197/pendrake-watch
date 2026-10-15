@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-ui-input": {
+      "id": "components-ui-input",
+      "name": "Input",
+      "path": "./src/components/ui/input/input.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Input",
+        "exportName": "Input",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/input/input.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}

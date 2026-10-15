@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-ui-hold-button": {
+      "id": "components-ui-hold-button",
+      "name": "HoldButton",
+      "path": "./src/components/ui/hold-button/hold-button.stories.tsx",
+      "import": "import { HoldButton } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-ui-hold-button--default": {
+          "id": "components-ui-hold-button--default",
+          "name": "Default",
+          "snippet": "const Default = () => {\n  const [confirmed, setConfirmed] = useState(0);\n  return (\n    <div className=\"flex w-72 flex-col gap-3\">\n      <HoldButton onConfirm={() => setConfirmed((n) => n + 1)}>\n        Hold to remove wallet\n      </HoldButton>\n      <p className=\"text-sm text-muted-foreground\">\n        Confirmed {confirmed} time{confirmed === 1 ? \"\" : \"s\"}\n      </p>\n    </div>\n  );\n};"
+        },
+        "components-ui-hold-button--quick": {
+          "id": "components-ui-hold-button--quick",
+          "name": "Quick",
+          "snippet": "const Quick = () => (\n  <div className=\"w-72\">\n    <HoldButton durationMs={600} onConfirm={() => {}}>\n      Hold to delete\n    </HoldButton>\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "components": {
+    "components-ui-button": {
+      "id": "components-ui-button",
+      "name": "Button",
+      "path": "./src/components/ui/button/button.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Button",
+        "exportName": "Button",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/button/button.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "variant": {
+            "name": "variant",
+            "required": false,
+            "type": {
+              "name": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"default\""
+            }
+          },
+          "size": {
+            "name": "size",
+            "required": false,
+            "type": {
+              "name": "\"default\" | \"xs\" | \"sm\" | \"lg\" | \"icon\" | \"icon-xs\" | \"icon-sm\" | \"icon-lg\" | null | undefined"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"default\""
+            }
+          },
+          "asChild": {
+            "name": "asChild",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "false"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/button/button.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "variant": {
+          "name": "variant",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+          },
+          "table": {
+            "type": {
+              "summary": "\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined"
+            },
+            "defaultValue": {
+              "summary": "\"default\""
+            }
+          }
+        },
+        "size": {
+          "name": "size",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "\"default\" | \"xs\" | \"sm\" | \"lg\" | \"icon\" | \"icon-xs\" | \"icon-sm\" | \"icon-lg\" | null | undefined"
+          },
+          "table": {
+            "type": {
+              "summary": "\"default\" | \"xs\" | \"sm\" | \"lg\" | \"icon\" | \"icon-xs\" | \"icon-sm\" | \"icon-lg\" | null | undefined"
+            },
+            "defaultValue": {
+              "summary": "\"default\""
+            }
+          }
+        },
+        "asChild": {
+          "name": "asChild",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            },
+            "defaultValue": {
+              "summary": "false"
+            }
+          }
+        }
+      }
+    }
+  }
+}

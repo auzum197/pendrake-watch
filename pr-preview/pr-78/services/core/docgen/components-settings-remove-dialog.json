@@ -1,0 +1,178 @@
+{
+  "components": {
+    "components-settings-remove-dialog": {
+      "id": "components-settings-remove-dialog",
+      "name": "RemoveDialog",
+      "path": "./src/components/settings/remove-dialog.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "RemoveDialog",
+        "exportName": "RemoveDialog",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/settings/remove-dialog.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "open": {
+            "name": "open",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/remove-dialog.tsx"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": true,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/remove-dialog.tsx"
+              }
+            ]
+          },
+          "walletId": {
+            "name": "walletId",
+            "required": true,
+            "type": {
+              "name": "string | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/remove-dialog.tsx"
+              }
+            ]
+          },
+          "fingerprint": {
+            "name": "fingerprint",
+            "required": true,
+            "type": {
+              "name": "string | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/remove-dialog.tsx"
+              }
+            ]
+          },
+          "network": {
+            "name": "network",
+            "required": true,
+            "type": {
+              "name": "enum",
+              "raw": "\"mainnet\" | \"regtest\"",
+              "value": [
+                {
+                  "value": "\"mainnet\""
+                },
+                {
+                  "value": "\"regtest\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/remove-dialog.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "walletId": {
+          "name": "walletId",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "string | null"
+          },
+          "table": {
+            "type": {
+              "summary": "string | null"
+            }
+          }
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "string | null"
+          },
+          "table": {
+            "type": {
+              "summary": "string | null"
+            }
+          }
+        },
+        "network": {
+          "name": "network",
+          "description": "",
+          "type": {
+            "required": true,
+            "raw": "\"mainnet\" | \"regtest\"",
+            "name": "enum",
+            "value": [
+              "mainnet",
+              "regtest"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"mainnet\" | \"regtest\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

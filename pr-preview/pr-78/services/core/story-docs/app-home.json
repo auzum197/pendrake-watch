@@ -1,0 +1,116 @@
+{
+  "components": {
+    "app-home": {
+      "id": "app-home",
+      "name": "Home",
+      "path": "./src/routes/dashboard.stories.tsx",
+      "import": "import { DashboardView } from 'pendrake-watch';",
+      "stories": {
+        "app-home--synced": {
+          "id": "app-home--synced",
+          "name": "Synced",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--syncing": {
+          "id": "app-home--syncing",
+          "name": "Syncing",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--unreachable": {
+          "id": "app-home--unreachable",
+          "name": "Unreachable",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--wrong-chain": {
+          "id": "app-home--wrong-chain",
+          "name": "Wrong Chain",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--sync-error": {
+          "id": "app-home--sync-error",
+          "name": "Sync Error",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--loading": {
+          "id": "app-home--loading",
+          "name": "Loading",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--empty": {
+          "id": "app-home--empty",
+          "name": "Empty",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--switching": {
+          "id": "app-home--switching",
+          "name": "Switching",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--long-history": {
+          "id": "app-home--long-history",
+          "name": "Long History",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--discreet": {
+          "id": "app-home--discreet",
+          "name": "Discreet",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--usd": {
+          "id": "app-home--usd",
+          "name": "Usd",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--usd-stale": {
+          "id": "app-home--usd-stale",
+          "name": "Usd Stale",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "app-home--usd-consent": {
+          "id": "app-home--usd-consent",
+          "name": "Usd Consent",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        }
+      }
+    }
+  }
+}

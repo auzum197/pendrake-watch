@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-sonner": {
+      "id": "components-ui-sonner",
+      "name": "Toaster",
+      "path": "./src/components/ui/sonner/sonner.stories.tsx",
+      "import": "import { Button, Toaster } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-sonner--default": {
+          "id": "components-ui-sonner--default",
+          "name": "Default",
+          "snippet": "const Default = () => (\n  <div className=\"flex flex-wrap gap-2\">\n    <Button onClick={() => toast(\"Wallet synced\")}>Message</Button>\n    <Button onClick={() => toast.success(\"Copied to clipboard\")}>\n      Success\n    </Button>\n    <Button onClick={() => toast.error(\"Indexer unreachable\")}>Error</Button>\n    <Button\n      onClick={() =>\n        toast(\"Notifications enabled\", {\n          action: { label: \"Undo\", onClick: () => {} },\n        })\n      }\n    >\n      With action\n    </Button>\n    <Toaster />\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-notes-notes-skeleton": {
+      "id": "components-notes-notes-skeleton",
+      "name": "SummaryBarSkeleton",
+      "path": "./src/components/notes/notes-skeleton.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "SummaryBarSkeleton",
+        "exportName": "SummaryBarSkeleton",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/notes/notes-skeleton.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}
