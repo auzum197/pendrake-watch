@@ -1,0 +1,5 @@
+# Pinned so a new stable release does not cold every CI cache at once. Bump on
+# purpose, then every workflow and developer picks it up together.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt"]

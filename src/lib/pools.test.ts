@@ -73,7 +73,7 @@ describe("poolStats share", () => {
 
   it("is zero for every pool when the wallet is empty", () => {
     const stats = poolStats(null, [], []);
-    expect(stats.map((s) => s.share)).toEqual([0, 0, 0]);
+    expect(stats.map((s) => s.share)).toEqual([0, 0, 0, 0]);
   });
 });
 
