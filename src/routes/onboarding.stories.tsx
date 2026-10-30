@@ -36,10 +36,13 @@ const meta = {
       await new Promise((r) => setTimeout(r, 600));
       const key = ufvk.trim();
       if (key.length < 8) return { kind: "malformed", reason: "too short" };
-      if (key.startsWith("uviewtest")) return { kind: "testnet" };
       return {
         kind: "valid",
-        network: key.startsWith("uviewregtest") ? "regtest" : "mainnet",
+        network: key.startsWith("uviewregtest")
+          ? "regtest"
+          : key.startsWith("uviewtest")
+            ? "testnet"
+            : "mainnet",
         fingerprint: "b7e2c91a4f03d6e8",
         pools: ["orchard", "sapling", "transparent"],
       };
@@ -83,5 +86,32 @@ export const Malformed: Story = {
     await expect(
       canvas.queryByRole("button", { name: /abc/ }),
     ).not.toBeInTheDocument();
+  },
+};
+
+const SAMPLE_TESTNET_KEY = SAMPLE_KEY.replace("uview1", "uviewtest1");
+
+// A testnet key is a first-class import: it folds like mainnet and its Indexer
+// step opens on the testnet default, with the custom entry beside it.
+export const Testnet: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByPlaceholderText("your ufvk..."));
+    await userEvent.paste(SAMPLE_TESTNET_KEY);
+    await waitFor(
+      () =>
+        expect(
+          canvas.getByRole("button", { name: /uviewtest1tdhy/ }),
+        ).toBeVisible(),
+      { timeout: 3000 },
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+    await waitFor(
+      () =>
+        expect(
+          canvas.getByRole("button", { name: /testnet\.zec\.rocks/ }),
+        ).toBeVisible(),
+      { timeout: 3000 },
+    );
   },
 };

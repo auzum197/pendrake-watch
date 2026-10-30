@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 
 use pendrake_ipc::{
     BirthdayInput, Call, ExportUfvkArgs, GetTransactionArgs, ImportUfvkArgs, Network,
-    ParseUfvkArgs, RemoveArgs, Request, RescanArgs, SelectWalletArgs, SetDiscreetArgs,
-    SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, UnlockArgs,
-    VerifyPassphraseArgs,
+    ParseUfvkArgs, RemoveArgs, Request, RescanArgs, RestartSyncArgs, SelectWalletArgs,
+    SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs,
+    UnlockArgs, VerifyPassphraseArgs,
 };
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -536,6 +536,14 @@ async fn rescan_wallet(id: String) -> Result<Value, String> {
     request(Call::RescanWallet(RescanArgs { id })).await
 }
 
+/// Nudge a Wallet into a fresh sync round now, cutting short the engine's backoff
+/// after a failed round. `id` is `None` for the Selected Wallet. Returns the
+/// Selected Wallet's state; progress arrives on the sync-event stream.
+#[tauri::command]
+async fn restart_sync(id: Option<String>) -> Result<Value, String> {
+    request(Call::RestartSync(RestartSyncArgs { id })).await
+}
+
 /// Wipe every Wallet and forget the passphrase: the way out of a forgotten one.
 #[tauri::command]
 async fn start_over() -> Result<Value, String> {
@@ -725,6 +733,7 @@ pub fn run() {
             get_price_history,
             remove_wallet,
             rescan_wallet,
+            restart_sync,
             start_over,
             list_wallets,
             select_wallet,

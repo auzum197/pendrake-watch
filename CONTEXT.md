@@ -20,7 +20,7 @@ _Avoid_: id, account index
 The deterministic icon rendered from a Wallet's fingerprint, giving each Wallet a recognizable visual identity in the UI.
 
 **Network**:
-The Zcash chain a Wallet is bound to, either mainnet or regtest. It is encoded in the UFVK and fixed for the Wallet's life. A UFVK from one network cannot be loaded against another.
+The Zcash chain a Wallet is bound to: mainnet, testnet, or regtest. It is encoded in the UFVK and fixed for the Wallet's life. A UFVK from one network cannot be loaded against another.
 _Avoid_: chain, env
 
 **Initial scan**:
@@ -28,7 +28,7 @@ The first full sync of a Wallet, from its UFVK's Birthday to the chain tip pinne
 _Avoid_: backfill, catch-up, priming
 
 **Tip-follow**:
-The steady state after the Initial scan: a Wallet keeps pace with the chain tip round after round and notifies on each newly detected transaction. Every Wallet is in Tip-follow whenever the app runs, Selected or not, locked or not. It is never started by hand, and it recovers from an unreachable Indexer on its own, so the sync indicator shows state and offers no action.
+The steady state after the Initial scan: a Wallet keeps pace with the chain tip round after round and notifies on each newly detected transaction. Every Wallet is in Tip-follow whenever the app runs, Selected or not, locked or not. It is never started by hand, and it recovers from an unreachable Indexer on its own: failed rounds back off and retry until the cause clears. The one hand-held lever is the sync error pill, which cuts that backoff short once the user has fixed the cause; it starts no round the loop wouldn't start itself.
 _Avoid_: background sync, auto-sync, polling, manual sync
 
 **Unavailable**:
@@ -44,7 +44,7 @@ The status of a transaction. Confirmed means it has landed in a block, Pending m
 _Avoid_: completed, in progress, complete, unconfirmed
 
 **Birthday**:
-The block height a Wallet begins its initial scan from. Set at import as an exact height or derived from a date. When unspecified it defaults to Sapling activation, the floor that guarantees no shielded history is missed.
+The block height a Wallet begins its initial scan from. Set at import as an exact height, or on mainnet derived from a date (testnet and regtest take a height only). When unspecified it defaults to Sapling activation, the floor that guarantees no shielded history is missed.
 _Avoid_: start height, birth height
 
 **Pool**:
@@ -64,7 +64,7 @@ The optional text carried by a shielded Note. UTXOs carry none, and one transact
 _Avoid_: message, comment
 
 **Indexer**:
-The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one, chosen during onboarding and changeable later from Settings. Mainnet offers a curated region list, opening on an auto-routed default, with a custom URL alongside it; regtest has no public default, so the user must supply one. An unreachable Indexer is reported once per outage, however many Wallets use it.
+The lightwalletd or zebra instance a Wallet connects to for chain data. Each Wallet has one, chosen during onboarding and changeable later from Settings. Mainnet offers a curated region list and testnet a single public default, both opening there with a custom URL alongside; regtest has no public default, so the user must supply one. An unreachable Indexer is reported once per outage, however many Wallets use it.
 _Avoid_: server, endpoint, node
 
 **Anchor**:

@@ -55,6 +55,11 @@ jobs:
       - name: Check formatting
         run: pnpm fmt:check
 
+      # Rules-of-React violations that would make a component bail out of
+      # compiler memoization (babel-plugin-react-compiler runs in vite.config).
+      - name: React Compiler lint
+        run: pnpm lint:compiler
+
       # vite build does not typecheck and the unit tests need neither, so the
       # three run side by side. The Storybook browser tests stay out of CI: they
       # need a Playwright Chromium download and a second cache.

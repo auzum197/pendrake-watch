@@ -4,20 +4,21 @@ export type OnboardingStep = "identity" | "indexer" | "passphrase";
 
 // The network is derived from the UFVK's bech32m prefix and is immutable for the
 // wallet (docs/adr/0002): the engine cross-checks this against the key and rejects
-// a mismatch. uviewregtest is regtest, uviewtest is public testnet (which the engine
-// rejects, but the prefix shares regtest's onboarding step sequence), otherwise mainnet.
+// a mismatch. uviewregtest is regtest, uviewtest is public testnet, otherwise
+// mainnet.
 export function networkFromUfvk(ufvk: string): Network {
   const hrp = ufvk.trim().toLowerCase();
-  return hrp.startsWith("uviewtest") || hrp.startsWith("uviewregtest")
-    ? "regtest"
-    : "mainnet";
+  if (hrp.startsWith("uviewregtest")) return "regtest";
+  if (hrp.startsWith("uviewtest")) return "testnet";
+  return "mainnet";
 }
 
-// The Indexer step follows the identity on both networks, differing only in what it
-// offers: mainnet picks from the curated list or a custom URL, regtest has no public
-// default and must supply one (CONTEXT.md "Indexer"). The Passphrase step is dropped
-// when the daemon already holds the session passphrase, which is the post-Replace
-// case: the new Wallet inherits it (docs/adr/0004).
+// The Indexer step follows the identity on all networks, differing only in what it
+// offers: mainnet picks from the curated region list or a custom URL, testnet opens
+// on its single public default, and regtest has no default and must supply one
+// (CONTEXT.md "Indexer"). The Passphrase step is dropped when the daemon already
+// holds the session passphrase, which is the post-Replace case: the new Wallet
+// inherits it (docs/adr/0004).
 export function onboardingSteps(sessionHeld = false): OnboardingStep[] {
   const steps: OnboardingStep[] = ["identity", "indexer"];
   if (!sessionHeld) {
@@ -73,13 +74,14 @@ export type BirthdayDraft = {
 
 // The raw Birthday choice the daemon's resolver settles into a height, so the GUI
 // never pre-resolves (docs/adr/0002). Regtest has no date path and falls back to
-// default (its activation, height 1) when left blank; on mainnet a blank height or
+// default (its activation, height 1) when left blank; testnet's block cadence
+// doesn't project linearly, so it is height only too. On mainnet a blank height or
 // an unparseable date both fall back to default (the Sapling floor).
 export function birthdayChoice(
   draft: BirthdayDraft,
   network: Network,
 ): BirthdayInput {
-  if (network === "regtest" || draft.syncMode === "height") {
+  if (network !== "mainnet" || draft.syncMode === "height") {
     return draft.height
       ? { kind: "height", value: Number(draft.height) }
       : { kind: "default" };

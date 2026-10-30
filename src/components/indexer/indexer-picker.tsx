@@ -1,14 +1,15 @@
 import type { Ref } from "react";
 import { IconCheck } from "@tabler/icons-react";
 import { Input } from "@/components/ui/input/input";
-import { CUSTOM_INDEXER, isCustomIndexer } from "@/lib/indexer";
-import { MAINNET_INDEXERS, type Network } from "@/lib/ipc";
+import { CUSTOM_INDEXER, indexerPresets, isCustomIndexer } from "@/lib/indexer";
+import { type Network } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 
-// The Indexer choice: on mainnet the curated zec.rocks region list plus a custom
-// entry, on regtest the custom field alone, since there is no public default to
-// offer. Shared by the onboarding step and Settings, which differ only in the copy
-// around it and how the change is committed.
+// The Indexer choice: the network's curated presets (mainnet's region list,
+// testnet's single default) plus a custom entry; regtest shows the custom field
+// alone, since it has no public default to offer. Shared by the onboarding step
+// and Settings, which differ only in the copy around it and how the change is
+// committed.
 export function IndexerPicker({
   network,
   selection,
@@ -37,12 +38,13 @@ export function IndexerPicker({
   onCustomSubmit?: () => void;
 }) {
   const custom = isCustomIndexer(selection, network);
+  const presets = indexerPresets(network);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      {network === "mainnet" && (
+      {presets.length > 0 && (
         <ul className="flex flex-col gap-1.5">
-          {MAINNET_INDEXERS.map((preset) => (
+          {presets.map((preset) => (
             <IndexerRow
               key={preset.uri}
               label={preset.label}
