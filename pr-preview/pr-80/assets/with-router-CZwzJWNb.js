@@ -1,1 +1,0 @@
-import{c as r,d as s,e as a,j as i,f as n}from"./iframe-jTRNIEbi.js";const c=t=>{const o=r({component:t}),e=s({routeTree:o,history:a({initialEntries:["/"]})});return i.jsx(n,{router:e})};export{c as w};
