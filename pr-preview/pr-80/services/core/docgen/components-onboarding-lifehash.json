@@ -1,0 +1,106 @@
+{
+  "components": {
+    "components-onboarding-lifehash": {
+      "id": "components-onboarding-lifehash",
+      "name": "LifeHashIcon",
+      "path": "./src/components/onboarding/lifehash.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "LifeHashIcon",
+        "exportName": "LifeHashIcon",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/onboarding/lifehash.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "fingerprint": {
+            "name": "fingerprint",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash.tsx"
+              }
+            ]
+          },
+          "style": {
+            "name": "style",
+            "required": false,
+            "type": {
+              "name": "CSSProperties"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/lifehash.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "fingerprint": {
+          "name": "fingerprint",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "style": {
+          "name": "style",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "CSSProperties"
+          },
+          "table": {
+            "type": {
+              "summary": "CSSProperties"
+            }
+          }
+        }
+      }
+    }
+  }
+}
