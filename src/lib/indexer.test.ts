@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   CUSTOM_INDEXER,
+  DEFAULT_INDEXER,
+  DEFAULT_TESTNET_INDEXER,
+  defaultIndexer,
+  effectiveIndexerSelection,
+  indexerPresets,
   indexerReady,
   isCustomIndexer,
   looksLikeUrl,
@@ -23,6 +28,22 @@ describe("looksLikeUrl", () => {
   });
 });
 
+describe("indexerPresets", () => {
+  it("gives mainnet the region list and testnet its single default", () => {
+    expect(indexerPresets("mainnet")).toHaveLength(5);
+    expect(indexerPresets("testnet")).toEqual([
+      { label: "Default", uri: DEFAULT_TESTNET_INDEXER },
+    ]);
+    expect(indexerPresets("regtest")).toEqual([]);
+  });
+
+  it("names each network's opening default, null without one", () => {
+    expect(defaultIndexer("mainnet")).toBe(DEFAULT_INDEXER);
+    expect(defaultIndexer("testnet")).toBe(DEFAULT_TESTNET_INDEXER);
+    expect(defaultIndexer("regtest")).toBeNull();
+  });
+});
+
 describe("isCustomIndexer", () => {
   it("reads the sentinel as custom on mainnet", () => {
     expect(isCustomIndexer(CUSTOM_INDEXER, "mainnet")).toBe(true);
@@ -34,9 +55,42 @@ describe("isCustomIndexer", () => {
   });
 });
 
+describe("effectiveIndexerSelection", () => {
+  it("keeps custom and a preset of the same network", () => {
+    expect(effectiveIndexerSelection(CUSTOM_INDEXER, "testnet")).toBe(
+      CUSTOM_INDEXER,
+    );
+    expect(effectiveIndexerSelection(DEFAULT_TESTNET_INDEXER, "testnet")).toBe(
+      DEFAULT_TESTNET_INDEXER,
+    );
+  });
+
+  it("swaps a carried-over preset for this network's own default", () => {
+    // The draft starts on mainnet's default before any key is pasted.
+    expect(effectiveIndexerSelection(DEFAULT_INDEXER, "testnet")).toBe(
+      DEFAULT_TESTNET_INDEXER,
+    );
+    expect(effectiveIndexerSelection(DEFAULT_TESTNET_INDEXER, "mainnet")).toBe(
+      DEFAULT_INDEXER,
+    );
+  });
+
+  it("passes anything through on regtest, whose import always takes the custom URL", () => {
+    expect(effectiveIndexerSelection(DEFAULT_INDEXER, "regtest")).toBe(
+      DEFAULT_INDEXER,
+    );
+  });
+});
+
 describe("resolveIndexer", () => {
   it("takes a mainnet preset as-is", () => {
     expect(resolveIndexer(PRESET, "https://ignored", "mainnet")).toBe(PRESET);
+  });
+
+  it("takes a testnet preset as-is", () => {
+    expect(
+      resolveIndexer(DEFAULT_TESTNET_INDEXER, "https://ignored", "testnet"),
+    ).toBe(DEFAULT_TESTNET_INDEXER);
   });
 
   it("takes the trimmed custom URL when custom is selected", () => {
@@ -55,6 +109,10 @@ describe("resolveIndexer", () => {
 describe("indexerReady", () => {
   it("is ready on any mainnet preset", () => {
     expect(indexerReady(PRESET, "", "mainnet")).toBe(true);
+  });
+
+  it("is ready on the testnet default", () => {
+    expect(indexerReady(DEFAULT_TESTNET_INDEXER, "", "testnet")).toBe(true);
   });
 
   it("needs a URL-shaped custom entry", () => {

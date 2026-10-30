@@ -1,9 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
-import { fn } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 import { useState } from "react";
 import { IndexerPicker } from "./indexer-picker";
-import { CUSTOM_INDEXER } from "@/lib/indexer";
-import { DEFAULT_INDEXER } from "@/lib/ipc";
+import {
+  CUSTOM_INDEXER,
+  DEFAULT_INDEXER,
+  DEFAULT_TESTNET_INDEXER,
+} from "@/lib/indexer";
 
 const meta = {
   component: IndexerPicker,
@@ -24,7 +27,7 @@ function Demo({
   start,
   inputClassName,
 }: {
-  network: "mainnet" | "regtest";
+  network: "mainnet" | "testnet" | "regtest";
   start: string;
   inputClassName?: string;
 }) {
@@ -57,6 +60,17 @@ export const MainnetCustom: Story = {
 // Regtest has no public default, so the field stands alone with no list above it.
 export const Regtest: Story = {
   render: () => <Demo network="regtest" start={CUSTOM_INDEXER} />,
+};
+
+// Testnet opens on its single public default, with a custom entry beside it.
+export const Testnet: Story = {
+  render: () => <Demo network="testnet" start={DEFAULT_TESTNET_INDEXER} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("button", { name: /testnet\.zec\.rocks/ }),
+    ).toBeVisible();
+  },
 };
 
 // The onboarding step's larger field, sized to sit with the wizard's other inputs.

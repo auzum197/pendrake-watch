@@ -19,9 +19,9 @@ describe("onboardingSteps", () => {
 });
 
 describe("networkFromUfvk", () => {
-  it("reads a regtest prefix as regtest", () => {
+  it("reads a non-mainnet prefix as its network", () => {
     expect(networkFromUfvk("uviewregtest1abc")).toBe("regtest");
-    expect(networkFromUfvk("uviewtest1abc")).toBe("regtest");
+    expect(networkFromUfvk("uviewtest1abc")).toBe("testnet");
   });
 
   it("treats anything else as mainnet", () => {
@@ -86,6 +86,21 @@ describe("birthdayChoice", () => {
       birthdayChoice(
         { syncMode: "date", date: "28/10/2018", height: "" },
         "regtest",
+      ),
+    ).toEqual({ kind: "default" });
+  });
+
+  it("is height only on testnet too, whose cadence doesn't project", () => {
+    expect(
+      birthdayChoice(
+        { syncMode: "date", date: "28/10/2018", height: "915000" },
+        "testnet",
+      ),
+    ).toEqual({ kind: "height", value: 915000 });
+    expect(
+      birthdayChoice(
+        { syncMode: "date", date: "28/10/2018", height: "" },
+        "testnet",
       ),
     ).toEqual({ kind: "default" });
   });

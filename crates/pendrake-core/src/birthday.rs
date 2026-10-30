@@ -36,6 +36,8 @@ const MAINNET_ANCHOR_TIME: i64 = 1_782_160_473;
 /// to Sapling activation, the earliest supported block; an explicit height is used
 /// as given; a mainnet date back-projects from the anchor, never landing after the
 /// picked day. Regtest has no date reference, so a date there floors to activation.
+/// Testnet's difficulty-reset emissions don't project linearly, so a date there
+/// floors to Sapling too.
 pub fn resolve_birthday(input: &BirthdayInput, chain: &ChainType) -> u32 {
     let sapling = sapling_activation(chain);
     match *input {
@@ -43,8 +45,8 @@ pub fn resolve_birthday(input: &BirthdayInput, chain: &ChainType) -> u32 {
         BirthdayInput::Default => sapling,
         BirthdayInput::Date(secs) => match chain {
             ChainType::Mainnet => mainnet_height_for_date(secs).max(sapling),
+            ChainType::Testnet => sapling,
             ChainType::Regtest(_) => 1,
-            _ => sapling,
         },
     }
 }
@@ -151,6 +153,17 @@ mod tests {
         assert_eq!(
             resolve_birthday(&BirthdayInput::Date(MAINNET_ANCHOR_TIME), &regtest()),
             sapling_activation(&regtest())
+        );
+    }
+
+    #[test]
+    fn testnet_date_floors_to_sapling() {
+        // Testnet's difficulty-reset emissions don't project linearly, so a date
+        // is not trusted; the Sapling floor misses nothing.
+        let testnet = ChainType::Testnet;
+        assert_eq!(
+            resolve_birthday(&BirthdayInput::Date(MAINNET_ANCHOR_TIME), &testnet),
+            sapling_activation(&testnet)
         );
     }
 }

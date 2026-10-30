@@ -23,10 +23,10 @@ use pendrake_ipc::{
     Balance, BatchPhase, BatchProgress, BatchSummary, BatchTiming, Call, CommitBreakdown,
     ExportUfvkArgs, GetTransactionArgs, ImportType, ImportUfvkArgs, Network, Note, NoteDirection,
     NoteStatus, ParseUfvkArgs, ParseUfvkResult, Pool, PoolBalance, PricePoint, PriceSpot,
-    RemoveArgs, RescanArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs, SetIndexerArgs,
-    SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncFault, SyncPhase, SyncState,
-    SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs, ViewMode,
-    WalletAddress, WalletNote, WalletState, WalletSummary,
+    RemoveArgs, RescanArgs, RestartSyncArgs, SelectWalletArgs, SetDiscreetArgs, SetFiatEnabledArgs,
+    SetIndexerArgs, SetNotificationsArgs, SetWalletLabelArgs, SyncEvent, SyncFault, SyncPhase,
+    SyncState, SyncStatus, Tx, TxKind, TxStatus, UfvkNetwork, UnlockArgs, VerifyPassphraseArgs,
+    ViewMode, WalletAddress, WalletNote, WalletState, WalletSummary,
 };
 use tokio::sync::broadcast::{self, error::RecvError};
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -915,6 +915,9 @@ impl WalletService {
                 Ok(to_value(self.export_ufvk(&id, &passphrase).await?)?)
             }
             Call::RescanWallet(RescanArgs { id }) => Ok(to_value(self.rescan(&id).await?)?),
+            Call::RestartSync(RestartSyncArgs { id }) => {
+                Ok(to_value(self.restart_sync(id.as_deref()).await?)?)
+            }
             Call::SetFiatEnabled(SetFiatEnabledArgs { enabled }) => {
                 Ok(to_value(self.set_fiat_enabled(enabled).await?)?)
             }
@@ -1178,11 +1181,12 @@ impl WalletService {
 
     async fn import_ufvk(self: &Arc<Self>, args: ImportUfvkArgs) -> Result<WalletState> {
         // ADR-0002: the network is derived from the key, never trusted from the
-        // client. Reject testnet and malformed keys, and any disagreement between
-        // the key and the requested network, before touching disk.
+        // client. Reject any disagreement between the key and the requested
+        // network before touching disk.
         let identity = parse_ufvk(&args.ufvk).map_err(|e| anyhow!("{e}"))?;
         let key_network = match identity.network {
             UfvkNetwork::Mainnet => Network::Mainnet,
+            UfvkNetwork::Testnet => Network::Testnet,
             UfvkNetwork::Regtest => Network::Regtest,
         };
         if key_network != args.network {
@@ -1487,6 +1491,35 @@ impl WalletService {
             s.percent = 0;
         })
         .await;
+        w.restart.notify_one();
+        Ok(self.wallet_state().await)
+    }
+
+    /// Start a fresh sync round for a Wallet now: the manual nudge behind the
+    /// dashboard's sync error pill. The loop already retries failed rounds on its
+    /// own with a growing backoff (CONTEXT.md "Tip-follow": sync is never started
+    /// by hand), so all this does is end the stalled round and cut the wait short,
+    /// for the moment the user has fixed the cause (a router reboot, a restarted
+    /// Indexer) and doesn't want to sit out the backoff. Nothing is cleared or
+    /// reset beyond that: the same Indexer is probed again, and if it is still
+    /// down the round fails and the backoff resumes. The returned state is the
+    /// Selected Wallet's, whichever Wallet was nudged.
+    async fn restart_sync(&self, id: Option<&str>) -> Result<WalletState> {
+        let w = match id {
+            Some(id) => self.wallet(id).await?,
+            None => self.selected_or_err().await?,
+        };
+        if let Some(reason) = w.unavailable.read().await.as_deref() {
+            return Err(anyhow!("this Wallet can't be restarted: {reason}"));
+        }
+        {
+            let guard = w.client.lock().await;
+            let client = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("no wallet to restart sync for"))?;
+            let _ = client.stop_sync();
+        }
+        w.set_sync(|s| s.state = SyncState::STARTING).await;
         w.restart.notify_one();
         Ok(self.wallet_state().await)
     }
@@ -2510,11 +2543,10 @@ fn format_zec(zat: u64) -> String {
 }
 
 /// Fold the decoder's `Result` into the wire verdict the GUI renders inline. A
-/// testnet or malformed key is an `ok` result tagged by `kind`, not a daemon error.
+/// malformed key is an `ok` result tagged by `kind`, not a daemon error.
 fn parse_ufvk_result(input: &str) -> ParseUfvkResult {
     match parse_ufvk(input) {
         Ok(identity) => ParseUfvkResult::Valid(identity),
-        Err(UfvkError::Testnet) => ParseUfvkResult::Testnet,
         Err(UfvkError::Malformed(reason)) => ParseUfvkResult::Malformed { reason },
     }
 }
@@ -2522,6 +2554,7 @@ fn parse_ufvk_result(input: &str) -> ParseUfvkResult {
 fn chain_of(network: Network) -> ChainType {
     match network {
         Network::Mainnet => ChainType::Mainnet,
+        Network::Testnet => ChainType::Testnet,
         Network::Regtest => ChainType::Regtest(ActivationHeights::default()),
     }
 }
@@ -3681,7 +3714,7 @@ mod tests {
     }
 
     use zingolib::wallet::summary::data::{BasicNoteSummary, SendType};
-    use zingolib_status::confirmation_status::ConfirmationStatus;
+    use zingolib_common::status::ConfirmationStatus;
 
     fn txid(byte: u8) -> TxId {
         TxId::from_bytes([byte; 32])

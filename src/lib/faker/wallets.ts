@@ -44,8 +44,29 @@ const REGTEST: Chain = {
   activation: 1,
 };
 
+// Testnet follows mainnet's block schedule (150s before Blossom, 75s after), so
+// the shape matches MAINNET with testnet's own landmarks: Blossom at 584,000 and
+// Sapling activation at 280,000.
+const TESTNET_BLOSSOM_HEIGHT = 584_000;
+const TESTNET_BLOSSOM_SECS = Date.UTC(2019, 9, 20) / 1000;
+const TESTNET_SAPLING_HEIGHT = 280_000;
+
+const TESTNET: Chain = {
+  heightAt: (secs) =>
+    secs >= TESTNET_BLOSSOM_SECS
+      ? TESTNET_BLOSSOM_HEIGHT + Math.floor((secs - TESTNET_BLOSSOM_SECS) / 75)
+      : TESTNET_BLOSSOM_HEIGHT - Math.ceil((TESTNET_BLOSSOM_SECS - secs) / 150),
+  timeAt: (height) =>
+    height >= TESTNET_BLOSSOM_HEIGHT
+      ? TESTNET_BLOSSOM_SECS + (height - TESTNET_BLOSSOM_HEIGHT) * 75
+      : TESTNET_BLOSSOM_SECS - (TESTNET_BLOSSOM_HEIGHT - height) * 150,
+  activation: TESTNET_SAPLING_HEIGHT,
+};
+
 export function chainFor(network: Network): Chain {
-  return network === "regtest" ? REGTEST : MAINNET;
+  if (network === "regtest") return REGTEST;
+  if (network === "testnet") return TESTNET;
+  return MAINNET;
 }
 
 // The shape of a Wallet's history: how long it has existed, how often it moves,
@@ -137,17 +158,27 @@ function amount(r: Rng, typical: number): number {
 }
 
 function unifiedAddress(r: Rng, network: Network): string {
-  return (network === "regtest" ? "uregtest1" : "u1") + r.chars(BECH32, 139);
+  const hrp =
+    network === "regtest"
+      ? "uregtest1"
+      : network === "testnet"
+        ? "utest1"
+        : "u1";
+  return hrp + r.chars(BECH32, 139);
 }
 
 function saplingAddress(r: Rng, network: Network): string {
-  return (
-    (network === "regtest" ? "zregtestsapling1" : "zs1") + r.chars(BECH32, 76)
-  );
+  const hrp =
+    network === "regtest"
+      ? "zregtestsapling1"
+      : network === "testnet"
+        ? "ztestsapling1"
+        : "zs1";
+  return hrp + r.chars(BECH32, 76);
 }
 
 function transparentAddress(r: Rng, network: Network): string {
-  return (network === "regtest" ? "tm" : "t1") + r.chars(BASE58, 33);
+  return (network === "mainnet" ? "t1" : "tm") + r.chars(BASE58, 33);
 }
 
 function recipientFor(r: Rng, pool: Pool, network: Network): string {
@@ -163,9 +194,13 @@ function recipientFor(r: Rng, pool: Pool, network: Network): string {
 
 export function fakeUfvk(seed: string, network: Network): string {
   const r = rng(hashSeed(`${seed}:ufvk`));
-  return (
-    (network === "regtest" ? "uviewregtest1" : "uview1") + r.chars(BECH32, 278)
-  );
+  const hrp =
+    network === "regtest"
+      ? "uviewregtest1"
+      : network === "testnet"
+        ? "uviewtest1"
+        : "uview1";
+  return hrp + r.chars(BECH32, 278);
 }
 
 export function txidOf(eventId: string): string {

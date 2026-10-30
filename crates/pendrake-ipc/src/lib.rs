@@ -57,6 +57,7 @@ pub enum Call {
     SetNotifications(SetNotificationsArgs),
     ExportUfvk(ExportUfvkArgs),
     RescanWallet(RescanArgs),
+    RestartSync(RestartSyncArgs),
     SetFiatEnabled(SetFiatEnabledArgs),
     SetDiscreet(SetDiscreetArgs),
     GetSpotPrice,
@@ -92,6 +93,7 @@ impl Call {
             | Call::SetDiscreet(_)
             | Call::SetWalletLabel(_)
             | Call::RescanWallet(_)
+            | Call::RestartSync(_)
             | Call::Shutdown => true,
             Call::GetBalance
             | Call::GetTransactions
@@ -134,6 +136,7 @@ impl Call {
             | Call::SetNotifications(_)
             | Call::ExportUfvk(_)
             | Call::RescanWallet(_)
+            | Call::RestartSync(_)
             | Call::SetFiatEnabled(_)
             | Call::SetDiscreet(_)
             | Call::GetSpotPrice
@@ -179,6 +182,7 @@ impl Response {
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     Mainnet,
+    Testnet,
     Regtest,
 }
 
@@ -326,14 +330,15 @@ pub struct WalletAddress {
     pub transparent: Option<String>,
 }
 
-/// The network a UFVK declares. Distinct from [`Network`]: a key can be testnet,
-/// which Pendrake rejects, so the decode result carries only the two it accepts.
+/// The network a UFVK declares. Kept separate from [`Network`] so the decode
+/// result speaks the key's own vocabulary; the import cross-checks the two agree.
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum UfvkNetwork {
     Mainnet,
+    Testnet,
     Regtest,
 }
 
@@ -363,23 +368,23 @@ pub struct UfvkIdentity {
     pub pools: Vec<Pool>,
 }
 
-/// The verdict of a `parseUfvk` request. A testnet or malformed key is a decode
-/// outcome the GUI renders inline, not a transport failure, so it rides back as
-/// an `ok` result tagged by `kind` rather than a daemon error.
+/// The verdict of a `parseUfvk` request. A malformed key is a decode outcome the
+/// GUI renders inline, not a transport failure, so it rides back as an `ok`
+/// result tagged by `kind` rather than a daemon error.
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ParseUfvkResult {
     Valid(UfvkIdentity),
-    Testnet,
     Malformed { reason: String },
 }
 
 /// How the user chose a Wallet's Birthday at import. The daemon's resolver is the
 /// single source of truth that turns this into a starting block height, so the GUI
-/// sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only and
-/// carries unix seconds for midnight UTC of the picked day; `Default` is blank.
+/// sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only
+/// (testnet and regtest have no linear time-to-height projection) and carries
+/// unix seconds for midnight UTC of the picked day; `Default` is blank.
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[cfg_attr(feature = "bindings", ts(export, export_to = "wire.ts"))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -430,6 +435,15 @@ pub struct SetNotificationsArgs {
 #[serde(rename_all = "camelCase")]
 pub struct RescanArgs {
     pub id: String,
+}
+
+/// Nudge a Wallet into a fresh sync round now, cutting short the engine's own
+/// backoff after a failed round. `id` is `None` for the Selected Wallet, the pill's
+/// case. The loop also recovers on its own; this only skips the wait.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartSyncArgs {
+    pub id: Option<String>,
 }
 
 /// Release a Wallet's UFVK, gated on the session Passphrase. The GUI shows it once

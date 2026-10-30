@@ -22,6 +22,7 @@ const FILLER = Array.from(
 
 const PREFIX: Record<Network, string> = {
   mainnet: "uview1",
+  testnet: "uviewtest1",
   regtest: "uviewregtest1",
 };
 
