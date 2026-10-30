@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconSearch } from "@tabler/icons-react";
 import { appToast, TOAST_ID } from "@/components/app/app-toast/app-toast";
 import { PoolDot } from "@/components/notes/badges";
@@ -54,14 +54,12 @@ export function NotesPage() {
   );
   const sorted = useMemo(() => sortNotes(visible, sort), [visible, sort]);
 
-  // A token that ticks on every filter change (but not on mount, search, or sort), so
-  // remounting the table replays the swap animation only when the filter switches.
-  // Tracking the previous filter in a ref keeps it a render-time derivation, no effect.
-  const prevFilter = useRef(filter);
-  const swap = useRef(0);
-  if (prevFilter.current !== filter) {
-    prevFilter.current = filter;
-    swap.current += 1;
+  const [swap, setSwap] = useState(0);
+
+  function changeFilter(next: Filter) {
+    if (next === filter) return;
+    setFilter(next);
+    setSwap((n) => n + 1);
   }
 
   function onSort(key: SortKey) {
@@ -96,7 +94,7 @@ export function NotesPage() {
             style={reveal ? { animationDelay: "60ms" } : undefined}
           >
             <div className="flex items-center justify-between gap-3">
-              <FilterControls active={filter} onChange={setFilter} />
+              <FilterControls active={filter} onChange={changeFilter} />
               <div className="relative shrink-0">
                 <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -117,10 +115,8 @@ export function NotesPage() {
               // Keyed on the swap token so a filter switch remounts and replays the
               // fade-in. Search and sort keep the same token, updating in place.
               <div
-                key={swap.current}
-                className={
-                  reveal && swap.current > 0 ? "notes-filter-swap" : ""
-                }
+                key={swap}
+                className={reveal && swap > 0 ? "notes-filter-swap" : ""}
               >
                 <NotesTable notes={sorted} sort={sort} onSort={onSort} />
               </div>

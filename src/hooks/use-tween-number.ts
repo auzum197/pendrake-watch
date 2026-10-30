@@ -11,8 +11,11 @@ export function useTweenNumber(target: number, duration = 360): number {
   // The latest shown value, so a retarget starts from the current frame, not a stale
   // render's value.
   const current = useRef(target);
-  current.current = value;
   const frame = useRef(0);
+
+  useEffect(() => {
+    current.current = value;
+  }, [value]);
 
   useEffect(() => {
     if (!animationsEnabled()) {
