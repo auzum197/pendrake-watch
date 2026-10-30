@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-ui-dot-stream": {
+      "id": "components-ui-dot-stream",
+      "name": "DotStream",
+      "path": "./src/components/ui/dot-stream/dot-stream.stories.tsx",
+      "import": "import { DotStream } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-dot-stream--default": {
+          "id": "components-ui-dot-stream--default",
+          "name": "Default",
+          "snippet": "const Default = () => <DotStream />;"
+        },
+        "components-ui-dot-stream--tinted": {
+          "id": "components-ui-dot-stream--tinted",
+          "name": "Tinted",
+          "snippet": "const Tinted = () => (\n  <>\n    <span className=\"text-white\">\n      <DotStream />\n    </span>\n    <span className=\"text-brand\">\n      <DotStream />\n    </span>\n  </>\n);"
+        }
+      }
+    }
+  }
+}

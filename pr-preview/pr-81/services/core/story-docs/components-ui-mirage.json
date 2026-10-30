@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-ui-mirage": {
+      "id": "components-ui-mirage",
+      "name": "Mirage",
+      "path": "./src/components/ui/mirage/mirage.stories.tsx",
+      "import": "import { Mirage } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-mirage--default": {
+          "id": "components-ui-mirage--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Mirage size={24} speed={2.5} />;"
+        },
+        "components-ui-mirage--large": {
+          "id": "components-ui-mirage--large",
+          "name": "Large",
+          "snippet": "const Large = () => <Mirage size={80} speed={2.5} />;"
+        },
+        "components-ui-mirage--tinted": {
+          "id": "components-ui-mirage--tinted",
+          "name": "Tinted",
+          "snippet": "const Tinted = () => <>\n    <span className=\"text-white\">\n        <Mirage size={24} speed={2.5} />\n    </span>\n    <span className=\"text-brand\">\n        <Mirage size={24} speed={2.5} />\n    </span>\n    <span className=\"text-amber-400\">\n        <Mirage size={24} speed={2.5} />\n    </span>\n</>;"
+        }
+      }
+    }
+  }
+}
