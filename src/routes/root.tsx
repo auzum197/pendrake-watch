@@ -9,7 +9,7 @@ import { openSettings } from "@/lib/settings-modal";
 import { FAKER } from "@/lib/transport";
 
 // The faker editor rides along only in faker mode; the lazy import is dead code
-// in a production build, where FAKER folds to false.
+// in a build made without VITE_FAKER, where FAKER folds to false.
 const FakerBubble = FAKER
   ? lazy(() =>
       import("@/lib/faker/bubble").then((m) => ({ default: m.FakerBubble })),

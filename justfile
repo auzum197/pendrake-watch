@@ -79,7 +79,8 @@ dev-scan: stage-daemon
     VITE_REACT_SCAN=1 PENDRAKED_BIN="{{justfile_directory()}}/crates/target/release/pendraked" pnpm tauri dev
 
 # Run the GUI in the browser against an in-memory fake daemon seeded with a spread
-# of Wallets. For the same inside the Tauri shell, run `VITE_FAKER=1 just dev`.
+# of Wallets. For the same inside the Tauri shell, run `VITE_FAKER=1 just dev`, and
+# for a release build on fake data, `VITE_FAKER=1 just macos run`.
 [group('run')]
 dev-faker:
     VITE_FAKER=1 pnpm dev
