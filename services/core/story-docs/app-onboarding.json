@@ -20,6 +20,11 @@
           "id": "app-onboarding--malformed",
           "name": "Malformed",
           "snippet": "const Malformed = () => <OnboardingPage />;"
+        },
+        "app-onboarding--testnet": {
+          "id": "app-onboarding--testnet",
+          "name": "Testnet",
+          "snippet": "const Testnet = () => <OnboardingPage />;"
         }
       }
     }

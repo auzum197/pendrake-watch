@@ -17,10 +17,13 @@
             "required": true,
             "type": {
               "name": "enum",
-              "raw": "\"mainnet\" | \"regtest\"",
+              "raw": "\"mainnet\" | \"testnet\" | \"regtest\"",
               "value": [
                 {
                   "value": "\"mainnet\""
+                },
+                {
+                  "value": "\"testnet\""
                 },
                 {
                   "value": "\"regtest\""
@@ -198,16 +201,17 @@
           "description": "",
           "type": {
             "required": true,
-            "raw": "\"mainnet\" | \"regtest\"",
+            "raw": "\"mainnet\" | \"testnet\" | \"regtest\"",
             "name": "enum",
             "value": [
               "mainnet",
+              "testnet",
               "regtest"
             ]
           },
           "table": {
             "type": {
-              "summary": "\"mainnet\" | \"regtest\""
+              "summary": "\"mainnet\" | \"testnet\" | \"regtest\""
             }
           }
         },
