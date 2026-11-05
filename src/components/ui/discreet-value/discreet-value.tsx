@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent,
@@ -152,62 +151,27 @@ export function DiscreetPeek({
   className?: string;
 }) {
   const [peeked, setPeeked] = useState(false);
-  const wrap = useRef<HTMLSpanElement>(null);
   const holdTimer = useRef(0);
-  const prevWidth = useRef<number | null>(null);
-  const widthAnim = useRef<Animation | null>(null);
   const peekedOnce = useRef(false);
 
-  useEffect(
-    () => () => {
-      widthAnim.current?.cancel();
-      window.clearTimeout(holdTimer.current);
-    },
-    [],
-  );
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
 
   function press(e: PointerEvent) {
     if (e.button !== 0) return;
     window.clearTimeout(holdTimer.current);
     holdTimer.current = window.setTimeout(() => {
       peekedOnce.current = true;
-      prevWidth.current = wrap.current?.offsetWidth ?? null;
       setPeeked(true);
     }, PEEK_HOLD_MS);
   }
 
   function release() {
     window.clearTimeout(holdTimer.current);
-    if (peeked) prevWidth.current = wrap.current?.offsetWidth ?? null;
     setPeeked(false);
   }
 
-  useLayoutEffect(() => {
-    const el = wrap.current;
-    const from = prevWidth.current;
-    prevWidth.current = null;
-    if (!el || from == null || !animationsEnabled()) return;
-    const to = el.offsetWidth;
-    if (from === to) return;
-    widthAnim.current?.cancel();
-    el.style.whiteSpace = "nowrap";
-    el.style.clipPath = "inset(0)";
-    const run = el.animate([{ width: `${from}px` }, { width: `${to}px` }], {
-      duration: 200,
-      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-    });
-    widthAnim.current = run;
-    run.onfinish = () => {
-      if (widthAnim.current !== run) return;
-      widthAnim.current = null;
-      el.style.whiteSpace = "";
-      el.style.clipPath = "";
-    };
-  }, [peeked]);
-
   return (
     <span
-      ref={wrap}
       className={`tabular-nums discreet-peekable ${className ?? ""}`}
       aria-label="Hidden"
       onPointerDown={press}
