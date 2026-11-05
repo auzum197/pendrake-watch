@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-pools-rings-icon": {
+      "id": "components-pools-rings-icon",
+      "name": "RingsIcon",
+      "path": "./src/components/pools/rings-icon.stories.tsx",
+      "import": "import { RingsIcon } from 'pendrake-watch';",
+      "stories": {
+        "components-pools-rings-icon--default": {
+          "id": "components-pools-rings-icon--default",
+          "name": "Default",
+          "snippet": "const Default = () => <span className=\"pool-tile pool-tile--transparent size-14\">\n    <RingsIcon className=\"size-8\" />\n</span>;"
+        }
+      }
+    }
+  }
+}

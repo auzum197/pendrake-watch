@@ -1,0 +1,154 @@
+{
+  "components": {
+    "components-app-segmented": {
+      "id": "components-app-segmented",
+      "name": "Segmented",
+      "path": "./src/components/app/segmented/segmented.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Segmented",
+        "exportName": "Segmented",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/segmented/segmented.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "value": {
+            "name": "value",
+            "required": true,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/segmented/segmented.tsx"
+              }
+            ]
+          },
+          "onChange": {
+            "name": "onChange",
+            "required": true,
+            "type": {
+              "name": "(v: string) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/segmented/segmented.tsx"
+              }
+            ]
+          },
+          "options": {
+            "name": "options",
+            "required": true,
+            "type": {
+              "name": "{ value: string; label: string; }[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/segmented/segmented.tsx"
+              }
+            ]
+          },
+          "tone": {
+            "name": "tone",
+            "required": false,
+            "type": {
+              "name": "enum",
+              "raw": "\"brand\" | \"neutral\"",
+              "value": [
+                {
+                  "value": "\"brand\""
+                },
+                {
+                  "value": "\"neutral\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"brand\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/segmented/segmented.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "value": {
+          "name": "value",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "onChange": {
+          "name": "onChange",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(v: string) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(v: string) => void"
+            }
+          }
+        },
+        "options": {
+          "name": "options",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "{ value: string; label: string; }[]"
+          },
+          "table": {
+            "type": {
+              "summary": "{ value: string; label: string; }[]"
+            }
+          }
+        },
+        "tone": {
+          "name": "tone",
+          "description": "",
+          "type": {
+            "required": false,
+            "raw": "\"brand\" | \"neutral\"",
+            "name": "enum",
+            "value": [
+              "brand",
+              "neutral"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"brand\" | \"neutral\""
+            },
+            "defaultValue": {
+              "summary": "\"\\\"brand\\\"\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

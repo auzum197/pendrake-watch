@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-onboarding-birthday-calendar": {
+      "id": "components-onboarding-birthday-calendar",
+      "name": "BirthdayCalendar",
+      "path": "./src/components/onboarding/birthday-calendar.stories.tsx",
+      "import": "import { BirthdayCalendar } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-onboarding-birthday-calendar--default": {
+          "id": "components-onboarding-birthday-calendar--default",
+          "name": "Default",
+          "snippet": "const Default = () => <BirthdayCalendar onSelect={fn()} />;"
+        },
+        "components-onboarding-birthday-calendar--preselected": {
+          "id": "components-onboarding-birthday-calendar--preselected",
+          "name": "Preselected",
+          "snippet": "const Preselected = () => <BirthdayCalendar onSelect={fn()} selected={new Date(2022, 5, 15)} />;"
+        }
+      }
+    }
+  }
+}

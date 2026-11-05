@@ -1,0 +1,17 @@
+{
+  "components": {
+    "app-unlock": {
+      "id": "app-unlock",
+      "name": "UnlockPage",
+      "path": "./src/routes/unlock.stories.tsx",
+      "import": "import { UnlockPage } from 'pendrake-watch';",
+      "stories": {
+        "app-unlock--locked": {
+          "id": "app-unlock--locked",
+          "name": "Locked",
+          "snippet": "const Locked = () => <UnlockPage />;"
+        }
+      }
+    }
+  }
+}

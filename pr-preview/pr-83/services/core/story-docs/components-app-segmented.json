@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-app-segmented": {
+      "id": "components-app-segmented",
+      "name": "Segmented",
+      "path": "./src/components/app/segmented/segmented.stories.tsx",
+      "import": "import { Segmented } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-app-segmented--brand": {
+          "id": "components-app-segmented--brand",
+          "name": "Brand",
+          "snippet": "const Brand = () => <Demo tone=\"brand\" />;"
+        },
+        "components-app-segmented--neutral": {
+          "id": "components-app-segmented--neutral",
+          "name": "Neutral",
+          "snippet": "const Neutral = () => <Demo tone=\"neutral\" />;"
+        },
+        "components-app-segmented--two-options": {
+          "id": "components-app-segmented--two-options",
+          "name": "Two Options",
+          "snippet": "const TwoOptions = () => {\n  const [value, setValue] = useState(\"full\");\n  return (\n    <div className=\"w-64 rounded-2xl bg-ink p-6\">\n      <Segmented\n        value={value}\n        onChange={setValue}\n        options={[\n          { value: \"full\", label: \"Full node\" },\n          { value: \"light\", label: \"Lightwallet\" },\n        ]}\n      />\n    </div>\n  );\n};"
+        }
+      }
+    }
+  }
+}

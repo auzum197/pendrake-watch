@@ -1,0 +1,1 @@
+const o="pendrake.reduceMotion";function n(){return typeof window<"u"&&window.matchMedia("(prefers-reduced-motion: reduce)").matches}function t(){const e=typeof localStorage<"u"?localStorage.getItem(o):null;return e==="on"?!0:e==="off"?!1:n()}function r(){return!t()}function a(e){typeof localStorage<"u"&&localStorage.setItem(o,e?"on":"off")}export{r as a,t as r,a as s};

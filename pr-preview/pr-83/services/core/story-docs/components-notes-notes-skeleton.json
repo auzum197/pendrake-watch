@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-notes-notes-skeleton": {
+      "id": "components-notes-notes-skeleton",
+      "name": "SummaryBarSkeleton",
+      "path": "./src/components/notes/notes-skeleton.stories.tsx",
+      "import": "import { NotesContentSkeleton, SummaryBarSkeleton } from 'pendrake-watch';",
+      "stories": {
+        "components-notes-notes-skeleton--summary-bar": {
+          "id": "components-notes-notes-skeleton--summary-bar",
+          "name": "Summary Bar",
+          "snippet": "const SummaryBar = () => <SummaryBarSkeleton />;"
+        },
+        "components-notes-notes-skeleton--content": {
+          "id": "components-notes-notes-skeleton--content",
+          "name": "Content",
+          "snippet": "const Content = () => <NotesContentSkeleton />;"
+        },
+        "components-notes-notes-skeleton--full-page": {
+          "id": "components-notes-notes-skeleton--full-page",
+          "name": "Full Page",
+          "snippet": "const FullPage = () => (\n  <div className=\"space-y-6\">\n    <SummaryBarSkeleton />\n    <NotesContentSkeleton />\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

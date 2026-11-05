@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-notes-notes-table": {
+      "id": "components-notes-notes-table",
+      "name": "NotesTable",
+      "path": "./src/components/notes/notes-table.stories.tsx",
+      "import": "import { NotesTable } from 'pendrake-watch';\nimport { walletNotes } from '@/stories/fixtures';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-notes-notes-table--default": {
+          "id": "components-notes-notes-table--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Demo />;"
+        },
+        "components-notes-notes-table--empty": {
+          "id": "components-notes-notes-table--empty",
+          "name": "Empty",
+          "snippet": "const Empty = () => <Demo notes={[]} />;"
+        }
+      }
+    }
+  }
+}

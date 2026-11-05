@@ -1,0 +1,151 @@
+{
+  "components": {
+    "components-ui-alert-dialog": {
+      "id": "components-ui-alert-dialog",
+      "name": "AlertDialog",
+      "path": "./src/components/ui/alert-dialog/alert-dialog.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "AlertDialog",
+        "exportName": "AlertDialog",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/alert-dialog/alert-dialog.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "children": {
+            "name": "children",
+            "required": false,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "DialogProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "DialogProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+              }
+            ]
+          },
+          "open": {
+            "name": "open",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "DialogProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "DialogProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": false,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "DialogProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "DialogProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultOpen": {
+            "name": "defaultOpen",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "DialogProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "DialogProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+reac_f42d365d769e011fd07c612bc3dd5c69/node_modules/@radix-ui/react-dialog/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "defaultOpen": {
+          "name": "defaultOpen",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-settings-remove-dialog": {
+      "id": "components-settings-remove-dialog",
+      "name": "RemoveDialog",
+      "path": "./src/components/settings/remove-dialog.stories.tsx",
+      "import": "import { RemoveDialog } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-settings-remove-dialog--explain": {
+          "id": "components-settings-remove-dialog--explain",
+          "name": "Explain",
+          "snippet": "const Explain = () => <RemoveDialog\n    open\n    onOpenChange={fn()}\n    walletId=\"a1b2c3d4e5f6\"\n    fingerprint=\"a1b2c3d4e5f6\"\n    network=\"mainnet\" />;"
+        },
+        "components-settings-remove-dialog--wrong-passphrase": {
+          "id": "components-settings-remove-dialog--wrong-passphrase",
+          "name": "Wrong Passphrase",
+          "snippet": "const WrongPassphrase = () => <RemoveDialog\n    open\n    onOpenChange={fn()}\n    walletId=\"a1b2c3d4e5f6\"\n    fingerprint=\"a1b2c3d4e5f6\"\n    network=\"mainnet\" />;"
+        }
+      }
+    }
+  }
+}

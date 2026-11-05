@@ -1,0 +1,53 @@
+{
+  "components": {
+    "components-ui-label": {
+      "id": "components-ui-label",
+      "name": "Label",
+      "path": "./src/components/ui/label/label.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Label",
+        "exportName": "Label",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/label/label.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "asChild": {
+            "name": "asChild",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PrimitivePropsWithRef",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-primitive@2.1.3_@types+react-dom@19.2.3_@types+react@19.2.16__@types+re_c2ab14b13b7a235b87f6f669fbdaeeab/node_modules/@radix-ui/react-primitive/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-primitive@2.1.3_@types+react-dom@19.2.3_@types+react@19.2.16__@types+re_c2ab14b13b7a235b87f6f669fbdaeeab/node_modules/@radix-ui/react-primitive/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "asChild": {
+          "name": "asChild",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

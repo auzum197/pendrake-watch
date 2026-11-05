@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-app-sync-status": {
+      "id": "components-app-sync-status",
+      "name": "SyncChip",
+      "path": "./src/components/app/sync-status/sync-status.stories.tsx",
+      "import": "import { SyncBar, SyncChip } from 'pendrake-watch';",
+      "stories": {
+        "components-app-sync-status--chip": {
+          "id": "components-app-sync-status--chip",
+          "name": "Chip",
+          "snippet": "const Chip = () => (\n  <div className=\"flex flex-col gap-3 rounded-2xl bg-ink p-6\">\n    <SyncChip sync={null} />\n    <SyncChip sync={syncing} />\n    <SyncChip sync={synced} />\n    <SyncChip sync={errored} />\n    <SyncChip sync={wrongChain} />\n  </div>\n);"
+        },
+        "components-app-sync-status--bar": {
+          "id": "components-app-sync-status--bar",
+          "name": "Bar",
+          "snippet": "const Bar = () => (\n  <div className=\"w-64 rounded-2xl bg-ink p-6\">\n    <SyncBar sync={syncing} />\n  </div>\n);"
+        },
+        "components-app-sync-status--card": {
+          "id": "components-app-sync-status--card",
+          "name": "Card",
+          "snippet": "const Card = () => (\n  <div className=\"flex w-64 flex-col gap-3 rounded-2xl bg-ink p-6\">\n    <SyncChip sync={syncing} />\n    <SyncBar sync={syncing} />\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

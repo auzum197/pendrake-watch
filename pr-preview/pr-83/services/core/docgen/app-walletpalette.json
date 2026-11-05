@@ -1,0 +1,50 @@
+{
+  "components": {
+    "app-walletpalette": {
+      "id": "app-walletpalette",
+      "name": "Open",
+      "path": "./src/components/app/wallet-palette/wallet-palette.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "WalletPalette",
+        "exportName": "WalletPalette",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/wallet-palette/wallet-palette.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "wallet": {
+            "name": "wallet",
+            "required": true,
+            "type": {
+              "name": "WalletState | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/wallet-palette/wallet-palette.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "wallet": {
+          "name": "wallet",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletState | null"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletState | null"
+            }
+          }
+        }
+      }
+    }
+  }
+}

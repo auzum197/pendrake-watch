@@ -1,0 +1,73 @@
+{
+  "components": {
+    "prototype-dither-chart": {
+      "id": "prototype-dither-chart",
+      "name": "Playground",
+      "path": "./src/components/dashboard/dither-prototype/dither-chart.stories.tsx",
+      "import": "import { DitherArea } from 'pendrake-watch';",
+      "stories": {
+        "prototype-dither-chart--playground": {
+          "id": "prototype-dither-chart--playground",
+          "name": "Playground",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--gradient-bloom": {
+          "id": "prototype-dither-chart--gradient-bloom",
+          "name": "1 · Gradient bloom",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--hatched-blueprint": {
+          "id": "prototype-dither-chart--hatched-blueprint",
+          "name": "2 · Hatched blueprint",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--dotted-halftone": {
+          "id": "prototype-dither-chart--dotted-halftone",
+          "name": "3 · Dotted halftone",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--chunky-pixels": {
+          "id": "prototype-dither-chart--chunky-pixels",
+          "name": "4 · Chunky pixels",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--line-aura": {
+          "id": "prototype-dither-chart--line-aura",
+          "name": "5 · Line aura",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--bars": {
+          "id": "prototype-dither-chart--bars",
+          "name": "Bars",
+          "error": {
+            "name": "Error",
+            "message": "Could not generate snippet without component name."
+          }
+        },
+        "prototype-dither-chart--gallery": {
+          "id": "prototype-dither-chart--gallery",
+          "name": "Gallery",
+          "snippet": "const Gallery = () => (\n  <div className=\"grid w-300 grid-cols-2 gap-6\">\n    {GALLERY.map((g) => (\n      <figure\n        key={g.title}\n        className=\"flex flex-col gap-3 rounded-2xl border border-border bg-card p-5\"\n      >\n        <figcaption className=\"font-heading text-sm font-semibold\">\n          {g.title}\n        </figcaption>\n        <DitherArea\n          points={g.data === \"usd\" ? USD : DATASETS[g.data]}\n          usd={g.data === \"usd\"}\n          className=\"aspect-900/240 w-full\"\n          {...g.look}\n        />\n      </figure>\n    ))}\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

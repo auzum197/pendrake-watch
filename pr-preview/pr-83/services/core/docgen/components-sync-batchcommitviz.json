@@ -1,0 +1,77 @@
+{
+  "components": {
+    "components-sync-batchcommitviz": {
+      "id": "components-sync-batchcommitviz",
+      "name": "BatchCommitViz",
+      "path": "./src/components/sync/BatchCommitViz.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "BatchCommitViz",
+        "exportName": "BatchCommitViz",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/sync/BatchCommitViz.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "committing": {
+            "name": "committing",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/BatchCommitViz.tsx"
+              }
+            ]
+          },
+          "frac": {
+            "name": "frac",
+            "required": true,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/BatchCommitViz.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "committing": {
+          "name": "committing",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "frac": {
+          "name": "frac",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        }
+      }
+    }
+  }
+}

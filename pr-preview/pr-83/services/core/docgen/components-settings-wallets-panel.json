@@ -1,0 +1,108 @@
+{
+  "components": {
+    "components-settings-wallets-panel": {
+      "id": "components-settings-wallets-panel",
+      "name": "WalletsPanel",
+      "path": "./src/components/settings/wallets-panel.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "WalletsPanel",
+        "exportName": "WalletsPanel",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/settings/wallets-panel.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "wallets": {
+            "name": "wallets",
+            "required": true,
+            "type": {
+              "name": "WalletSummary[]"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/wallets-panel.tsx"
+              }
+            ]
+          },
+          "focusWallet": {
+            "name": "focusWallet",
+            "required": true,
+            "type": {
+              "name": "string | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/wallets-panel.tsx"
+              }
+            ]
+          },
+          "refresh": {
+            "name": "refresh",
+            "required": true,
+            "type": {
+              "name": "() => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/settings/wallets-panel.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "wallets": {
+          "name": "wallets",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletSummary[]"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletSummary[]"
+            }
+          }
+        },
+        "focusWallet": {
+          "name": "focusWallet",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "string | null"
+          },
+          "table": {
+            "type": {
+              "summary": "string | null"
+            }
+          }
+        },
+        "refresh": {
+          "name": "refresh",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "() => void"
+          },
+          "table": {
+            "type": {
+              "summary": "() => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

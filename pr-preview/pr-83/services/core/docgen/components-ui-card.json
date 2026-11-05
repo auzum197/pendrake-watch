@@ -1,0 +1,68 @@
+{
+  "components": {
+    "components-ui-card": {
+      "id": "components-ui-card",
+      "name": "Card",
+      "path": "./src/components/ui/card/card.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Card",
+        "exportName": "Card",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/card/card.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "size": {
+            "name": "size",
+            "required": false,
+            "type": {
+              "name": "enum",
+              "raw": "\"default\" | \"sm\"",
+              "value": [
+                {
+                  "value": "\"default\""
+                },
+                {
+                  "value": "\"sm\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "\"default\""
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/card/card.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "size": {
+          "name": "size",
+          "description": "",
+          "type": {
+            "required": false,
+            "raw": "\"default\" | \"sm\"",
+            "name": "enum",
+            "value": [
+              "default",
+              "sm"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"default\" | \"sm\""
+            },
+            "defaultValue": {
+              "summary": "\"\\\"default\\\"\""
+            }
+          }
+        }
+      }
+    }
+  }
+}

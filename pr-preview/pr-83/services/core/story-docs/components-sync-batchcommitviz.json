@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-sync-batchcommitviz": {
+      "id": "components-sync-batchcommitviz",
+      "name": "BatchCommitViz",
+      "path": "./src/components/sync/BatchCommitViz.stories.tsx",
+      "import": "import { BatchCommitViz } from 'pendrake-watch';",
+      "stories": {
+        "components-sync-batchcommitviz--waiting": {
+          "id": "components-sync-batchcommitviz--waiting",
+          "name": "Waiting",
+          "snippet": "const Waiting = () => <BatchCommitViz committing={false} frac={0} />;"
+        },
+        "components-sync-batchcommitviz--committing": {
+          "id": "components-sync-batchcommitviz--committing",
+          "name": "Committing",
+          "snippet": "const Committing = () => <BatchCommitViz committing frac={0.6} />;"
+        },
+        "components-sync-batchcommitviz--done": {
+          "id": "components-sync-batchcommitviz--done",
+          "name": "Done",
+          "snippet": "const Done = () => <BatchCommitViz committing frac={1} />;"
+        }
+      }
+    }
+  }
+}

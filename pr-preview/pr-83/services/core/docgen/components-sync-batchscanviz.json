@@ -1,0 +1,105 @@
+{
+  "components": {
+    "components-sync-batchscanviz": {
+      "id": "components-sync-batchscanviz",
+      "name": "BatchScanViz",
+      "path": "./src/components/sync/BatchScanViz.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "BatchScanViz",
+        "exportName": "BatchScanViz",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/sync/BatchScanViz.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "active": {
+            "name": "active",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/BatchScanViz.tsx"
+              }
+            ]
+          },
+          "sparkSeq": {
+            "name": "sparkSeq",
+            "required": true,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/BatchScanViz.tsx"
+              }
+            ]
+          },
+          "canSpark": {
+            "name": "canSpark",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/BatchScanViz.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "active": {
+          "name": "active",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "sparkSeq": {
+          "name": "sparkSeq",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        },
+        "canSpark": {
+          "name": "canSpark",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

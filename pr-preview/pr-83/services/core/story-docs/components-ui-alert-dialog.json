@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-ui-alert-dialog": {
+      "id": "components-ui-alert-dialog",
+      "name": "AlertDialog",
+      "path": "./src/components/ui/alert-dialog/alert-dialog.stories.tsx",
+      "import": "import {\n  AlertDialog,\n  AlertDialogAction,\n  AlertDialogCancel,\n  AlertDialogContent,\n  AlertDialogDescription,\n  AlertDialogFooter,\n  AlertDialogHeader,\n  AlertDialogTitle,\n  AlertDialogTrigger,\n  Button,\n} from 'pendrake-watch';",
+      "stories": {
+        "components-ui-alert-dialog--default": {
+          "id": "components-ui-alert-dialog--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Demo />;"
+        },
+        "components-ui-alert-dialog--opened": {
+          "id": "components-ui-alert-dialog--opened",
+          "name": "Opened",
+          "snippet": "const Opened = () => <Demo />;"
+        }
+      }
+    }
+  }
+}
