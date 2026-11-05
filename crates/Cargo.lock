@@ -2376,7 +2376,7 @@ dependencies = [
 [[package]]
 name = "pepper-sync"
 version = "0.6.0"
-source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#f8a0c05df7492f31d03ace957ce8b6a04ec906b1"
+source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#35c73c286d618e79cf209be84caaff7f9cdf5f1a"
 dependencies = [
  "bip32",
  "byteorder",
@@ -4374,7 +4374,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -5483,7 +5483,7 @@ dependencies = [
 [[package]]
 name = "zingolib"
 version = "5.0.0"
-source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#f8a0c05df7492f31d03ace957ce8b6a04ec906b1"
+source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#35c73c286d618e79cf209be84caaff7f9cdf5f1a"
 dependencies = [
  "bech32",
  "bip0039",
@@ -5528,7 +5528,7 @@ dependencies = [
 [[package]]
 name = "zingolib-common"
 version = "0.1.0"
-source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#f8a0c05df7492f31d03ace957ce8b6a04ec906b1"
+source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#35c73c286d618e79cf209be84caaff7f9cdf5f1a"
 dependencies = [
  "bip0039",
  "bip32",
@@ -5552,7 +5552,7 @@ dependencies = [
 [[package]]
 name = "zingolib-file-format"
 version = "0.1.0"
-source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#f8a0c05df7492f31d03ace957ce8b6a04ec906b1"
+source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#35c73c286d618e79cf209be84caaff7f9cdf5f1a"
 dependencies = [
  "argon2",
  "bip0039",
@@ -5575,7 +5575,7 @@ dependencies = [
 [[package]]
 name = "zingolib-price"
 version = "0.1.0"
-source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#f8a0c05df7492f31d03ace957ce8b6a04ec906b1"
+source = "git+https://github.com/auzum197/zingolib?branch=stable-auz#35c73c286d618e79cf209be84caaff7f9cdf5f1a"
 dependencies = [
  "byteorder",
  "reqwest",
