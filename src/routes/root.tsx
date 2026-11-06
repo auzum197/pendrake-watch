@@ -8,13 +8,15 @@ import { selectLinkedWallet, stashPendingLink } from "@/lib/deep-link";
 import { openSettings } from "@/lib/settings-modal";
 import { FAKER } from "@/lib/transport";
 
-// The faker editor rides along only in faker mode; the lazy import is dead code
-// in a production build, where FAKER folds to false.
-const FakerBubble = FAKER
-  ? lazy(() =>
-      import("@/lib/faker/bubble").then((m) => ({ default: m.FakerBubble })),
-    )
-  : null;
+// The Lab editor rides along only in dev faker mode. A release build on fake
+// data keeps the fake daemon and drops the flask, so a demo looks like the real
+// app. The lazy import is dead code wherever the condition folds to false.
+const FakerBubble =
+  FAKER && import.meta.env.DEV
+    ? lazy(() =>
+        import("@/lib/faker/bubble").then((m) => ({ default: m.FakerBubble })),
+      )
+    : null;
 
 export function RootLayout() {
   const navigate = useNavigate();

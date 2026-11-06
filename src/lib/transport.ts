@@ -15,11 +15,13 @@ export type Listen = <T>(
   handler: EventCallback<T>,
 ) => Promise<UnlistenFn>;
 
-// Faker mode: VITE_FAKER=1 in dev swaps the daemon for an in-memory one seeded
-// with a spread of Wallets (src/lib/faker), so the GUI runs with no daemon, no
-// Indexer and no Tauri shell. Gated like react-scan, so the dynamic import is dead
-// code in a production build and only the real transport ships.
-export const FAKER = import.meta.env.DEV && import.meta.env.VITE_FAKER === "1";
+// Faker mode: VITE_FAKER=1 swaps the daemon for an in-memory one seeded with a
+// spread of Wallets (src/lib/faker), so the GUI runs with no daemon, no Indexer
+// and no Tauri shell. Vite folds the variable at build time, so the dynamic
+// import is dead code unless the build was made with it set, which is how a
+// release demo build ships the fake and a normal release ships only the real
+// transport.
+export const FAKER = import.meta.env.VITE_FAKER === "1";
 
 const faker = FAKER ? await import("./faker/transport") : null;
 

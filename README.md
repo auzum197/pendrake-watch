@@ -76,11 +76,12 @@ Run `just` to list all tasks including platform-specific ones.
 
 ### Faker mode
 
-For UI work that needs no chain, `VITE_FAKER=1` in dev swaps the daemon for an in-memory one (`src/lib/faker`). It is gated like react-scan.
+For UI work that needs no chain, `VITE_FAKER=1` swaps the daemon for an in-memory one (`src/lib/faker`). Vite folds the variable at build time, so a build made without it carries no fake code.
 
 ```bash
-just dev-faker        # browser at http://localhost:1430, no daemon build
-VITE_FAKER=1 just dev # the same inside the Tauri shell
+just dev-faker              # browser at http://localhost:1430, no daemon build
+VITE_FAKER=1 just dev       # the same inside the Tauri shell
+VITE_FAKER=1 just macos run # a release build on fake data, for demos, without the Lab
 ```
 
 It seeds seven Wallets, one per state the UI draws: a long quiet history, a busy shop with every Pool and a mempool entry, one with no label, one still in its Initial scan, a regtest one, one whose Indexer is unreachable, and one whose file will not open. The data is deterministic (the same Wallet on every reload within a day) and internally consistent: each Wallet's history is a list of transfer events, and the txids, inputs, change, fees and notes derive from it, so the balance is always the sum of the unspent notes. Heights follow the chain clock. While it runs, a block lands every 75 seconds, a payment arrives on the Selected Wallet every 90 seconds, and the scan progresses to the tip. The passphrase is `pendrake`. Importing any `uview1…` or `uviewregtest1…` string adds a Wallet.
