@@ -1,7 +1,5 @@
 name: Website
 
-# The site has its own workflow so that its checks never gate the app jobs in
-# ci.yml. It runs only when the site, or an app file the site imports, changes.
 on:
   push:
     branches: [test, main]
@@ -16,7 +14,6 @@ on:
     branches: [test, main]
     paths: *website-paths
 
-# Cancel superseded runs on the same ref.
 concurrency:
   group: website-${{ github.ref }}
   cancel-in-progress: true
@@ -40,7 +37,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22 # pnpm 11.5 requires Node >= 22.13
+          node-version: 22
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
 
