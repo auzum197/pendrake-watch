@@ -3,7 +3,8 @@
   "adoptExistingLintConfig": false,
   "ignore": {
     "files": [
-      "**/*-prototype/**"
+      "**/*-prototype/**",
+      "website/**"
     ]
   },
   "rules": {
