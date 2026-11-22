@@ -1,0 +1,60 @@
+name: Website
+
+# The site has its own workflow so that its checks never gate the app jobs in
+# ci.yml. It runs only when the site, or an app file the site imports, changes.
+on:
+  push:
+    branches: [test, main]
+    paths: &website-paths
+      - "website/**"
+      - "src/assets/**"
+      - "src/components/app/reveal.css"
+      - "src/components/dashboard/dither/**"
+      - "src-tauri/icon-composer/**"
+      - ".github/workflows/website.yml"
+  pull_request:
+    branches: [test, main]
+    paths: *website-paths
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check-build:
+    name: Website checks and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    env:
+      ASTRO_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # pnpm 11.5 requires Node >= 22.13
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm fmt:check
+
+      - name: React Compiler lint
+        run: pnpm lint:compiler
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build
