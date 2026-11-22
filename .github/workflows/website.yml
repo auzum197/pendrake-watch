@@ -1,0 +1,57 @@
+name: Website
+
+on:
+  push:
+    branches: [test, main]
+    paths: &website-paths
+      - "website/**"
+      - "src/assets/**"
+      - "src/components/app/reveal.css"
+      - "src/components/dashboard/dither/**"
+      - "src-tauri/icon-composer/**"
+      - ".github/workflows/website.yml"
+  pull_request:
+    branches: [test, main]
+    paths: *website-paths
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check-build:
+    name: Website checks and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    env:
+      ASTRO_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm fmt:check
+
+      - name: React Compiler lint
+        run: pnpm lint:compiler
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build

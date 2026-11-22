@@ -1,0 +1,89 @@
+.wcard {
+	display: flex;
+	flex-direction: column;
+	gap: 0.875rem;
+	padding: 1rem;
+	border-radius: 1rem;
+	background: rgba(28, 28, 32, 0.8);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.1),
+		0 24px 60px rgba(0, 0, 0, 0.5);
+	-webkit-backdrop-filter: blur(24px) saturate(140%);
+	backdrop-filter: blur(24px) saturate(140%);
+	font-family: -apple-system, system-ui, sans-serif;
+	color: var(--foreground);
+	text-align: left;
+	transform: scale(1);
+	transition:
+		transform 420ms var(--ease-out-strong),
+		box-shadow 420ms var(--ease-out-strong),
+		border-color 420ms ease;
+}
+.wcard[data-hit="true"] {
+	transform: scale(1.015);
+	border-color: color-mix(in oklab, var(--brand) 55%, transparent);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		0 24px 60px rgba(0, 0, 0, 0.5),
+		0 0 0 4px color-mix(in oklab, var(--brand) 18%, transparent);
+	transition-duration: 160ms;
+}
+
+.wcard-head {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.wcard-balance {
+	margin: 0;
+	font-family: var(--font-heading);
+	font-size: 1.75rem;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+}
+.wcard-balance span {
+	font-size: 0.9rem;
+	font-weight: 400;
+	letter-spacing: 0;
+	color: var(--muted-foreground);
+}
+
+.wcard-spark {
+	height: 3.5rem;
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+
+.frame-tx[data-wallets="true"] .frame-tx-head,
+.frame-tx[data-wallets="true"] .frame-tx-row {
+	grid-template-columns: 1.25rem 1.25rem 8rem 8rem minmax(5rem, 1fr) 5rem 9ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wcard {
+		transition: border-color 200ms ease;
+	}
+	.wcard[data-hit="true"] {
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-transparency: reduce) {
+	.wcard {
+		background: #1c1c20;
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+}
+
+.ledger-rows {
+	--row-h: 49px;
+	height: calc(var(--rows) * var(--row-h));
+	overflow: hidden;
+	-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--row-h) * 0.9), transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - var(--row-h) * 0.9), transparent 100%);
+}
