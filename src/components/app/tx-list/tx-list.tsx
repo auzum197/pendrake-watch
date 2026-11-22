@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -93,27 +101,35 @@ const ROW_HEIGHT = 49;
 export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
   const navigate = useNavigate();
   const [returnTxid] = useState(takeReturnRow);
-  const ordered = [...txs].sort((a, b) => {
-    const ha = a.blockHeight ?? Infinity;
-    const hb = b.blockHeight ?? Infinity;
-    if (ha !== hb) return hb - ha;
-    return b.datetime - a.datetime;
-  });
-  const rows = limit ? ordered.slice(0, limit) : ordered;
+  const open = useCallback(
+    (txid: string) => navigate({ to: "/tx/$txid", params: { txid } }),
+    [navigate],
+  );
+  // Sort and column sizing over the whole history only ever run when the history
+  // itself changes: both touch every transaction (a full sort and a BigInt
+  // format per row), and this component re-renders on every sync event.
+  const ordered = useMemo(() => {
+    const sorted = [...txs].sort((a, b) => {
+      const ha = a.blockHeight ?? Infinity;
+      const hb = b.blockHeight ?? Infinity;
+      if (ha !== hb) return hb - ha;
+      return b.datetime - a.datetime;
+    });
+    return limit ? sorted.slice(0, limit) : sorted;
+  }, [txs, limit]);
+  const cols = useMemo(() => colsFor(ordered), [ordered]);
 
-  if (rows.length === 0) {
+  if (ordered.length === 0) {
     return (
       <p className="mt-4 text-sm text-muted-foreground">No transactions yet.</p>
     );
   }
 
-  const open = (txid: string) =>
-    navigate({ to: "/tx/$txid", params: { txid } });
+  const rows = ordered;
+  const returning = returnTxid !== null;
+  const motion = animationsEnabled();
 
   if (limit) {
-    const cols = colsFor(rows);
-    const returning = returnTxid !== null;
-    const motion = animationsEnabled();
     return (
       <div className="mt-4 text-sm">
         <TxHeader cols={cols} />
@@ -138,7 +154,14 @@ export function TxList({ txs, limit }: { txs: Tx[]; limit?: number }) {
     );
   }
 
-  return <VirtualTxList rows={rows} returnTxid={returnTxid} onOpen={open} />;
+  return (
+    <VirtualTxList
+      rows={rows}
+      cols={cols}
+      returnTxid={returnTxid}
+      onOpen={open}
+    />
+  );
 }
 
 function TxHeader({ cols }: { cols: string }) {
@@ -156,15 +179,23 @@ function TxHeader({ cols }: { cols: string }) {
   );
 }
 
+// `useVirtualizer` is an incompatible-library boundary for the React Compiler
+// (the virtualizer mutates its instance cache during render by design), so this
+// component opts out of auto-memoization explicitly. Everything else in the
+// file still compiles; the remaining "can't optimize" report on the hook call
+// is the library boundary itself, not a regression.
 function VirtualTxList({
   rows,
+  cols,
   returnTxid,
   onOpen,
 }: {
   rows: Tx[];
+  cols: string;
   returnTxid: string | null;
   onOpen: (txid: string) => void;
 }) {
+  "use no memo";
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -195,7 +226,8 @@ function VirtualTxList({
     if (returnTxid === null || !scrollEl) return;
     const index = rows.findIndex((t) => t.txid === returnTxid);
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "center" });
-  }, [scrollEl]); // eslint-disable-line react-hooks/exhaustive-deps
+    // react-doctor-disable-next-line react-doctor/exhaustive-deps
+  }, [scrollEl]);
 
   const [revealing, setRevealing] = useState(
     animationsEnabled() && returnTxid === null,
@@ -205,8 +237,6 @@ function VirtualTxList({
     const t = setTimeout(() => setRevealing(false), STAGGER_CEILING_MS + 440);
     return () => clearTimeout(t);
   }, [returnTxid]);
-
-  const cols = useMemo(() => colsFor(rows), [rows]);
 
   return (
     <div className="mt-4 text-sm">
@@ -250,7 +280,10 @@ function VirtualTxList({
   );
 }
 
-export function TxRow({
+// Memoized so a re-render of the list (a sync event, a wallet-data poll) doesn't
+// rebuild every mounted row; during a sidebar spring the width reflow alone is
+// already the whole per-frame cost.
+export const TxRow = memo(function TxRow({
   tx,
   cols,
   onOpen,
@@ -288,7 +321,7 @@ export function TxRow({
       <TxBlock tx={tx} />
     </div>
   );
-}
+});
 
 function TxKind({ tx }: { tx: Tx }) {
   const received = tx.kind === "received";

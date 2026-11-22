@@ -1,10 +1,10 @@
 //! UFVK decoding for the identity slice.
 //!
 //! Decodes a pasted UFVK into the network it binds to, the pools it can watch,
-//! and a stable fingerprint, the moment the key validates. Testnet keys are
-//! rejected (Pendrake is mainnet and regtest only) and a malformed string gets a
-//! specific reason. This is the Rust-side derivation ADR-0002 calls for: the
-//! service and the GUI read the network from the key, not from a client field.
+//! and a stable fingerprint, the moment the key validates. A malformed string
+//! gets a specific reason. This is the Rust-side derivation ADR-0002 calls for:
+//! the service and the GUI read the network from the key, not from a client
+//! field.
 
 use std::fmt::{self, Write};
 
@@ -14,20 +14,15 @@ use zcash_protocol::consensus::NetworkType;
 
 use pendrake_ipc::{Pool, UfvkIdentity, UfvkNetwork};
 
-/// Why a UFVK can't become a Wallet. Testnet is valid-but-unsupported, so it is
-/// kept distinct from a malformed key the user likely mistyped.
+/// Why a UFVK can't become a Wallet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UfvkError {
-    Testnet,
     Malformed(String),
 }
 
 impl fmt::Display for UfvkError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UfvkError::Testnet => {
-                f.write_str("This is a testnet key. Pendrake supports mainnet and regtest only.")
-            }
             UfvkError::Malformed(reason) => write!(f, "Not a valid UFVK: {reason}"),
         }
     }
@@ -42,8 +37,8 @@ pub fn parse_ufvk(input: &str) -> Result<UfvkIdentity, UfvkError> {
 
     let network = match net {
         NetworkType::Main => UfvkNetwork::Mainnet,
+        NetworkType::Test => UfvkNetwork::Testnet,
         NetworkType::Regtest => UfvkNetwork::Regtest,
-        NetworkType::Test => return Err(UfvkError::Testnet),
     };
 
     // Ironwood reuses the Orchard FVK (no separate typecode). Any key that can
@@ -117,11 +112,10 @@ mod tests {
     }
 
     #[test]
-    fn rejects_testnet_with_its_own_error() {
-        assert_eq!(
-            parse_ufvk(&sample_ufvk(NetworkType::Test)),
-            Err(UfvkError::Testnet)
-        );
+    fn decodes_testnet_with_pools() {
+        let id = parse_ufvk(&sample_ufvk(NetworkType::Test)).unwrap();
+        assert_eq!(id.network, UfvkNetwork::Testnet);
+        assert_shielded_pools(&id.pools);
     }
 
     #[test]
@@ -143,7 +137,11 @@ mod tests {
         let regtest = parse_ufvk(&sample_ufvk(NetworkType::Regtest))
             .unwrap()
             .fingerprint;
+        let testnet = parse_ufvk(&sample_ufvk(NetworkType::Test))
+            .unwrap()
+            .fingerprint;
         assert_eq!(main, again);
         assert_ne!(main, regtest);
+        assert_ne!(main, testnet);
     }
 }

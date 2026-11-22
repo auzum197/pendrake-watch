@@ -40,6 +40,7 @@ const POOLS: Pool[] = ["orchard", "sapling", "transparent", "ironwood"];
 const KINDS: TxKind[] = ["received", "sent"];
 const NETWORKS: { value: Network; label: string }[] = [
   { value: "mainnet", label: "Mainnet" },
+  { value: "testnet", label: "Testnet" },
   { value: "regtest", label: "Regtest" },
 ];
 const CONDITIONS: { value: Condition["kind"]; label: string }[] = [

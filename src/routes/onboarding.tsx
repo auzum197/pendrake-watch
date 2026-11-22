@@ -18,7 +18,6 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card/hover-card";
 import {
-  DEFAULT_INDEXER,
   getWalletState,
   importUfvk,
   parseUfvk,
@@ -34,7 +33,12 @@ import {
   networkFromUfvk,
   onboardingSteps,
 } from "@/lib/onboarding";
-import { indexerReady, resolveIndexer } from "@/lib/indexer";
+import {
+  DEFAULT_INDEXER,
+  effectiveIndexerSelection,
+  indexerReady,
+  resolveIndexer,
+} from "@/lib/indexer";
 import { BirthdayCalendar } from "@/components/onboarding/birthday-calendar";
 import { LifeHashAvatar } from "@/components/onboarding/lifehash-avatar";
 import { OnboardingCard } from "@/components/onboarding/onboarding-card";
@@ -113,6 +117,13 @@ export function OnboardingPage() {
   const current = steps[position];
   const next = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
   const back = () => setIndex((i) => Math.max(i - 1, 0));
+  // The draft starts on mainnet's default before any key is pasted, so once the
+  // network is known the selection is read through the network's own lens: a
+  // carried-over preset falls back to this network's default, custom stays.
+  const indexerSelection = effectiveIndexerSelection(
+    draft.indexerSelection,
+    network,
+  );
   async function createWallet() {
     setBusy(true);
     setError(null);
@@ -123,15 +134,11 @@ export function OnboardingPage() {
         // The daemon's resolver settles this raw choice into a height
         // (docs/adr/0002), so the GUI never pre-resolves a date.
         birthday: birthdayChoice(draft, network),
-        // Regtest has no universal Indexer, so its onboarding requires a custom
-        // one and never falls back to DEFAULT_INDEXER, the mainnet endpoint
-        // (AUZ-104). Mainnet opens on that default with the region list and a
-        // custom entry alongside it.
-        indexerUri: resolveIndexer(
-          draft.indexerSelection,
-          draft.indexerUri,
-          network,
-        ),
+        // Mainnet opens on the auto-routed default with the region list and a
+        // custom entry alongside it; testnet on its single public default
+        // (AUZ-104). Regtest has no universal Indexer, so its onboarding
+        // requires a custom one.
+        indexerUri: resolveIndexer(indexerSelection, draft.indexerUri, network),
         network,
         // First onboarding sets the global passphrase (docs/adr/0003). A
         // post-Replace import omits it so the daemon reuses the held one.
@@ -140,9 +147,8 @@ export function OnboardingPage() {
       navigate({ to: "/dashboard" });
     } catch (e) {
       setError(String(e));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   // One step by index. On the final step the primary action imports; earlier steps
@@ -172,6 +178,7 @@ export function OnboardingPage() {
       return (
         <IndexerStep
           network={network}
+          selection={indexerSelection}
           draft={draft}
           set={set}
           onBack={back}
@@ -400,7 +407,6 @@ function StepActions({
 
 const VERDICT_TEXT = {
   malformed: "Not a valid UFVK. Check that you pasted the whole key.",
-  testnet: "Testnet key. Pendrake supports mainnet and regtest only.",
 };
 
 function KeyField({
@@ -431,13 +437,8 @@ function KeyField({
   const border =
     verdict === "malformed"
       ? "border-red-500/60"
-      : verdict === "testnet"
-        ? "border-amber-500/60"
-        : "border-ink-line focus-within:border-white/30";
-  const problem =
-    verdict === "malformed" || verdict === "testnet"
-      ? VERDICT_TEXT[verdict]
-      : null;
+      : "border-ink-line focus-within:border-white/30";
+  const problem = verdict === "malformed" ? VERDICT_TEXT[verdict] : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -486,14 +487,10 @@ function KeyField({
       </div>
       <p
         className={`h-4 truncate text-xs leading-4 transition-opacity duration-200 ease-out-soft ${
-          verdict === "malformed"
-            ? "text-red-300"
-            : verdict === "testnet"
-              ? "text-amber-300"
-              : "opacity-0"
+          verdict === "malformed" ? "text-red-300" : "opacity-0"
         }`}
       >
-        {problem ?? " "}
+        {problem ?? " "}
       </p>
     </div>
   );
@@ -581,8 +578,8 @@ function poolList(pools: UfvkIdentity["pools"]) {
 }
 
 // The birthday picker, shown only once the key decodes. Its shape follows the
-// network: mainnet offers a date or a height, regtest a height alone, since a
-// local chain has no calendar to date a birthday against.
+// network: mainnet offers a date or a height; regtest and testnet a height alone,
+// since neither has a block cadence a date can be projected against.
 function SyncFrom({
   network,
   draft,
@@ -607,19 +604,7 @@ function SyncFrom({
   return (
     <div className="flex flex-col gap-2.5">
       <FieldLabel>Sync from</FieldLabel>
-      {network === "regtest" ? (
-        // Regtest has no universal date reference, so it offers only a height,
-        // defaulting to its activation (1) when left blank.
-        <input
-          className={`${fieldBase} h-12 font-mono`}
-          inputMode="numeric"
-          placeholder="1"
-          value={draft.height}
-          onChange={(e) =>
-            set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
-          }
-        />
-      ) : (
+      {network === "mainnet" ? (
         <>
           <Segmented
             value={draft.syncMode}
@@ -635,6 +620,19 @@ function SyncFrom({
             height
           )}
         </>
+      ) : (
+        // Regtest has no universal date reference, so it offers only a height,
+        // defaulting to its activation (1) when left blank. Testnet's
+        // difficulty-reset emissions don't project linearly either.
+        <input
+          className={`${fieldBase} h-12 font-mono`}
+          inputMode="numeric"
+          placeholder={network === "regtest" ? "1" : "Block height"}
+          value={draft.height}
+          onChange={(e) =>
+            set("height", e.currentTarget.value.replace(/[^0-9]/g, ""))
+          }
+        />
       )}
     </div>
   );
@@ -682,17 +680,19 @@ function DateField({
   );
 }
 
-const NETWORK_LABEL: Record<"mainnet" | "regtest", string> = {
+const NETWORK_LABEL: Record<UfvkNetwork, string> = {
   mainnet: "Mainnet",
+  testnet: "Testnet",
   regtest: "Regtest",
 };
 
 // The Indexer the new Wallet syncs against. Mainnet opens on the auto-routed default
-// with the region list and a custom entry beside it; regtest has no public default,
-// so it only takes a custom one and the primary action stays disabled until the URL
-// looks real (AUZ-104).
+// with the region list and a custom entry beside it; testnet on its single public
+// default the same way; regtest has no public default, so it only takes a custom
+// one and the primary action stays disabled until the URL looks real (AUZ-104).
 function IndexerStep({
   network,
+  selection,
   draft,
   set,
   onBack,
@@ -702,6 +702,10 @@ function IndexerStep({
   error,
 }: {
   network: Network;
+  // The draft's selection read through this network's lens
+  // (effectiveIndexerSelection), so a preset carried over from another network
+  // never shows as selected here.
+  selection: string;
   draft: Draft;
   set: <K extends keyof Draft>(key: K, value: Draft[K]) => void;
   onBack: () => void;
@@ -711,19 +715,20 @@ function IndexerStep({
   busy: boolean;
   error: string | null;
 }) {
-  const ready = indexerReady(draft.indexerSelection, draft.indexerUri, network);
+  const ready = indexerReady(selection, draft.indexerUri, network);
+  const customOnly = network === "regtest";
   return (
     <>
       <StepHeading title="Indexer" />
 
       <div className="flex flex-col gap-2">
-        {network === "regtest" && <FieldLabel>Indexer URL</FieldLabel>}
+        {customOnly && <FieldLabel>Indexer URL</FieldLabel>}
         <IndexerPicker
           network={network}
-          selection={draft.indexerSelection}
+          selection={selection}
           customUrl={draft.indexerUri}
           disabled={busy}
-          autoFocus={network === "regtest"}
+          autoFocus={customOnly}
           inputClassName="h-12 rounded-xl border-ink-line bg-ink-soft px-4 text-sm"
           onSelect={(selection) => set("indexerSelection", selection)}
           onCustomChange={(url) => set("indexerUri", url)}

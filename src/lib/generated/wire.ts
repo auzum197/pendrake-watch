@@ -34,8 +34,9 @@ export type BatchTiming = { totalSecs: number, waitSecs: number, fetchSecs: numb
 /**
  * How the user chose a Wallet's Birthday at import. The daemon's resolver is the
  * single source of truth that turns this into a starting block height, so the GUI
- * sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only and
- * carries unix seconds for midnight UTC of the picked day; `Default` is blank.
+ * sends the raw choice and never pre-resolves (AUZ-95). `Date` is mainnet only
+ * (testnet and regtest have no linear time-to-height projection) and carries
+ * unix seconds for midnight UTC of the picked day; `Default` is blank.
  */
 export type BirthdayInput = { "kind": "height", "value": number } | { "kind": "date", "value": number } | { "kind": "default" };
 
@@ -62,7 +63,7 @@ export type ImportUfvkArgs = { ufvk: string, birthday: BirthdayInput, indexerUri
  */
 passphrase?: string, };
 
-export type Network = "mainnet" | "regtest";
+export type Network = "mainnet" | "testnet" | "regtest";
 
 /**
  * One output within a transaction: a shielded Note or a transparent UTXO,
@@ -87,11 +88,11 @@ export type NoteDirection = "received" | "sent";
 export type NoteStatus = "unspent" | "spent" | "pending";
 
 /**
- * The verdict of a `parseUfvk` request. A testnet or malformed key is a decode
- * outcome the GUI renders inline, not a transport failure, so it rides back as
- * an `ok` result tagged by `kind` rather than a daemon error.
+ * The verdict of a `parseUfvk` request. A malformed key is a decode outcome the
+ * GUI renders inline, not a transport failure, so it rides back as an `ok`
+ * result tagged by `kind` rather than a daemon error.
  */
-export type ParseUfvkResult = { "kind": "valid" } & UfvkIdentity | { "kind": "testnet" } | { "kind": "malformed", reason: string, };
+export type ParseUfvkResult = { "kind": "valid" } & UfvkIdentity | { "kind": "malformed", reason: string, };
 
 /**
  * A value pool a UFVK can view, in the glossary's vocabulary. Unknown and
@@ -209,10 +210,10 @@ export type TxStatus = "confirmed" | "pending";
 export type UfvkIdentity = { network: UfvkNetwork, fingerprint: string, pools: Array<Pool>, };
 
 /**
- * The network a UFVK declares. Distinct from [`Network`]: a key can be testnet,
- * which Pendrake rejects, so the decode result carries only the two it accepts.
+ * The network a UFVK declares. Kept separate from [`Network`] so the decode
+ * result speaks the key's own vocabulary; the import cross-checks the two agree.
  */
-export type UfvkNetwork = "mainnet" | "regtest";
+export type UfvkNetwork = "mainnet" | "testnet" | "regtest";
 
 export type ViewMode = "full" | "incoming-only";
 

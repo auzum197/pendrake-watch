@@ -111,6 +111,30 @@ describe("FakeDaemon", () => {
     expect(state()).toMatchObject({ exists: false, sessionHeld: false });
   });
 
+  it("restart_sync starts a fresh round for an errored Wallet", () => {
+    const { daemon, wallets } = boot();
+    const errored = wallets().find((w) => w.sync?.state === "error");
+    expect(errored).toBeDefined();
+    daemon.call("restart_sync", { id: errored!.id });
+    const after = wallets().find((w) => w.id === errored!.id);
+    expect(after?.sync?.state).toBe("syncing");
+  });
+
+  it("restart_sync without an id nudges the Selected Wallet", () => {
+    const { daemon, state, wallets } = boot();
+    const selected = state().walletId;
+    daemon.call("restart_sync", {});
+    const after = wallets().find((w) => w.id === selected);
+    expect(after?.sync?.state).toBe("syncing");
+  });
+
+  it("restart_sync refuses an unopenable Wallet", () => {
+    const { daemon, wallets } = boot();
+    const dead = wallets().find((w) => w.unavailable);
+    expect(dead).toBeDefined();
+    expect(() => daemon.call("restart_sync", { id: dead!.id })).toThrow();
+  });
+
   it("imports a key into a scanning Wallet under a new passphrase", () => {
     const { daemon, state, wallets } = boot();
     daemon.call("start_over", {});
@@ -119,7 +143,10 @@ describe("FakeDaemon", () => {
       kind: "valid",
       network: "mainnet",
     });
-    expect(parseUfvk("uviewtest1abc")).toEqual({ kind: "testnet" });
+    expect(parseUfvk(`uviewtest1${"q".repeat(60)}`)).toMatchObject({
+      kind: "valid",
+      network: "testnet",
+    });
     expect(parseUfvk("zs1abc").kind).toBe("malformed");
     const importArgs = {
       ufvk,

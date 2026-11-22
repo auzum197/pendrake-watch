@@ -112,16 +112,18 @@ function resolveBirthday(input: unknown, network: Network): number {
 // the same identity, which is all the Identity screen needs.
 export function parseUfvk(ufvk: string): ParseUfvkResult {
   const key = ufvk.trim().toLowerCase();
-  if (key.startsWith("uviewtest1")) return { kind: "testnet" };
   const network: Network | null = key.startsWith("uviewregtest1")
     ? "regtest"
-    : key.startsWith("uview1")
-      ? "mainnet"
-      : null;
+    : key.startsWith("uviewtest1")
+      ? "testnet"
+      : key.startsWith("uview1")
+        ? "mainnet"
+        : null;
   if (network === null) {
     return {
       kind: "malformed",
-      reason: "not a unified full viewing key (expected a uview1 prefix)",
+      reason:
+        "not a unified full viewing key (expected a uview1, uviewtest1 or uviewregtest1 prefix)",
     };
   }
   if (key.length < 40) {
@@ -234,6 +236,7 @@ export class FakeDaemon {
     const now = clock();
     this.tip = {
       mainnet: chainFor("mainnet").heightAt(now),
+      testnet: chainFor("testnet").heightAt(now),
       regtest: chainFor("regtest").heightAt(now),
     };
     this.history = priceHistory(now * 1000);
@@ -285,6 +288,7 @@ export class FakeDaemon {
     }
     if (this.seconds % BLOCK_SECONDS === 0) {
       this.newBlock("mainnet", now);
+      this.newBlock("testnet", now);
       const regtestPending = this.wallets.some(
         (w) =>
           w.spec.persona.network === "regtest" &&
@@ -526,6 +530,15 @@ export class FakeDaemon {
         this.startScan(w, w.spec.persona.birthdayHeight, RESCAN_SECONDS);
         return this.state();
       }
+      case "restart_sync": {
+        const id = optStr(args, "id");
+        const w = id ? this.lookup(id) : this.selected();
+        const reason = this.unavailableOf(w);
+        if (reason) throw `this Wallet can't be restarted: ${reason}`;
+        this.startScan(w, w.sync.syncedHeight, RESUME_SECONDS);
+        this.changed();
+        return this.state();
+      }
       case "start_over":
         this.wallets = [];
         this.selectedId = null;
@@ -600,7 +613,6 @@ export class FakeDaemon {
 
   private importUfvk(args: Args, now: number): WalletState {
     const parsed = parseUfvk(str(args, "ufvk"));
-    if (parsed.kind === "testnet") throw "testnet keys are not supported";
     if (parsed.kind === "malformed") throw `invalid UFVK: ${parsed.reason}`;
     if (args.network !== parsed.network) {
       throw `the key belongs to ${parsed.network}, not ${String(args.network)}`;

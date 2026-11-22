@@ -65,7 +65,7 @@ export function WalletPlate({
     }
   }
 
-  async function use() {
+  async function activate() {
     await switchWallet(wallet.id);
     onChanged();
   }
@@ -80,7 +80,7 @@ export function WalletPlate({
       <UfvkReveal walletId={wallet.id} network={wallet.network} />
       <PlateActions
         wallet={wallet}
-        onUse={() => void use()}
+        onUse={() => void activate()}
         onRescan={() => setRescanning(true)}
         onRemove={() => setRemoving(true)}
       />

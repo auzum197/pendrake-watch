@@ -11,18 +11,21 @@ pendrake-ipc = { path = "../pendrake-ipc" }
 zingolib = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 pepper-sync = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 
-zingo-netutils = "5"
+zingo-netutils = "5.0.1"
 
-zcash_protocol = "=0.10.0"
-zcash_primitives = "=0.29.0"
-zcash_address = "=0.13.0"
+# The zakura generation: the zcash_* crates renamed for the Nu7 era, matching the
+# stack zingolib stable-auz builds against. Same lib names, so the import paths
+# below are unchanged.
+zcash_protocol = { version = "=4.0.0-rc1", package = "zakura-protocol" }
+zcash_primitives = { version = "=4.0.0-rc1", package = "zakura-primitives" }
+zcash_address = { version = "=4.0.0-rc1", package = "zakura-address" }
 
-zcash_client_backend = { version = "=0.24.0-rc.1", default-features = false, features = [
+zcash_client_backend = { git = "https://github.com/zakura-core/wallet-libraries", rev = "a2f87e6f235dc16840be1dd7fc88e6dd06f0a268", package = "zakura-client-backend", default-features = false, features = [
     "lightwalletd-tonic",
     "orchard",
     "transparent-inputs",
 ] }
-zcash_keys = { version = "=0.15.0", default-features = false, features = [
+zcash_keys = { version = "=4.0.0-rc1", package = "zakura-keys", default-features = false, features = [
     "transparent-inputs",
     "sapling",
     "orchard",
@@ -66,5 +69,6 @@ tonic = "0.14"
 # Isolated data dir per single-instance test, cleaned up on drop.
 tempfile = "3"
 # ConfirmationStatus, to stamp the hand-built TransactionSummary fixtures the
+# net-delta tests work from.
+zingolib-common = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }
 
-zingolib-status = { git = "https://github.com/auzum197/zingolib", branch = "stable-auz" }

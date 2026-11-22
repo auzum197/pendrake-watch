@@ -1,5 +1,17 @@
 # Pendrake Watch — Update log
 
+## 2026-10-29: restart from the sync error pill
+
+A Wallet that hits a sync error used to sit on an amber "Sync error" pill with nothing to do but wait out the engine's backoff, which doubles round after round. The pill on the dashboard is now a button: clicking it asks the daemon for a fresh round immediately (`restart_sync`), for the moment the cause is fixed — the router rebooted, the Indexer came back — and waiting feels silly. It starts no round the loop wouldn't start itself; if the Indexer is still down the round fails and the backoff resumes. Wrong chain stays inert, since retrying the same Indexer cannot fix an anchor mismatch; the Indexer switch in Settings remains the way out.
+
+---
+
+## 2026-10-29: testnet
+
+Testnet is a supported network. A `uviewtest` UFVK, which onboarding used to refuse with an amber "not supported" verdict, now imports like any other key: the daemon opens it against the real testnet chain, and the Wallet syncs, notifies and switches like its mainnet siblings. The Indexer step opens on testnet's public default (`https://testnet.zec.rocks`, the same endpoint zingolib falls back to) with a custom entry beside it, and the Birthday is a block height only, since testnet's difficulty-reset emissions make a date-to-height projection untrustworthy. The sidebar's testnet Wallets carry the TAZ ticker. The faker grew a testnet chain, testnet address prefixes and a Testnet persona network, so the flow runs in the browser with no daemon. See docs/adr/0014.
+
+---
+
 ## 2026-10-07: faker mode for the GUI
 
 `VITE_FAKER=1` in dev swaps the daemon for an in-memory one, so the GUI runs in a plain browser with no daemon build, no Indexer and no chain. It seeds seven Wallets, one per state the UI draws (a long history, a busy shop with every Pool and a mempool entry, an unlabelled one, one mid Initial scan, a regtest one, an unreachable Indexer, an unopenable file), with deterministic and internally consistent data: balances are the sum of the unspent notes and every spend consumes real inputs. Blocks, payments, scan progress and the spot price keep moving while it runs. A flask button in the corner opens the Lab, an editor for everything the real daemon would keep on disk: the app settings, each Wallet's identity, persona and condition, and its history row by row, with the ledger re-derived from the edited rows. Edits persist in localStorage. `just dev-faker` starts it. The gate is the same as react-scan, so the fake is dead code in a production build.
@@ -84,6 +96,34 @@ The daemon opens every Wallet on disk and syncs each one on its own.
 - `active` became `selected` on the wire, `removeWallet` takes an id and `startOver` is a separate method.
 
 ---
+
+## v0.1.1 — 2026-09-29
+
+Hardening, receive QR, and UI polish on `feat/multi-wallet`. One wallet stays
+active; sync still starts from the Sync chip.
+
+### Added
+- Receive QR on the active wallet card (UA + copy). Hidden while discreet or locked.
+- Custom wallet labels.
+- Lazy daemon start and optional stop-on-close.
+
+### Security
+- Socket `0600`, data dir `0700`.
+- IPC request lines capped at 64 KiB.
+- Session passphrase stored as `Zeroizing<String>`.
+- Wrong-passphrase delay doubles per miss up to 5s.
+
+### Fixed
+- Persist chosen indexer URI on import.
+- Discreet-mode display bug.
+- Lock `zeroize` on `pendrake-core` so CI `--locked` builds.
+
+### UI
+- Sidebar `w-80`; switcher full card width; dark thin scrollbar.
+- Window 1280×800 default, min 1100×720.
+- Receive is an icon-only control (no border).
+- Pool colors match ZecHub: Sapling gold, Orchard green, Ironwood red.
+
 
 **Date:** 2026-08-17  
 **Focus:** Ironwood (NU6.3) support, multi-wallet accounts, manual sync, local build hardening, onboarding indexer choice, Notes UI polish

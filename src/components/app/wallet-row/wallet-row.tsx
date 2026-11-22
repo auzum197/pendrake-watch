@@ -18,6 +18,7 @@ import { Mirage } from "@/components/ui/mirage/mirage";
 
 const TICKER: Record<Network, string> = {
   mainnet: "ZEC",
+  testnet: "TAZ",
   regtest: "ZEC",
 };
 

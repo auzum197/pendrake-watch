@@ -55,7 +55,7 @@ export function MerkleTree({
   total?: number;
   scanned?: number;
 }) {
-  const rows = useMemo(layout, []);
+  const rows = useMemo(() => layout(), []);
   const filled = Math.max(0, Math.min(LEAVES, Math.round(frac * LEAVES)));
   const lastLeaf = filled - 1;
 

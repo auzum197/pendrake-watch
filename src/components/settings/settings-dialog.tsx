@@ -10,9 +10,13 @@ import {
   WalletsPanel,
 } from "@/components/settings/wallets-panel";
 import type { WalletState, WalletSummary } from "@/lib/ipc";
-import { CUSTOM_INDEXER, indexerReady, resolveIndexer } from "@/lib/indexer";
 import {
-  MAINNET_INDEXERS,
+  CUSTOM_INDEXER,
+  indexerPresets,
+  indexerReady,
+  resolveIndexer,
+} from "@/lib/indexer";
+import {
   setFiatEnabled,
   setIndexer,
   setNotifications,
@@ -56,8 +60,8 @@ const TEXT = {
     title: "Indexer",
     descriptionMainnet:
       "The Indexer this Wallet syncs from. Switching connects to the new one before saving.",
-    descriptionRegtest:
-      "This regtest Wallet has no public default, so point it at your own Indexer.",
+    descriptionCustom:
+      "This Wallet's network has no public default, so point it at your own Indexer.",
   },
   remove: {
     title: "Remove Wallet",
@@ -128,7 +132,7 @@ function searchMatches(
     indexer: hit(
       TEXT.indexer.title,
       TEXT.indexer.descriptionMainnet,
-      TEXT.indexer.descriptionRegtest,
+      TEXT.indexer.descriptionCustom,
     ),
     remove: hit(TEXT.remove.title, TEXT.remove.description),
   };
@@ -710,13 +714,12 @@ function IndexerSection({
   focusOnMount: boolean;
   query?: string;
 }) {
-  const isMainnet = network === "mainnet";
-  const preset = isMainnet
-    ? MAINNET_INDEXERS.find((p) => p.uri === current)
-    : undefined;
+  // A stored URI that names one of the network's presets opens on that preset;
+  // anything else (including regtest's always-custom URLs) opens on the field.
+  const preset = indexerPresets(network).find((p) => p.uri === current);
 
   const [selection, setSelection] = useState(
-    isMainnet && preset ? preset.uri : CUSTOM_INDEXER,
+    preset ? preset.uri : CUSTOM_INDEXER,
   );
   const [customUrl, setCustomUrl] = useState(preset ? "" : current);
   const [saved, setSaved] = useState(current);
@@ -763,9 +766,9 @@ function IndexerSection({
       <p className="mt-1 text-sm text-muted-foreground">
         <Highlighted
           text={
-            isMainnet
-              ? TEXT.indexer.descriptionMainnet
-              : TEXT.indexer.descriptionRegtest
+            network === "regtest"
+              ? TEXT.indexer.descriptionCustom
+              : TEXT.indexer.descriptionMainnet
           }
           query={query}
         />

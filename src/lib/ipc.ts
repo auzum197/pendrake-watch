@@ -1,6 +1,5 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { invoke, listen } from "./transport";
-
 // The wire types are generated from the daemon's pendrake-ipc crate by
 // `just bindings`, so the two sides cannot drift. They are re-exported here as
 // aliases (a plain re-export would survive into the Storybook module mock);
@@ -40,19 +39,6 @@ export type WalletNote = Wire.WalletNote;
 export type WalletState = Wire.WalletState;
 export type WalletSummary = Wire.WalletSummary;
 export type ImportUfvkInput = Wire.ImportUfvkArgs;
-
-// The public mainnet default: zec.rocks auto-routes to a nearby region.
-export const DEFAULT_INDEXER = "https://zec.rocks:443";
-
-// Curated mainnet Indexers shown in Settings. The default is auto-routed; the rest
-// pin a region. Regtest has no public default, so it only ever uses a custom one.
-export const MAINNET_INDEXERS: { label: string; uri: string }[] = [
-  { label: "Default (auto-routed)", uri: DEFAULT_INDEXER },
-  { label: "North America", uri: "https://na.zec.rocks:443" },
-  { label: "Europe", uri: "https://eu.zec.rocks:443" },
-  { label: "South America", uri: "https://sa.zec.rocks:443" },
-  { label: "Middle East", uri: "https://me.zec.rocks:443" },
-];
 
 export function importUfvk(input: ImportUfvkInput): Promise<WalletState> {
   return invoke("import_ufvk", {
@@ -165,6 +151,13 @@ export function removeWallet(
 
 export function rescanWallet(id: string): Promise<WalletState> {
   return invoke("rescan_wallet", { id });
+}
+
+// Nudge a Wallet into a fresh sync round now, cutting the engine's backoff short
+// after a failed round. `id` is omitted for the Selected Wallet, which is what the
+// dashboard's sync error pill nudges.
+export function restartSync(id?: string): Promise<WalletState> {
+  return invoke("restart_sync", { id });
 }
 
 export function startOver(): Promise<void> {

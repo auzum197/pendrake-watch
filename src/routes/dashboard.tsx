@@ -8,6 +8,7 @@ import {
 } from "@tabler/icons-react";
 import { Segmented } from "@/components/app/segmented/segmented";
 import { DiscreetEye } from "@/components/app/discreet-eye/discreet-eye";
+import { appToast } from "@/components/app/app-toast/app-toast";
 import { DiscreetValue } from "@/components/ui/discreet-value/discreet-value";
 import { Skeleton } from "@/components/ui/skeleton/skeleton";
 import { TxList } from "@/components/app/tx-list/tx-list";
@@ -36,6 +37,7 @@ import {
 } from "@/lib/format";
 import {
   type Balance,
+  restartSync,
   setFiatEnabled,
   type SyncStatus,
   type Tx,
@@ -146,29 +148,94 @@ const PERIOD_HIGH: Record<ChartRange, string> = {
   day: "1-day high",
 };
 
-function HeroSyncPill({ sync }: { sync: SyncStatus | null }) {
-  const synced = isSynced(sync);
-  const errored = sync?.state === "error";
-  const active = sync?.state === "syncing" && !synced;
+// The pill beside the total. A plain sync error turns it into a button: the engine
+// already retries failed rounds on its own with a growing backoff, so clicking
+// just asks the daemon to cut that wait short. Wrong chain stays inert, since no
+// amount of retrying the same Indexer fixes an anchor mismatch — the Indexer
+// switch in Settings is the way out.
+type PillState =
+  | "restarting"
+  | "synced"
+  | "error"
+  | "wrongChain"
+  | "syncing"
+  | "hidden";
 
-  if (!synced && !errored && !active) return null;
+function pillState(sync: SyncStatus | null, restarting: boolean): PillState {
+  if (restarting) return "restarting";
+  if (sync === null) return "hidden";
+  if (sync.state === "error") return sync.wrongChain ? "wrongChain" : "error";
+  if (isSynced(sync)) return "synced";
+  if (sync.state === "syncing") return "syncing";
+  return "hidden";
+}
 
-  const Icon = synced
-    ? IconCircleCheckFilled
-    : errored
-      ? IconAlertTriangle
-      : IconLoader2;
+const PILL_STYLE: Record<
+  PillState,
+  { icon: typeof IconLoader2; iconClass: string } | null
+> = {
+  restarting: {
+    icon: IconLoader2,
+    iconClass: "text-muted-foreground motion-safe:animate-spin",
+  },
+  synced: { icon: IconCircleCheckFilled, iconClass: "text-brand" },
+  error: { icon: IconAlertTriangle, iconClass: "text-amber-400" },
+  wrongChain: { icon: IconAlertTriangle, iconClass: "text-red-400" },
+  syncing: {
+    icon: IconLoader2,
+    iconClass: "text-brand motion-safe:animate-spin",
+  },
+  hidden: null,
+};
 
-  const iconColor = synced
-    ? "text-brand"
-    : errored
-      ? "text-amber-400"
-      : "text-brand motion-safe:animate-spin";
+function HeroSyncPill({
+  sync,
+  walletId,
+}: {
+  sync: SyncStatus | null;
+  walletId: string | null;
+}) {
+  const [restarting, setRestarting] = useState(false);
+  const state = pillState(sync, restarting);
+  const style = PILL_STYLE[state];
+  if (style === null) return null;
+
+  async function restart() {
+    if (restarting) return;
+    setRestarting(true);
+    try {
+      await restartSync(walletId ?? undefined);
+    } catch (e) {
+      appToast.error("Couldn't restart sync", String(e));
+    }
+    setRestarting(false);
+  }
+
+  const label = restarting ? "Restarting…" : syncLabel(sync);
+  const body = (
+    <>
+      <style.icon className={`size-3.5 shrink-0 ${style.iconClass}`} />
+      {label}
+    </>
+  );
+
+  if (state === "error") {
+    return (
+      <button
+        type="button"
+        onClick={restart}
+        title={sync?.error ?? "Restart sync now"}
+        aria-label="Restart sync"
+        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground outline-none transition-colors hover:border-amber-400/50 hover:text-foreground focus-visible:border-amber-400/50"
+      >
+        {body}
+      </button>
+    );
+  }
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
-      <Icon className={`size-3.5 shrink-0 ${iconColor}`} />
-      {syncLabel(sync)}
+      {body}
     </span>
   );
 }
@@ -316,7 +383,7 @@ function ChartCard({
               Total Balance
             </span>
             <DiscreetEye />
-            <HeroSyncPill sync={sync} />
+            <HeroSyncPill sync={sync} walletId={wallet?.walletId ?? null} />
           </div>
           {activeDenom === "usd" ? (
             <span className="font-heading text-5xl font-bold leading-none tabular-nums">
