@@ -7,7 +7,7 @@ const vignette = { from: 0.1, to: 1, dim: 0.85, sink: 0.92 };
 
 const meta = {
   component: Sky,
-  parameters: { layout: "fullscreen" },
+  parameters: { bare: true },
   args: {
     video: asset("sky-slow.mp4"),
     still: asset("sky-still.png"),

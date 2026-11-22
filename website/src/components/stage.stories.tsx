@@ -4,7 +4,7 @@ import { Stage } from "./stage";
 
 const meta = {
   component: Stage,
-  parameters: { layout: "fullscreen" },
+  parameters: { bare: true },
   args: { still: asset("sky-still.png") },
   decorators: [
     (Story) => (

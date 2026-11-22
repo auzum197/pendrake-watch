@@ -38,7 +38,7 @@ export const Static: Story = {};
 export const Receiving: Story = { render: () => <Live /> };
 
 export const FullSize: Story = {
-  parameters: { layout: "fullscreen" },
+  parameters: { bare: true },
   decorators: [
     (Story) => (
       <div

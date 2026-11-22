@@ -10,13 +10,7 @@ const meta = {
       options: [undefined, "detect", "macos", "windows", "linux"],
     },
   },
-  decorators: [
-    (Story) => (
-      <div style={{ background: "#0a1a8c", padding: "3rem" }}>
-        <Story />
-      </div>
-    ),
-  ],
+  parameters: { sky: true },
 } satisfies Meta<typeof PearlButton>;
 
 export default meta;

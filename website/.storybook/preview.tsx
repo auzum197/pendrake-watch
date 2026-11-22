@@ -3,6 +3,8 @@ import { useLayoutEffect } from "react";
 import "../src/styles/theme.css";
 import "../src/styles/home.css";
 
+const SKY = "#0a1a8c";
+
 const withMotion: Decorator = (Story, context) => {
   const on: boolean =
     context.parameters.motion ?? context.globals.motion === "on";
@@ -13,16 +15,20 @@ const withMotion: Decorator = (Story, context) => {
 };
 
 const withSurface: Decorator = (Story, context) =>
-  context.parameters.layout === "fullscreen" ? (
+  context.parameters.bare ? (
     <Story />
   ) : (
-    <div className="grid min-h-svh place-items-center bg-background p-8 text-foreground">
+    <div
+      className="grid min-h-svh place-items-center bg-background p-8 text-foreground"
+      style={context.parameters.sky ? { background: SKY } : undefined}
+    >
       <Story />
     </div>
   );
 
 const preview: Preview = {
   parameters: {
+    layout: "fullscreen",
     backgrounds: { disabled: true },
     a11y: { test: "todo" },
   },
