@@ -3,7 +3,7 @@ import gsap from "gsap";
 export { gsap };
 
 export const reducedMotion = () =>
-  matchMedia("(prefers-reduced-motion: reduce)").matches;
+  !document.documentElement.classList.contains("motion");
 
 export function countTo(from: number, to: number, set: (v: number) => void) {
   if (reducedMotion()) {
