@@ -1,7 +1,9 @@
 import gsap from "gsap";
-import { reducedMotion } from "./shared";
 
 export { gsap };
+
+export const reducedMotion = () =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function countTo(from: number, to: number, set: (v: number) => void) {
   if (reducedMotion()) {
@@ -43,29 +45,4 @@ export function rowIn(el: Element) {
       },
       0.1,
     );
-}
-
-export function riseIn(targets: Element[], delay = 0) {
-  if (reducedMotion()) {
-    gsap.fromTo(
-      targets,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.3, stagger: 0.05, delay },
-    );
-    return;
-  }
-  gsap.fromTo(
-    targets,
-    { opacity: 0, y: 18, filter: "blur(6px)" },
-    {
-      opacity: 1,
-      y: 0,
-      filter: "blur(0px)",
-      duration: 0.9,
-      ease: "expo.out",
-      stagger: 0.09,
-      delay,
-      clearProps: "filter",
-    },
-  );
 }

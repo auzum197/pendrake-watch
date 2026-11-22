@@ -55,38 +55,42 @@ const FILLED: Record<string, string> = {
 
 export type IconName = keyof typeof PATHS | "check" | "sidebar";
 
-export function Icon(props: {
+export function Icon({
+  name,
+  className,
+  label,
+}: {
   name: IconName;
-  class?: string;
+  className?: string;
   label?: string;
 }) {
-  if (props.name === "check" || props.name === "sidebar") {
+  if (name === "check" || name === "sidebar") {
     return (
       <svg
         viewBox="0 0 24 24"
-        class={props.class}
+        className={className}
         fill="currentColor"
-        aria-hidden={!props.label}
-        aria-label={props.label}
+        aria-hidden={!label}
+        aria-label={label}
       >
-        <path d={FILLED[props.name]} />
+        <path d={FILLED[name]} />
       </svg>
     );
   }
   return (
     <svg
       viewBox="0 0 24 24"
-      class={props.class}
+      className={className}
       fill="none"
       stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden={!props.label}
-      aria-label={props.label}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={!label}
+      aria-label={label}
     >
-      {PATHS[props.name].map((d) => (
-        <path d={d} />
+      {PATHS[name].map((d) => (
+        <path key={d} d={d} />
       ))}
     </svg>
   );

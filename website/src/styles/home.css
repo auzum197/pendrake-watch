@@ -6,6 +6,8 @@
 	color: var(--foreground);
 	font-family: -apple-system, system-ui, sans-serif;
 	--frame-r: 26px;
+	--s: 0.6;
+	--rh: calc(900px * var(--s));
 }
 @supports (corner-shape: squircle) {
 	.home {
@@ -99,12 +101,15 @@
 }
 .home-stage {
 	position: relative;
+	width: calc(1180px * var(--s) * 0.7);
+	height: calc(900px * var(--s) * 0.7);
+	--k: calc(var(--s) * 0.7);
 }
 
 .home-ghost {
 	position: relative;
 	overflow: hidden;
-	display: flex;
+	display: none;
 	gap: 7px;
 	width: 100%;
 	height: 100%;
@@ -177,9 +182,16 @@
 	top: 50%;
 	left: 50%;
 	z-index: 4;
+	width: calc(1180px * var(--s));
+	height: calc(900px * var(--s));
+	margin-top: calc(-450px * var(--s));
+	margin-left: calc(-590px * var(--s));
 	pointer-events: none;
 }
 .home-frame {
+	width: 1180px;
+	height: 900px;
+	transform: scale(var(--s));
 	transform-origin: top left;
 }
 
@@ -188,7 +200,7 @@
 	top: -1.5rem;
 	right: -9.5rem;
 	z-index: 5;
-	display: grid;
+	display: none;
 }
 .home-burst > * {
 	grid-area: 1 / 1;
@@ -203,9 +215,19 @@
 		0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.home-ghost,
-	.home-burst {
-		display: none;
-	}
+.motion [data-rise],
+.motion [data-veil],
+.motion .home-real,
+.motion .home-idle,
+.motion .home-mini {
+	opacity: 0;
+}
+.motion .home-ghost {
+	display: flex;
+}
+.motion .home-burst {
+	display: grid;
+}
+.motion .home-key {
+	clip-path: inset(0 100% 0 0);
 }

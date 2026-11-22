@@ -16,7 +16,7 @@ const LINUX: Glyph = {
 };
 
 export function platformGlyph(): Glyph | undefined {
-  const hint = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
+  const hint = navigator.userAgent.toLowerCase();
   if (/android|iphone|ipad|ipod/.test(hint)) return undefined;
   if (hint.includes("mac"))
     return navigator.maxTouchPoints > 1 ? undefined : MAC;

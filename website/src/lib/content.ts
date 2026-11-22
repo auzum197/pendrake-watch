@@ -164,63 +164,70 @@ export const ACTIVITY: Tx[] = [
 export type Point = { t: number; value: number; label: string };
 
 const STEP = 25 * 60;
+const LAST = 18.5 * 3600;
+const SEED = 20261122;
 
-const clock = (epoch: number) =>
-  new Date(epoch * 1000).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-const NOW = Math.floor(Date.now() / 1000 / STEP) * STEP;
-
-const HEX = "0123456789abcdef";
-const hex = (n: number) =>
-  Array.from({ length: n }, () => HEX[Math.floor(Math.random() * 16)]).join("");
-
-function pickPool(): Pool {
-  const r = Math.random();
-  return r < 0.55 ? "orchard" : r < 0.85 ? "sapling" : "transparent";
+export function clockLabel(seconds: number) {
+  const minutes = Math.floor((((seconds % 86400) + 86400) % 86400) / 60);
+  const hh = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const mm = String(minutes % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;
-
-export function randomTx(block: number, balance: number, inbound = false): Tx {
-  const received = inbound || Math.random() < 0.72 || balance < 2;
-  const r = Math.random();
-  const amount = received
-    ? round(0.15 + r * r * 2.6)
-    : round(0.05 + r * r * Math.min(1.1, balance * 0.12));
-  return {
-    dir: received ? "Received" : "Sent",
-    amount: String(Math.max(0.01, amount)),
-    pool: pickPool(),
-    txid: `${hex(6)}…${hex(4)}`,
-    date: "Today",
-    block: block + 6 + Math.floor(Math.random() * 34),
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-export function seedHistory(points = 16, start = 10.5): Point[] {
+const HEX = "0123456789abcdef";
+
+const round = (n: number) => Math.round(n * 100) / 100;
+
+export function randomTx(
+  block: number,
+  balance: number,
+  inbound = false,
+  rand: () => number = Math.random,
+): Tx {
+  const hex = (n: number) =>
+    Array.from({ length: n }, () => HEX[Math.floor(rand() * 16)]).join("");
+  const received = inbound || rand() < 0.72 || balance < 2;
+  const r = rand();
+  const amount = received
+    ? round(0.15 + r * r * 2.6)
+    : round(0.05 + r * r * Math.min(1.1, balance * 0.12));
+  const pick = rand();
+  return {
+    dir: received ? "Received" : "Sent",
+    amount: String(Math.max(0.01, amount)),
+    pool: pick < 0.55 ? "orchard" : pick < 0.85 ? "sapling" : "transparent",
+    txid: `${hex(6)}…${hex(4)}`,
+    date: "Today",
+    block: block + 6 + Math.floor(rand() * 34),
+  };
+}
+
+function seedHistory(points = 16, start = 10.5): Point[] {
+  const rand = mulberry32(SEED);
   let value = start;
   return Array.from({ length: points }, (_, i) => {
     if (i > 0) {
-      const tx = randomTx(0, value);
+      const tx = randomTx(0, value, false, rand);
       value = round(value + Number(tx.amount) * (tx.dir === "Sent" ? -1 : 1));
     }
-    const t = NOW - (points - 1 - i) * STEP;
-    return { t, value, label: clock(t) };
+    const t = LAST - (points - 1 - i) * STEP;
+    return { t, value, label: clockLabel(t) };
   });
 }
 
 export const HISTORY: Point[] = seedHistory();
 
-export const clockLabel = clock;
-
-export const FINGERPRINTS = [
-  "a1b2c3d4e5f6",
-  "0d9e4b2a7c61f3e8",
-  "7b3f1e9c2a5d8e04",
-];
+export const WALLET = { name: "Cold storage", fingerprint: "a1b2c3d4e5f6" };
 
 export const noticeTitle = (tx: Tx) => `${tx.dir} ${tx.amount} ZEC`;

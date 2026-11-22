@@ -1,0 +1,78 @@
+---
+import { Icon } from "../components/icons";
+import { PearlButton, PearlLogo } from "../components/pearl";
+import { Sky } from "../components/sky";
+import { Stage } from "../components/stage";
+import { asset } from "../lib/asset";
+import { LINKS } from "../lib/content";
+import "../styles/theme.css";
+import "../styles/home.css";
+
+const lens = { x: 0.5, y: 0.52, radius: 0.56, power: 0.14 };
+const vignette = { from: 0.1, to: 1, dim: 0.85, sink: 0.92 };
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/png" href={asset("favicon.png")} />
+    <title>Pendrake Watch</title>
+    <meta
+      name="description"
+      content="A watch-only Zcash wallet for the desktop. It syncs in the background and notifies you when a transaction lands."
+    />
+    <script is:inline>
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        document.documentElement.classList.add("motion");
+      }
+    </script>
+  </head>
+  <body>
+    <main class="home">
+      <div class="home-sky" data-veil>
+        <Sky
+          client:load
+          video={asset("sky-slow.mp4")}
+          still={asset("sky-still.png")}
+          fallback={asset("sky-fallback.png")}
+          band={0.66}
+          vignette={vignette}
+          lens={lens}
+        />
+      </div>
+      <div class="home-glow" data-veil></div>
+
+      <header class="home-top">
+        <nav class="home-nav" data-rise>
+          <PearlButton client:load href={LINKS.download} label="Download" small />
+          <a class="site-link" href={LINKS.source}>
+            <Icon name="git" className="size-4" />
+            Source
+          </a>
+        </nav>
+        <div class="home-mark" data-rise>
+          <PearlLogo client:load />
+        </div>
+      </header>
+
+      <h1 class="home-label" data-rise>Your desktop watch-only Zcash wallet</h1>
+
+      <div class="home-anchor">
+        <div data-rise>
+          <Stage client:load still={asset("sky-still.png")} />
+        </div>
+      </div>
+
+      <div class="home-cta" data-rise>
+        <PearlButton client:load href={LINKS.download} label="Download" platform />
+      </div>
+    </main>
+
+    <script>
+      import "../scripts/enter";
+    </script>
+  </body>
+</html>

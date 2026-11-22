@@ -1,34 +1,46 @@
-import { onCleanup, onMount } from "solid-js";
-import { BAYER, BAYER8, skyPalette, toneCurve } from "./sky";
+import { useEffect, useRef } from "react";
+import {
+  BAYER,
+  BAYER8,
+  SKY_LEVELS,
+  skyPalette,
+  toneCurve,
+} from "../lib/dither";
 
 export type FillState = { level: number; fade: number };
+export type FillPainter = (state: FillState) => void;
 
-const CELL = 2;
-const LEVELS = 6;
 const EDGE = 0.4;
 
-export function DitherFill(props: {
-  class?: string;
+export function DitherFill({
+  src,
+  cell = 2,
+  className,
+  onReady,
+}: {
+  src: string;
   cell?: number;
-  ref?: (paint: (state: FillState) => void) => void;
+  className?: string;
+  onReady: (paint: FillPainter) => void;
 }) {
-  let canvas!: HTMLCanvasElement;
+  const canvas = useRef<HTMLCanvasElement>(null);
 
-  onMount(() => {
-    const ctx = canvas.getContext("2d")!;
-    const palette = skyPalette(LEVELS);
-    const curve = toneCurve(4, 0.5, 0.8);
-    const box = canvas.getBoundingClientRect();
-    const cell = props.cell ?? CELL;
+  useEffect(() => {
+    const el = canvas.current;
+    const ctx = el?.getContext("2d");
+    if (!el || !ctx) return;
+    const palette = skyPalette();
+    const curve = toneCurve();
+    const box = el.getBoundingClientRect();
     const cols = Math.max(1, Math.ceil(box.width / cell));
     const rows = Math.max(1, Math.ceil(box.height / cell));
-    canvas.width = cols;
-    canvas.height = rows;
+    el.width = cols;
+    el.height = rows;
     const out = ctx.createImageData(cols, rows);
     let ready = false;
     let last: FillState = { level: 0, fade: 0 };
 
-    const paint = (state: FillState) => {
+    const paint: FillPainter = (state) => {
       last = state;
       if (!ready) return;
       const reach = state.level * (1 + EDGE);
@@ -47,18 +59,17 @@ export function DitherFill(props: {
     };
 
     const img = new Image();
-    img.src = "/sky-still.png";
     img.onload = () => {
       const scale = Math.max(cols / img.naturalWidth, rows / img.naturalHeight);
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
       ctx.drawImage(img, (cols - w) / 2, (rows - h) * 0.66, w, h);
-      const src = ctx.getImageData(0, 0, cols, rows).data;
-      const top = LEVELS - 1;
+      const source = ctx.getImageData(0, 0, cols, rows).data;
+      const top = SKY_LEVELS - 1;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const i = (y * cols + x) * 4;
-          const q = curve[src[i]] * top;
+          const q = curve[source[i]] * top;
           const base = Math.floor(q);
           const threshold = (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16;
           const [r, g, b] =
@@ -71,12 +82,13 @@ export function DitherFill(props: {
       ready = true;
       paint(last);
     };
+    img.src = src;
 
-    props.ref?.(paint);
-    onCleanup(() => {
+    onReady(paint);
+    return () => {
       img.onload = null;
-    });
-  });
+    };
+  }, [src, cell, onReady]);
 
-  return <canvas ref={canvas} class={props.class} aria-hidden />;
+  return <canvas ref={canvas} className={className} aria-hidden />;
 }

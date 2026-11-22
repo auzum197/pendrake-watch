@@ -12,6 +12,21 @@
 	height: 100%;
 	image-rendering: pixelated;
 }
+.sky-fallback {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	image-rendering: pixelated;
+}
+.sky[data-live] .sky-fallback {
+	display: none;
+}
+.sky-canvas {
+	position: absolute;
+	inset: 0;
+}
 .sky-source {
 	position: absolute;
 	width: 1px;

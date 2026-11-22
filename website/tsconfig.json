@@ -1,21 +1,15 @@
 {
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "src"],
+  "exclude": ["dist"],
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "allowImportingTsExtensions": true,
-    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "baseUrl": ".",
     "paths": {
+      "react": ["./node_modules/@types/react"],
       "@/*": ["../src/*"],
       "~/*": ["./src/*"]
     }
-  },
-  "include": ["src", "../src/assets/*"]
+  }
 }
