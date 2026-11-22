@@ -1,0 +1,49 @@
+.sky {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	--ramp:
+		#000 0%, rgba(0, 0, 0, 0.84) 20%, rgba(0, 0, 0, 0.5) 45%, rgba(0, 0, 0, 0.2) 70%, rgba(0, 0, 0, 0.05) 88%,
+		transparent 100%;
+}
+.sky-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	image-rendering: pixelated;
+}
+.sky-source {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.sky-lens {
+	position: absolute;
+	inset: 0;
+}
+.sky-soft {
+	position: absolute;
+	inset: 0;
+	filter: blur(var(--blur));
+	-webkit-mask-image: radial-gradient(circle calc(var(--lr) * var(--reach)) at var(--lx) var(--ly), var(--ramp));
+	mask-image: radial-gradient(circle calc(var(--lr) * var(--reach)) at var(--lx) var(--ly), var(--ramp));
+}
+.sky-soft.is-wide {
+	--blur: 3px;
+	--reach: 1.5;
+}
+.sky-soft.is-core {
+	--blur: 7px;
+	--reach: 1.15;
+}
+.sky-soft.is-heart {
+	--blur: 13px;
+	--reach: 0.85;
+}
+.sky-soft.is-deep {
+	--blur: 22px;
+	--reach: 0.6;
+}

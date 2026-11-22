@@ -1,0 +1,109 @@
+.mac-window {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	overflow: hidden;
+	border-radius: var(--frame-r, 26px);
+	corner-shape: squircle;
+	background: var(--background);
+	color: var(--foreground);
+	font-family: var(--font-sans);
+	font-size: 14px;
+	line-height: 1.5;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.1),
+		0 0 0 1.5px rgba(0, 0, 0, 0.6),
+		0 28px 80px rgba(0, 0, 0, 0.6);
+	user-select: none;
+}
+
+.mac-lights {
+	position: absolute;
+	top: 18px;
+	left: 20px;
+	z-index: 2;
+	display: flex;
+	gap: 8px;
+}
+.mac-lights span {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+}
+.mac-lights .is-close {
+	background: #ff5f57;
+}
+.mac-lights .is-min {
+	background: #febc2e;
+}
+.mac-lights .is-zoom {
+	background: #28c840;
+}
+.mac-rail {
+	position: absolute;
+	top: 17px;
+	left: 114px;
+	z-index: 2;
+	width: 18px;
+	height: 18px;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.mac-side {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	width: 258px;
+	padding: 44px 12px 20px;
+	border-right: 2px solid var(--border);
+	background: var(--color-ink);
+	color: #fff;
+}
+.mac-side .frame-nav {
+	margin-top: 20px;
+}
+.mac-side .frame-nav.mt-auto {
+	margin-top: auto;
+}
+.mac-logo {
+	display: flex;
+	justify-content: center;
+	padding: 8px;
+}
+.mac-logo img {
+	height: 32px;
+	width: auto;
+	max-width: none;
+}
+.mac-wallet {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 20px;
+	padding: 16px;
+	border-radius: 16px;
+	background: rgba(28, 28, 32, 0.8);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+	font-family: -apple-system, system-ui, sans-serif;
+}
+.mac-wallet-text {
+	min-width: 0;
+	flex: 1;
+}
+
+.mac-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 56px 32px 28px;
+	background: var(--background);
+	overflow: hidden;
+}
+.mac-main .frame-card > .aspect-900\/240 {
+	max-height: 232px;
+}

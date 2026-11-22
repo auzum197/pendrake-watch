@@ -1,0 +1,131 @@
+.pearl {
+	position: relative;
+	height: 100%;
+	flex: none;
+	filter: drop-shadow(0 0 calc(var(--h) * 0.0116) rgba(255, 255, 255, 0.95))
+		drop-shadow(0 calc(var(--h) * 0.058) calc(var(--h) * 0.139) rgba(6, 16, 70, 0.6));
+}
+.pearl-base {
+	position: absolute;
+	inset: 0;
+	background: #fff;
+	mask-size: contain;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+}
+.pearl-finish {
+	position: absolute;
+	inset: 0;
+	opacity: 0.5;
+}
+.pearl-finish canvas {
+	display: block;
+	width: 100% !important;
+	height: 100% !important;
+}
+
+.pearl-logo {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--h) * 0.185);
+	height: var(--h, 1.75rem);
+}
+
+
+@media (prefers-reduced-transparency: reduce) {
+	.pearl-finish {
+		display: none;
+	}
+}
+
+.pearl-cta {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 2.75rem;
+	padding: 0 1.5rem;
+	border-radius: 980px;
+	font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+	font-size: 17px;
+	font-weight: 500;
+	line-height: 1;
+	letter-spacing: -0.022em;
+	color: #020838;
+	text-decoration: none;
+	filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 8px 20px rgba(6, 16, 70, 0.55));
+	transition: transform 200ms var(--ease-out-strong);
+}
+.pearl-cta:active {
+	transform: scale(0.97);
+}
+.pearl-cta:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+	.pearl-cta:hover {
+		transform: scale(1.04);
+	}
+	.pearl-cta:hover:active {
+		transform: scale(0.97);
+	}
+}
+.pearl-cta-back {
+	position: absolute;
+	inset: 1px;
+	border-radius: inherit;
+	background: #020838;
+}
+.pearl-cta-base {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: #fff;
+	mask-size: 100% 100%;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: 100% 100%;
+	-webkit-mask-repeat: no-repeat;
+}
+.pearl-cta-finish {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	border-radius: inherit;
+	opacity: 0.5;
+	-webkit-mask-image: radial-gradient(ellipse 62% 78% at 50% 50%, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0.22) 50%, #000 100%);
+	mask-image: radial-gradient(ellipse 62% 78% at 50% 50%, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0.22) 50%, #000 100%);
+}
+.pearl-cta-finish canvas {
+	display: block;
+	width: 100% !important;
+	height: 100% !important;
+}
+.pearl-cta-label {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+}
+.pearl-cta-icon {
+	width: 1.05rem;
+	height: 1.05rem;
+	margin-top: -2px;
+}
+.pearl-cta.is-small {
+	height: 2rem;
+	padding: 0 0.875rem;
+	font-size: 14px;
+	filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9)) drop-shadow(0 3px 8px rgba(6, 16, 70, 0.45));
+}
+.pearl-cta[data-ready] .pearl-cta-label {
+	color: transparent;
+}
+@media (prefers-reduced-transparency: reduce) {
+	.pearl-cta-finish {
+		display: none;
+	}
+}

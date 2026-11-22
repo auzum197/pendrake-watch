@@ -68,6 +68,11 @@ package: stage-daemon
     cd crates && cargo build --release
     pnpm tauri build
 
+# Run the website (website/) with hot reload.
+[group('run')]
+site:
+    cd website && pnpm install && pnpm dev
+
 # Run the app with hot reload, pinned to the freshly-built pendraked engine.
 [group('run')]
 dev: stage-daemon
