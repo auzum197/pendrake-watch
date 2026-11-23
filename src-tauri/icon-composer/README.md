@@ -12,8 +12,8 @@ PNGs) after changing the source art, run from the repo root:
 pnpm icons
 ```
 
-That runs `tools/gen-icons.mjs` (rounds and insets the art on Apple's grid, adds a
-top sheen, writes `src-tauri/app-icon.png`) and then `tauri icon` on the master.
+That runs `tools/gen-icons.mjs` (rounds and insets the art on Apple's grid, writes
+`src-tauri/app-icon.png`) and then `tauri icon` on the master.
 `sharp` is a devDependency, so no extra setup.
 
 ## Liquid Glass icon (macOS 26 Tahoe) - disabled
