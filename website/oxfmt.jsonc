@@ -10,5 +10,6 @@
     "*.yaml",
     "dist/**",
     ".astro/**",
+    "storybook-static/**",
   ],
 }

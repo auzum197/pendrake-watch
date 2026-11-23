@@ -74,12 +74,12 @@ export function useWallet(): Wallet {
   return { ...WALLET, balance, points, rows };
 }
 
-function TxRow({
+export function TxRow({
   tx,
   ref,
 }: {
   tx: Row;
-  ref: (el: HTMLDivElement | null) => void;
+  ref?: (el: HTMLDivElement | null) => void;
 }) {
   const received = tx.dir === "Received";
   return (
@@ -106,7 +106,7 @@ function TxRow({
   );
 }
 
-function Ledger({ rows, limit }: { rows: Row[]; limit: number }) {
+export function Ledger({ rows, limit }: { rows: Row[]; limit: number }) {
   const shown = rows.slice(0, limit + 1);
   const order = shown.map((tx) => tx.id).join();
   const els = useRef(new Map<number, HTMLDivElement>());
@@ -160,7 +160,7 @@ function Ledger({ rows, limit }: { rows: Row[]; limit: number }) {
   );
 }
 
-function Segmented({
+export function Segmented({
   options,
   initial,
 }: {

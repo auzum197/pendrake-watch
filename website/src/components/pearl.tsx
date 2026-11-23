@@ -15,7 +15,12 @@ import {
 import wordmark from "@/assets/pendrake-wordmark.png?url";
 import dragon from "../../../src-tauri/icon-composer/AppIcon.icon/Assets/dragon.png?url";
 import { gsap, reducedMotion } from "../lib/motion";
-import { platformGlyph, type Glyph } from "../lib/platform";
+import {
+  GLYPHS,
+  platformGlyph,
+  type Glyph,
+  type Platform,
+} from "../lib/platform";
 import "../styles/pearl.css";
 
 const FRAME = 2500;
@@ -228,24 +233,25 @@ export function PearlButton({
   href,
   label,
   small,
-  platform,
+  icon,
 }: {
   href: string;
   label: string;
   small?: boolean;
-  platform?: boolean;
+  icon?: Platform | "detect";
 }) {
   const root = useRef<HTMLAnchorElement>(null);
   const base = useRef<HTMLSpanElement>(null);
   const finish = useRef<HTMLSpanElement>(null);
   const text = useRef<HTMLSpanElement>(null);
-  const icon = useRef<SVGSVGElement>(null);
+  const mark = useRef<SVGSVGElement>(null);
   const hover = useRef<{ over: () => void; out: () => void } | null>(null);
-  const glyph = useSyncExternalStore(
+  const detected = useSyncExternalStore(
     never,
-    platform ? platformGlyph : noGlyph,
+    icon === "detect" ? platformGlyph : noGlyph,
     noGlyph,
   );
+  const glyph = icon && icon !== "detect" ? GLYPHS[icon] : detected;
 
   useEffect(() => {
     const link = root.current;
@@ -274,7 +280,7 @@ export function PearlButton({
       });
     };
 
-    engraved(link, labelEl, icon.current, glyph)
+    engraved(link, labelEl, mark.current, glyph)
       .then((file) => {
         plate = URL.createObjectURL(file);
         return finishImage(file);
@@ -345,7 +351,7 @@ export function PearlButton({
       <span className="pearl-cta-label">
         {glyph && (
           <svg
-            ref={icon}
+            ref={mark}
             className="pearl-cta-icon"
             viewBox="0 0 24 24"
             aria-hidden="true"

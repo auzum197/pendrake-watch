@@ -1,10 +1,11 @@
 import logo from "@/assets/pendrake-logo.svg?url";
 import { Dashboard, type Wallet } from "./dashboard";
-import { Icon, type IconName } from "./icons";
+import type { IconName } from "../lib/icon-paths";
+import { Icon } from "./icons";
 import { LifeHashIcon } from "./shared";
 import "../styles/window.css";
 
-function NavItem({
+export function NavItem({
   icon,
   label,
   active,

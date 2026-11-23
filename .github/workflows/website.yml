@@ -30,6 +30,7 @@ jobs:
         working-directory: website
     env:
       ASTRO_TELEMETRY_DISABLED: 1
+      STORYBOOK_DISABLE_TELEMETRY: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -55,3 +56,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build Storybook
+        run: pnpm build-storybook
