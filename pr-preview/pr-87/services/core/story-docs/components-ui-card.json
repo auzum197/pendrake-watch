@@ -1,0 +1,22 @@
+{
+  "components": {
+    "components-ui-card": {
+      "id": "components-ui-card",
+      "name": "Card",
+      "path": "./src/components/ui/card/card.stories.tsx",
+      "import": "import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-card--balance": {
+          "id": "components-ui-card--balance",
+          "name": "Balance",
+          "snippet": "const Balance = () => (\n  <Card className=\"w-72\">\n    <CardHeader>\n      <CardTitle>Balance</CardTitle>\n      <CardDescription>Mainnet</CardDescription>\n    </CardHeader>\n    <CardContent className=\"font-mono text-2xl tabular-nums\">\n      1.2345 ZEC\n    </CardContent>\n  </Card>\n);"
+        },
+        "components-ui-card--with-footer": {
+          "id": "components-ui-card--with-footer",
+          "name": "With Footer",
+          "snippet": "const WithFooter = () => (\n  <Card className=\"w-72\">\n    <CardHeader>\n      <CardTitle>Replace this Wallet?</CardTitle>\n      <CardDescription>The synced history is erased.</CardDescription>\n    </CardHeader>\n    <CardFooter className=\"gap-2\">\n      <Button variant=\"ghost\">Cancel</Button>\n      <Button variant=\"destructive\">Replace</Button>\n    </CardFooter>\n  </Card>\n);"
+        }
+      }
+    }
+  }
+}

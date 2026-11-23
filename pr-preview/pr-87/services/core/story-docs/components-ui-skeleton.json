@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-ui-skeleton": {
+      "id": "components-ui-skeleton",
+      "name": "Skeleton",
+      "path": "./src/components/ui/skeleton/skeleton.stories.tsx",
+      "import": "import { Skeleton } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-skeleton--default": {
+          "id": "components-ui-skeleton--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Skeleton className=\"h-4 w-48\" />;"
+        },
+        "components-ui-skeleton--circle": {
+          "id": "components-ui-skeleton--circle",
+          "name": "Circle",
+          "snippet": "const Circle = () => <Skeleton className=\"size-12 rounded-full\" />;"
+        },
+        "components-ui-skeleton--card-placeholder": {
+          "id": "components-ui-skeleton--card-placeholder",
+          "name": "Card Placeholder",
+          "snippet": "const CardPlaceholder = () => (\n  <div className=\"w-64 rounded-xl border border-border bg-card p-4\">\n    <Skeleton className=\"h-3 w-20\" />\n    <Skeleton className=\"mt-2.5 h-6 w-28\" />\n    <Skeleton className=\"mt-2 h-3 w-12\" />\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

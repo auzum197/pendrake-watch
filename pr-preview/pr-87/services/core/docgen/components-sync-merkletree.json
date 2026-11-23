@@ -1,0 +1,222 @@
+{
+  "components": {
+    "components-sync-merkletree": {
+      "id": "components-sync-merkletree",
+      "name": "MerkleTree",
+      "path": "./src/components/sync/MerkleTree.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "MerkleTree",
+        "exportName": "MerkleTree",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/sync/MerkleTree.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "frac": {
+            "name": "frac",
+            "required": true,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "pulseSeq": {
+            "name": "pulseSeq",
+            "required": true,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "pulseMs": {
+            "name": "pulseMs",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "650"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "active": {
+            "name": "active",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "synced": {
+            "name": "synced",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "total": {
+            "name": "total",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          },
+          "scanned": {
+            "name": "scanned",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/sync/MerkleTree.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "frac": {
+          "name": "frac",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        },
+        "pulseSeq": {
+          "name": "pulseSeq",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        },
+        "pulseMs": {
+          "name": "pulseMs",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "650"
+            }
+          }
+        },
+        "active": {
+          "name": "active",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "synced": {
+          "name": "synced",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "total": {
+          "name": "total",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        },
+        "scanned": {
+          "name": "scanned",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-ui-switch": {
+      "id": "components-ui-switch",
+      "name": "Switch",
+      "path": "./src/components/ui/switch/switch.stories.tsx",
+      "import": "import { Label, Switch } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-switch--off": {
+          "id": "components-ui-switch--off",
+          "name": "Off",
+          "snippet": "const Off = () => <Switch />;"
+        },
+        "components-ui-switch--on": {
+          "id": "components-ui-switch--on",
+          "name": "On",
+          "snippet": "const On = () => <Switch defaultChecked />;"
+        },
+        "components-ui-switch--with-label": {
+          "id": "components-ui-switch--with-label",
+          "name": "With Label",
+          "snippet": "const WithLabel = () => (\n  <div className=\"flex items-center gap-3\">\n    <Switch id=\"notifications\" defaultChecked />\n    <Label htmlFor=\"notifications\">Notifications</Label>\n  </div>\n);"
+        }
+      }
+    }
+  }
+}

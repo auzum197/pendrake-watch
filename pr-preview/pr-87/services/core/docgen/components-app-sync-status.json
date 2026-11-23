@@ -1,0 +1,50 @@
+{
+  "components": {
+    "components-app-sync-status": {
+      "id": "components-app-sync-status",
+      "name": "SyncChip",
+      "path": "./src/components/app/sync-status/sync-status.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "SyncChip",
+        "exportName": "SyncChip",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/sync-status/sync-status.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "sync": {
+            "name": "sync",
+            "required": true,
+            "type": {
+              "name": "SyncStatus | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/sync-status/sync-status.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "sync": {
+          "name": "sync",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "SyncStatus | null"
+          },
+          "table": {
+            "type": {
+              "summary": "SyncStatus | null"
+            }
+          }
+        }
+      }
+    }
+  }
+}

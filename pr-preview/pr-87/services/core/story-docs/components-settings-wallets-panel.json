@@ -1,0 +1,30 @@
+{
+  "components": {
+    "components-settings-wallets-panel": {
+      "id": "components-settings-wallets-panel",
+      "name": "WalletsPanel",
+      "path": "./src/components/settings/wallets-panel.stories.tsx",
+      "import": "import { WalletsPanel } from 'pendrake-watch';\nimport { fn } from 'storybook/test';",
+      "stories": {
+        "components-settings-wallets-panel--default": {
+          "id": "components-settings-wallets-panel--default",
+          "name": "Default",
+          "snippet": "const Default = () => <WalletsPanel\n    wallets={[{\n      id: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      label: \"Cold storage\",\n      fingerprint: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }, {\n        id: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        label: \"9f8e7d6c\",\n        fingerprint: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        network: \"mainnet\",\n        birthdayHeight: 2_100_000,\n        selected: false,\n        lastBalance: \"1200000\",\n\n        sync: {\n            state: \"syncing\",\n            syncedHeight: 2_400_000,\n            chainTip: 2_400_000,\n            percent: 37,\n            lastSyncedAt: 1_700_000_000\n        },\n\n        notificationsEnabled: false,\n        indexerUri: \"https://na.zec.rocks:443\"\n    }, {\n      id: \"0011223344556677889900aabbccddee\",\n      label: \"Regtest bench\",\n      fingerprint: \"0011223344556677889900aabbccddee\",\n      network: \"regtest\",\n      birthdayHeight: 1,\n      selected: false,\n      lastBalance: null,\n      unavailable: \"wallet file could not be read\",\n      notificationsEnabled: true,\n      indexerUri: \"http://127.0.0.1:9067\",\n    }]}\n    focusWallet={null}\n    refresh={fn()} />;",
+          "warning": "Incomplete snippet: `SYNCED` could not be resolved statically."
+        },
+        "components-settings-wallets-panel--focused-wallet": {
+          "id": "components-settings-wallets-panel--focused-wallet",
+          "name": "Focused Wallet",
+          "snippet": "const FocusedWallet = () => <WalletsPanel\n    wallets={[{\n      id: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      label: \"Cold storage\",\n      fingerprint: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }, {\n        id: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        label: \"9f8e7d6c\",\n        fingerprint: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        network: \"mainnet\",\n        birthdayHeight: 2_100_000,\n        selected: false,\n        lastBalance: \"1200000\",\n\n        sync: {\n            state: \"syncing\",\n            syncedHeight: 2_400_000,\n            chainTip: 2_400_000,\n            percent: 37,\n            lastSyncedAt: 1_700_000_000\n        },\n\n        notificationsEnabled: false,\n        indexerUri: \"https://na.zec.rocks:443\"\n    }, {\n      id: \"0011223344556677889900aabbccddee\",\n      label: \"Regtest bench\",\n      fingerprint: \"0011223344556677889900aabbccddee\",\n      network: \"regtest\",\n      birthdayHeight: 1,\n      selected: false,\n      lastBalance: null,\n      unavailable: \"wallet file could not be read\",\n      notificationsEnabled: true,\n      indexerUri: \"http://127.0.0.1:9067\",\n    }]}\n    focusWallet={WALLETS[2].id}\n    refresh={fn()} />;",
+          "warning": "Incomplete snippet: `SYNCED`, `WALLETS` could not be resolved statically."
+        },
+        "components-settings-wallets-panel--pick-another": {
+          "id": "components-settings-wallets-panel--pick-another",
+          "name": "Pick Another",
+          "snippet": "const PickAnother = () => <WalletsPanel\n    wallets={[{\n      id: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      label: \"Cold storage\",\n      fingerprint: \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n      network: \"mainnet\",\n      birthdayHeight: 419_200,\n      selected: true,\n      lastBalance: \"897091655\",\n      sync: SYNCED,\n      notificationsEnabled: true,\n      indexerUri: \"https://zec.rocks:443\",\n    }, {\n        id: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        label: \"9f8e7d6c\",\n        fingerprint: \"9f8e7d6c5b4a39281706f5e4d3c2b1a0\",\n        network: \"mainnet\",\n        birthdayHeight: 2_100_000,\n        selected: false,\n        lastBalance: \"1200000\",\n\n        sync: {\n            state: \"syncing\",\n            syncedHeight: 2_400_000,\n            chainTip: 2_400_000,\n            percent: 37,\n            lastSyncedAt: 1_700_000_000\n        },\n\n        notificationsEnabled: false,\n        indexerUri: \"https://na.zec.rocks:443\"\n    }, {\n      id: \"0011223344556677889900aabbccddee\",\n      label: \"Regtest bench\",\n      fingerprint: \"0011223344556677889900aabbccddee\",\n      network: \"regtest\",\n      birthdayHeight: 1,\n      selected: false,\n      lastBalance: null,\n      unavailable: \"wallet file could not be read\",\n      notificationsEnabled: true,\n      indexerUri: \"http://127.0.0.1:9067\",\n    }]}\n    focusWallet={null}\n    refresh={fn()} />;",
+          "warning": "Incomplete snippet: `SYNCED` could not be resolved statically."
+        }
+      }
+    }
+  }
+}

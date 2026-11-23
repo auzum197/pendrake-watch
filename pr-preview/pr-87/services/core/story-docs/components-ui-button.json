@@ -1,0 +1,52 @@
+{
+  "components": {
+    "components-ui-button": {
+      "id": "components-ui-button",
+      "name": "Button",
+      "path": "./src/components/ui/button/button.stories.tsx",
+      "import": "import { Button } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-button--default": {
+          "id": "components-ui-button--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Button>Send</Button>;"
+        },
+        "components-ui-button--outline": {
+          "id": "components-ui-button--outline",
+          "name": "Outline",
+          "snippet": "const Outline = () => <Button variant=\"outline\">Send</Button>;"
+        },
+        "components-ui-button--secondary": {
+          "id": "components-ui-button--secondary",
+          "name": "Secondary",
+          "snippet": "const Secondary = () => <Button variant=\"secondary\">Send</Button>;"
+        },
+        "components-ui-button--ghost": {
+          "id": "components-ui-button--ghost",
+          "name": "Ghost",
+          "snippet": "const Ghost = () => <Button variant=\"ghost\">Send</Button>;"
+        },
+        "components-ui-button--destructive": {
+          "id": "components-ui-button--destructive",
+          "name": "Destructive",
+          "snippet": "const Destructive = () => <Button variant=\"destructive\">Remove wallet</Button>;"
+        },
+        "components-ui-button--link": {
+          "id": "components-ui-button--link",
+          "name": "Link",
+          "snippet": "const Link = () => <Button variant=\"link\">Change Indexer</Button>;"
+        },
+        "components-ui-button--small": {
+          "id": "components-ui-button--small",
+          "name": "Small",
+          "snippet": "const Small = () => <Button size=\"sm\">Send</Button>;"
+        },
+        "components-ui-button--disabled": {
+          "id": "components-ui-button--disabled",
+          "name": "Disabled",
+          "snippet": "const Disabled = () => <Button disabled>Send</Button>;"
+        }
+      }
+    }
+  }
+}

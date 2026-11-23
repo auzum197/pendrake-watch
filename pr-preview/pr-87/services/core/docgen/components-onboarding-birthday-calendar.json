@@ -1,0 +1,79 @@
+{
+  "components": {
+    "components-onboarding-birthday-calendar": {
+      "id": "components-onboarding-birthday-calendar",
+      "name": "BirthdayCalendar",
+      "path": "./src/components/onboarding/birthday-calendar.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "BirthdayCalendar",
+        "exportName": "BirthdayCalendar",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/onboarding/birthday-calendar.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "selected": {
+            "name": "selected",
+            "required": false,
+            "type": {
+              "name": "Date"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/birthday-calendar.tsx"
+              }
+            ]
+          },
+          "onSelect": {
+            "name": "onSelect",
+            "required": true,
+            "type": {
+              "name": "(date: Date) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/onboarding/birthday-calendar.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "selected": {
+          "name": "selected",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "Date"
+          },
+          "table": {
+            "type": {
+              "summary": "Date"
+            }
+          }
+        },
+        "onSelect": {
+          "name": "onSelect",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(date: Date) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(date: Date) => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

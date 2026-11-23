@@ -1,0 +1,115 @@
+{
+  "components": {
+    "components-ui-mirage": {
+      "id": "components-ui-mirage",
+      "name": "Mirage",
+      "path": "./src/components/ui/mirage/mirage.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Mirage",
+        "exportName": "Mirage",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/mirage/mirage.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "size": {
+            "name": "size",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "24"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/mirage/mirage.tsx"
+              }
+            ]
+          },
+          "speed": {
+            "name": "speed",
+            "required": false,
+            "type": {
+              "name": "number"
+            },
+            "description": "",
+            "defaultValue": {
+              "value": "2.5"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/mirage/mirage.tsx"
+              }
+            ]
+          },
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/mirage/mirage.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "size": {
+          "name": "size",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "24"
+            }
+          }
+        },
+        "speed": {
+          "name": "speed",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "number"
+          },
+          "table": {
+            "type": {
+              "summary": "number"
+            },
+            "defaultValue": {
+              "summary": "2.5"
+            }
+          }
+        },
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

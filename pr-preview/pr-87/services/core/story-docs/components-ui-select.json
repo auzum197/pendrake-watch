@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-select": {
+      "id": "components-ui-select",
+      "name": "Select",
+      "path": "./src/components/ui/select/select.stories.tsx",
+      "import": "import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-select--indexers": {
+          "id": "components-ui-select--indexers",
+          "name": "Indexers",
+          "snippet": "const Indexers = () => (\n  <Select defaultValue={indexers[0].uri}>\n    <SelectTrigger className=\"w-72\">\n      <SelectValue placeholder=\"Pick an Indexer\" />\n    </SelectTrigger>\n    <SelectContent>\n      {indexers.map((indexer) => (\n        <SelectItem key={indexer.uri} value={indexer.uri}>\n          {indexer.label}\n        </SelectItem>\n      ))}\n    </SelectContent>\n  </Select>\n);"
+        }
+      }
+    }
+  }
+}
