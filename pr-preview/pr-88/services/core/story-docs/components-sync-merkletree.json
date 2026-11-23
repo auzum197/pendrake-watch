@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-sync-merkletree": {
+      "id": "components-sync-merkletree",
+      "name": "MerkleTree",
+      "path": "./src/components/sync/MerkleTree.stories.tsx",
+      "import": "import { MerkleTree } from 'pendrake-watch';",
+      "stories": {
+        "components-sync-merkletree--scanning": {
+          "id": "components-sync-merkletree--scanning",
+          "name": "Scanning",
+          "snippet": "const Scanning = () => <MerkleTree\n    frac={0.5}\n    pulseSeq={0}\n    active\n    synced={false}\n    total={4_200_000}\n    scanned={2_100_000} />;"
+        },
+        "components-sync-merkletree--nearly-done": {
+          "id": "components-sync-merkletree--nearly-done",
+          "name": "Nearly Done",
+          "snippet": "const NearlyDone = () => <MerkleTree\n    frac={0.9}\n    pulseSeq={0}\n    active\n    synced={false}\n    total={4_200_000}\n    scanned={3_780_000} />;"
+        },
+        "components-sync-merkletree--complete": {
+          "id": "components-sync-merkletree--complete",
+          "name": "Complete",
+          "snippet": "const Complete = () => <MerkleTree frac={1} pulseSeq={0} active synced />;"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "components": {
+    "components-ui-skeleton": {
+      "id": "components-ui-skeleton",
+      "name": "Skeleton",
+      "path": "./src/components/ui/skeleton/skeleton.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Skeleton",
+        "exportName": "Skeleton",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/skeleton/skeleton.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {}
+      },
+      "argTypes": {}
+    }
+  }
+}

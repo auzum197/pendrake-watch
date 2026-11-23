@@ -1,0 +1,183 @@
+{
+  "components": {
+    "components-ui-popover": {
+      "id": "components-ui-popover",
+      "name": "Popover",
+      "path": "./src/components/ui/popover/popover.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Popover",
+        "exportName": "Popover",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/popover/popover.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "children": {
+            "name": "children",
+            "required": false,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PopoverProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "PopoverProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+              }
+            ]
+          },
+          "open": {
+            "name": "open",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PopoverProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "PopoverProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultOpen": {
+            "name": "defaultOpen",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PopoverProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "PopoverProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": false,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PopoverProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "PopoverProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+              }
+            ]
+          },
+          "modal": {
+            "name": "modal",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "PopoverProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "PopoverProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-popover@1.1.15_@types+react-dom@19.2.3_@types+react@19.2.16__@types+rea_ee3689d814700396b836f19eb0709d16/node_modules/@radix-ui/react-popover/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "defaultOpen": {
+          "name": "defaultOpen",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "modal": {
+          "name": "modal",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

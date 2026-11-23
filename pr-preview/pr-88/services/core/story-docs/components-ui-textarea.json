@@ -1,0 +1,27 @@
+{
+  "components": {
+    "components-ui-textarea": {
+      "id": "components-ui-textarea",
+      "name": "Textarea",
+      "path": "./src/components/ui/textarea/textarea.stories.tsx",
+      "import": "import { Textarea } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-textarea--default": {
+          "id": "components-ui-textarea--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Textarea placeholder=\"Paste your UFVK\" />;"
+        },
+        "components-ui-textarea--filled": {
+          "id": "components-ui-textarea--filled",
+          "name": "Filled",
+          "snippet": "const Filled = () => <Textarea\n    placeholder=\"Paste your UFVK\"\n    defaultValue=\"uview1qexampleexampleexampleexampleexample\" />;"
+        },
+        "components-ui-textarea--disabled": {
+          "id": "components-ui-textarea--disabled",
+          "name": "Disabled",
+          "snippet": "const Disabled = () => <Textarea placeholder=\"Paste your UFVK\" disabled value=\"Locked\" />;"
+        }
+      }
+    }
+  }
+}

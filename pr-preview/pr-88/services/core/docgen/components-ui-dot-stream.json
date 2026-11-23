@@ -1,0 +1,49 @@
+{
+  "components": {
+    "components-ui-dot-stream": {
+      "id": "components-ui-dot-stream",
+      "name": "DotStream",
+      "path": "./src/components/ui/dot-stream/dot-stream.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "DotStream",
+        "exportName": "DotStream",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/dot-stream/dot-stream.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "className": {
+            "name": "className",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/ui/dot-stream/dot-stream.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "className": {
+          "name": "className",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
