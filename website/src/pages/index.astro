@@ -16,7 +16,7 @@ const vignette = { from: 0.1, to: 1, dim: 0.85, sink: 0.92 };
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/png" href={asset("favicon.png")} />
     <title>Pendrake Watch</title>
@@ -50,7 +50,7 @@ const vignette = { from: 0.1, to: 1, dim: 0.85, sink: 0.92 };
           <PearlButton client:load href={LINKS.download} label="Download" small />
           <a class="site-link" href={LINKS.source}>
             <Icon name="git" className="size-4" />
-            Source
+            <span>Source</span>
           </a>
         </nav>
         <div class="home-mark" data-rise>
@@ -58,7 +58,7 @@ const vignette = { from: 0.1, to: 1, dim: 0.85, sink: 0.92 };
         </div>
       </header>
 
-      <h1 class="home-label" data-rise>Your desktop watch-only Zcash wallet</h1>
+      <h1 class="home-label" data-rise>Your desktop <span>watch-only</span> Zcash wallet</h1>
 
       <div class="home-anchor">
         <div data-rise>
