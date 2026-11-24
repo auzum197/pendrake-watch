@@ -58,12 +58,14 @@ export function Sky({
       source.src = still;
     } else {
       source = document.createElement("video");
-      source.src = video;
       source.muted = true;
+      source.defaultMuted = true;
+      source.autoplay = true;
       source.loop = true;
       source.playsInline = true;
       source.preload = "auto";
       source.className = "sky-source";
+      source.src = video;
       root.append(source);
     }
     const film = source instanceof HTMLVideoElement ? source : null;
@@ -161,14 +163,12 @@ export function Sky({
       if (document.visibilityState === "visible") film.play().catch(() => {});
       else film.pause();
     };
-    const begin = () => {
-      run();
-      loop();
-    };
 
     if (film) {
-      film.addEventListener("loadeddata", begin);
       document.addEventListener("visibilitychange", run);
+      addEventListener("pointerup", run, { once: true });
+      run();
+      loop();
     } else {
       source.addEventListener("load", paint);
     }
@@ -179,7 +179,7 @@ export function Sky({
       cancelAnimationFrame(raf);
       source.removeEventListener("load", paint);
       if (!film) return;
-      film.removeEventListener("loadeddata", begin);
+      removeEventListener("pointerup", run);
       if ("cancelVideoFrameCallback" in film)
         film.cancelVideoFrameCallback(handle);
       film.pause();
