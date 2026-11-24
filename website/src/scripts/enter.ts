@@ -5,12 +5,12 @@ const FRAME_H = 900;
 const home = document.querySelector<HTMLElement>(".home");
 
 if (home) {
+  const side = matchMedia("(max-height: 520px) and (orientation: landscape)");
   const fit = () => {
-    const scale = Math.min(
-      0.6,
-      (innerWidth * 0.7) / FRAME_W,
-      (innerHeight - 360) / FRAME_H,
-    );
+    const wide = Math.max(innerWidth * 0.7, Math.min(innerWidth - 32, 420));
+    const scale = side.matches
+      ? Math.min((innerWidth * 0.46) / FRAME_W, (innerHeight - 120) / FRAME_H)
+      : Math.min(0.6, wide / FRAME_W, (innerHeight - 360) / FRAME_H);
     home.style.setProperty("--s", String(scale));
   };
   fit();

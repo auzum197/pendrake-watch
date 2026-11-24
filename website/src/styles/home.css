@@ -30,9 +30,9 @@
 
 .home-top {
 	position: absolute;
-	top: 1.25rem;
-	right: 1.5rem;
-	left: 1.75rem;
+	top: max(1.25rem, env(safe-area-inset-top));
+	right: max(1.5rem, env(safe-area-inset-right));
+	left: max(1.75rem, env(safe-area-inset-left));
 	z-index: 3;
 	display: flex;
 	flex-direction: row-reverse;
@@ -58,6 +58,17 @@
 	padding: 0 0.875rem 0 0.625rem;
 	border-radius: 980px;
 	color: rgba(255, 255, 255, 0.82);
+	-webkit-tap-highlight-color: transparent;
+}
+@media (pointer: coarse) {
+	.home-nav a {
+		position: relative;
+	}
+	.home-nav a::after {
+		content: "";
+		position: absolute;
+		inset: -6px 0;
+	}
 }
 @media (hover: hover) and (pointer: fine) {
 	.home-nav .site-link:hover {
@@ -73,6 +84,8 @@
 	left: 0;
 	z-index: 1;
 	margin: 0;
+	padding: 0 1.5rem;
+	text-wrap: balance;
 	font-family: var(--font-heading);
 	font-size: clamp(1.375rem, 2vw, 1.875rem);
 	font-weight: 600;
@@ -81,6 +94,9 @@
 	text-align: center;
 	color: #fff;
 	text-shadow: 0 2px 20px rgba(2, 8, 56, 0.7);
+}
+.home-label span {
+	white-space: nowrap;
 }
 .home-cta {
 	position: absolute;
@@ -213,6 +229,68 @@
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.1),
 		0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 640px) {
+	.home-top {
+		right: max(1rem, env(safe-area-inset-right));
+		left: max(1rem, env(safe-area-inset-left));
+	}
+	.home-mark {
+		--h: 1.5rem;
+	}
+	.home-field {
+		gap: 0.5rem;
+		width: min(15rem, 84%);
+		height: 2.5rem;
+		padding: 0 0.625rem;
+		font-size: 12px;
+	}
+}
+@media (max-width: 350px) {
+	.home-nav .site-link {
+		justify-content: center;
+		width: 2rem;
+		padding: 0;
+	}
+	.home-nav .site-link span {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.home-mini {
+		zoom: 0.75;
+	}
+}
+@media (max-height: 520px) and (orientation: landscape) {
+	.home-label {
+		right: 50%;
+		bottom: calc(50% - 0.5rem);
+		left: env(safe-area-inset-left);
+	}
+	.home-cta {
+		top: calc(50% + 2rem);
+		right: 50%;
+		left: env(safe-area-inset-left);
+	}
+	.home-anchor {
+		top: calc(50% + 1.5rem);
+		left: 73%;
+	}
+}
+@media (max-width: 640px), (max-height: 520px) and (orientation: landscape) {
+	.home-burst {
+		right: -50vw;
+		left: -50vw;
+		justify-content: center;
+	}
+}
+@media (max-width: 640px) {
+	.home-burst {
+		top: -3rem;
+	}
 }
 
 .motion [data-rise],
