@@ -56,6 +56,7 @@
 	letter-spacing: -0.022em;
 	color: #020838;
 	text-decoration: none;
+	-webkit-tap-highlight-color: transparent;
 	filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 8px 20px rgba(6, 16, 70, 0.55));
 	transition: transform 200ms var(--ease-out-strong);
 }
@@ -69,6 +70,9 @@
 @media (hover: hover) and (pointer: fine) {
 	.pearl-cta:hover {
 		transform: scale(1.04);
+	}
+	.pearl-cta.is-small:hover {
+		transform: none;
 	}
 	.pearl-cta:hover:active {
 		transform: scale(0.97);
