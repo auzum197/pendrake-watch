@@ -10,6 +10,7 @@ import {
   IconListDetails,
   IconLock,
   IconSettings,
+  type Icon,
 } from "@tabler/icons-react";
 import { lock, type SyncStatus, type WalletState } from "@/lib/ipc";
 import { useFeature } from "@/lib/features";
@@ -53,7 +54,8 @@ async function openAbout() {
   aboutWindow = win;
 }
 
-type Section = "wallet" | "activity" | "notes";
+const SECTIONS = ["wallet", "activity", "notes"] as const;
+type Section = (typeof SECTIONS)[number];
 
 export function AppShell({
   active,
@@ -229,16 +231,16 @@ function AppSidebar({
 
       <WalletCard wallet={wallet} switching={switching} />
 
-      <nav className="mt-5 flex flex-col gap-1">
+      <NavList className="mt-5" current={SECTIONS.indexOf(active)}>
         <NavItem
-          icon={<IconHome className="size-4 shrink-0" />}
+          Icon={IconHome}
           label="Home"
           rail={rail}
           active={active === "wallet"}
           onClick={() => navigate({ to: "/dashboard" })}
         />
         <NavItem
-          icon={<IconActivity className="size-4 shrink-0" />}
+          Icon={IconActivity}
           label="Activity"
           rail={rail}
           active={active === "activity"}
@@ -249,41 +251,74 @@ function AppSidebar({
           active={active === "notes"}
           onClick={() => navigate({ to: "/notes" })}
         />
-      </nav>
+      </NavList>
 
-      <nav className="mt-auto flex flex-col gap-1">
-        <SettingsNavItem rail={rail} />
-
-        <NavItem
-          icon={<IconHelpCircle className="size-4 shrink-0" />}
-          label="About"
-          rail={rail}
-          onClick={openAbout}
-        />
-        <NavItem
-          icon={<IconLock className="size-4 shrink-0" />}
-          label="Sign Out"
-          rail={rail}
-          onClick={async () => {
-            await lock();
-            navigate({ to: "/unlock" });
-          }}
-        />
-      </nav>
+      <UtilityNav rail={rail} />
     </aside>
   );
 }
 
-function SettingsNavItem({ rail }: { rail: boolean }) {
+function UtilityNav({ rail }: { rail: boolean }) {
+  const navigate = useNavigate();
   const { open } = useSettingsModal();
   return (
-    <NavItem
-      icon={<IconSettings className="size-4 shrink-0" />}
-      label="Settings"
-      rail={rail}
-      active={open}
-      onClick={() => openSettings()}
-    />
+    <NavList className="mt-auto" current={open ? 0 : -1}>
+      <NavItem
+        Icon={IconSettings}
+        label="Settings"
+        rail={rail}
+        active={open}
+        onClick={() => openSettings()}
+      />
+      <NavItem
+        Icon={IconHelpCircle}
+        label="About"
+        rail={rail}
+        onClick={openAbout}
+      />
+      <NavItem
+        Icon={IconLock}
+        label="Sign Out"
+        rail={rail}
+        onClick={async () => {
+          await lock();
+          navigate({ to: "/unlock" });
+        }}
+      />
+    </NavList>
+  );
+}
+
+function NavList({
+  current,
+  className,
+  children,
+}: {
+  current: number;
+  className: string;
+  children: ReactNode;
+}) {
+  const [animate] = useState(animationsEnabled);
+  const shift = { transform: `translateY(${Math.max(current, 0) * 40}px)` };
+  return (
+    <nav
+      data-reduced={animate ? undefined : ""}
+      className={`relative flex flex-col gap-1 ${className}`}
+    >
+      <span
+        aria-hidden
+        data-on={current >= 0}
+        className="sidebar-pill sidebar-item"
+        style={shift}
+      />
+      <span
+        aria-hidden
+        data-on={current >= 0}
+        className="sidebar-bar"
+        style={shift}
+      />
+      {children}
+    </nav>
   );
 }
 
@@ -306,7 +341,7 @@ function NotesNavItem({
       className={`flex flex-col ${animate ? "nav-reveal" : ""} ${state}`}
     >
       <NavItem
-        icon={<IconListDetails className="size-4 shrink-0" />}
+        Icon={IconListDetails}
         label="Notes"
         rail={rail}
         active={active}
@@ -317,13 +352,13 @@ function NotesNavItem({
 }
 
 function NavItem({
-  icon,
+  Icon,
   label,
   rail,
   active,
   onClick,
 }: {
-  icon: ReactNode;
+  Icon: Icon;
   label: string;
   rail: boolean;
   active?: boolean;
@@ -335,13 +370,16 @@ function NavItem({
       title={rail ? label : undefined}
       onClick={active ? undefined : onClick}
       aria-current={active ? "page" : undefined}
-      className={`sidebar-item flex items-center gap-3 overflow-hidden rounded-lg py-2 pl-4.5 pr-4.5 text-sm transition duration-150 ease-out active:scale-97 ${
+      className={`sidebar-item relative flex h-9 items-center gap-3 overflow-hidden rounded-lg pl-4.5 pr-4.5 text-sm transition duration-150 ease-out ${
         active
-          ? "bg-brand font-bold text-ink"
-          : "cursor-pointer font-medium text-white/55 hover:bg-white/5 hover:text-white/80"
+          ? "font-semibold text-white"
+          : "cursor-pointer font-medium text-white/55 hover:bg-white/5 hover:text-white/80 active:scale-97"
       }`}
     >
-      {icon}
+      <Icon
+        className={`size-4 shrink-0 transition-colors duration-150 ${active ? "text-brand" : ""}`}
+        stroke={active ? 2.25 : 1.75}
+      />
       <span className="sidebar-label whitespace-nowrap">{label}</span>
     </button>
   );
