@@ -1,0 +1,454 @@
+{
+  "components": {
+    "components-ui-select": {
+      "id": "components-ui-select",
+      "name": "Select",
+      "path": "./src/components/ui/select/select.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "Select",
+        "exportName": "Select",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/ui/select/select.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "children": {
+            "name": "children",
+            "required": false,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "open": {
+            "name": "open",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultOpen": {
+            "name": "defaultOpen",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": false,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "dir": {
+            "name": "dir",
+            "required": false,
+            "type": {
+              "name": "enum",
+              "raw": "\"ltr\" | \"rtl\"",
+              "value": [
+                {
+                  "value": "\"ltr\""
+                },
+                {
+                  "value": "\"rtl\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "name": {
+            "name": "name",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "autoComplete": {
+            "name": "autoComplete",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "disabled": {
+            "name": "disabled",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "required": {
+            "name": "required",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "form": {
+            "name": "form",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectSharedProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "SelectSharedProps",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "value": {
+            "name": "value",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "defaultValue": {
+            "name": "defaultValue",
+            "required": false,
+            "type": {
+              "name": "string"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          },
+          "onValueChange": {
+            "name": "onValueChange",
+            "required": false,
+            "type": {
+              "name": "(value: string) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "parent": {
+              "name": "SelectProps",
+              "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+            },
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "node_modules/.pnpm/@radix-ui+react-select@2.2.6_@types+react-dom@19.2.3_@types+react@19.2.16__@types+react_5ecf76b9fbf9ce78904f84e31aa7c402/node_modules/@radix-ui/react-select/dist/index.d.mts"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        },
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "defaultOpen": {
+          "name": "defaultOpen",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "dir": {
+          "name": "dir",
+          "description": "",
+          "type": {
+            "required": false,
+            "raw": "\"ltr\" | \"rtl\"",
+            "name": "enum",
+            "value": [
+              "ltr",
+              "rtl"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"ltr\" | \"rtl\""
+            }
+          }
+        },
+        "name": {
+          "name": "name",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "autoComplete": {
+          "name": "autoComplete",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "disabled": {
+          "name": "disabled",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "required": {
+          "name": "required",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "form": {
+          "name": "form",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "value": {
+          "name": "value",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "defaultValue": {
+          "name": "defaultValue",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "string"
+          },
+          "table": {
+            "type": {
+              "summary": "string"
+            }
+          }
+        },
+        "onValueChange": {
+          "name": "onValueChange",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "function",
+            "value": "(value: string) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(value: string) => void"
+            }
+          }
+        }
+      }
+    }
+  }
+}

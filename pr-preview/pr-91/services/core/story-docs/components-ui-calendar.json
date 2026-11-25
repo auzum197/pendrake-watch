@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-calendar": {
+      "id": "components-ui-calendar",
+      "name": "Calendar",
+      "path": "./src/components/ui/calendar/calendar.stories.tsx",
+      "import": "import { Calendar } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-calendar--default": {
+          "id": "components-ui-calendar--default",
+          "name": "Default",
+          "snippet": "const Default = () => <Calendar mode=\"single\" showOutsideDays />;"
+        }
+      }
+    }
+  }
+}

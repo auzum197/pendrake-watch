@@ -1,0 +1,17 @@
+{
+  "components": {
+    "components-ui-hover-card": {
+      "id": "components-ui-hover-card",
+      "name": "HoverCard",
+      "path": "./src/components/ui/hover-card/hover-card.stories.tsx",
+      "import": "import { Button, HoverCard, HoverCardContent, HoverCardTrigger } from 'pendrake-watch';",
+      "stories": {
+        "components-ui-hover-card--default": {
+          "id": "components-ui-hover-card--default",
+          "name": "Default",
+          "snippet": "const Default = () => (\n  <HoverCard openDelay={0}>\n    <HoverCardTrigger asChild>\n      <Button variant=\"link\">orchard</Button>\n    </HoverCardTrigger>\n    <HoverCardContent className=\"w-64 text-sm\">\n      Shielded pool. Outputs here are private and carry an optional memo.\n    </HoverCardContent>\n  </HoverCard>\n);"
+        }
+      }
+    }
+  }
+}

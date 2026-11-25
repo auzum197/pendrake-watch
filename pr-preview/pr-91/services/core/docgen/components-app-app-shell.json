@@ -1,0 +1,211 @@
+{
+  "components": {
+    "components-app-app-shell": {
+      "id": "components-app-app-shell",
+      "name": "AppShell",
+      "path": "./src/components/app/app-shell/app-shell.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "AppShell",
+        "exportName": "AppShell",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/app/app-shell/app-shell.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "active": {
+            "name": "active",
+            "required": true,
+            "type": {
+              "name": "enum",
+              "raw": "\"wallet\" | \"activity\" | \"notes\"",
+              "value": [
+                {
+                  "value": "\"wallet\""
+                },
+                {
+                  "value": "\"activity\""
+                },
+                {
+                  "value": "\"notes\""
+                }
+              ]
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          },
+          "wallet": {
+            "name": "wallet",
+            "required": true,
+            "type": {
+              "name": "WalletState | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          },
+          "sync": {
+            "name": "sync",
+            "required": true,
+            "type": {
+              "name": "SyncStatus | null"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          },
+          "switching": {
+            "name": "switching",
+            "required": false,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          },
+          "error": {
+            "name": "error",
+            "required": false,
+            "type": {
+              "name": "string | null | undefined"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          },
+          "children": {
+            "name": "children",
+            "required": true,
+            "type": {
+              "name": "ReactNode"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/app/app-shell/app-shell.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "active": {
+          "name": "active",
+          "description": "",
+          "type": {
+            "required": true,
+            "raw": "\"wallet\" | \"activity\" | \"notes\"",
+            "name": "enum",
+            "value": [
+              "wallet",
+              "activity",
+              "notes"
+            ]
+          },
+          "table": {
+            "type": {
+              "summary": "\"wallet\" | \"activity\" | \"notes\""
+            }
+          }
+        },
+        "wallet": {
+          "name": "wallet",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "WalletState | null"
+          },
+          "table": {
+            "type": {
+              "summary": "WalletState | null"
+            }
+          }
+        },
+        "sync": {
+          "name": "sync",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "SyncStatus | null"
+          },
+          "table": {
+            "type": {
+              "summary": "SyncStatus | null"
+            }
+          }
+        },
+        "switching": {
+          "name": "switching",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "error": {
+          "name": "error",
+          "description": "",
+          "type": {
+            "required": false,
+            "name": "other",
+            "value": "string | null | undefined"
+          },
+          "table": {
+            "type": {
+              "summary": "string | null | undefined"
+            }
+          }
+        },
+        "children": {
+          "name": "children",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "other",
+            "value": "ReactNode"
+          },
+          "table": {
+            "type": {
+              "summary": "ReactNode"
+            }
+          }
+        }
+      }
+    }
+  }
+}

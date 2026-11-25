@@ -1,0 +1,107 @@
+{
+  "components": {
+    "components-dashboard-fiat-consent-dialog": {
+      "id": "components-dashboard-fiat-consent-dialog",
+      "name": "FiatConsentDialog",
+      "path": "./src/components/dashboard/fiat-consent-dialog.stories.tsx",
+      "jsDocTags": {},
+      "reactComponentMeta": {
+        "displayName": "FiatConsentDialog",
+        "exportName": "FiatConsentDialog",
+        "filePath": "/home/runner/work/pendrake-watch/pendrake-watch/src/components/dashboard/fiat-consent-dialog.tsx",
+        "description": "",
+        "jsDocTags": {},
+        "props": {
+          "open": {
+            "name": "open",
+            "required": true,
+            "type": {
+              "name": "boolean"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/dashboard/fiat-consent-dialog.tsx"
+              }
+            ]
+          },
+          "onOpenChange": {
+            "name": "onOpenChange",
+            "required": true,
+            "type": {
+              "name": "(open: boolean) => void"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/dashboard/fiat-consent-dialog.tsx"
+              }
+            ]
+          },
+          "onAccept": {
+            "name": "onAccept",
+            "required": true,
+            "type": {
+              "name": "() => Promise<void>"
+            },
+            "description": "",
+            "defaultValue": null,
+            "declarations": [
+              {
+                "name": "TypeLiteral",
+                "fileName": "src/components/dashboard/fiat-consent-dialog.tsx"
+              }
+            ]
+          }
+        }
+      },
+      "argTypes": {
+        "open": {
+          "name": "open",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "boolean"
+          },
+          "table": {
+            "type": {
+              "summary": "boolean"
+            }
+          }
+        },
+        "onOpenChange": {
+          "name": "onOpenChange",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "(open: boolean) => void"
+          },
+          "table": {
+            "type": {
+              "summary": "(open: boolean) => void"
+            }
+          }
+        },
+        "onAccept": {
+          "name": "onAccept",
+          "description": "",
+          "type": {
+            "required": true,
+            "name": "function",
+            "value": "() => Promise<void>"
+          },
+          "table": {
+            "type": {
+              "summary": "() => Promise<void>"
+            }
+          }
+        }
+      }
+    }
+  }
+}
