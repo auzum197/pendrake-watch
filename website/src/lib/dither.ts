@@ -1,10 +1,10 @@
 export type Rgb = [number, number, number];
 
 export const SKY_STOPS: Rgb[] = [
-  [2, 8, 56],
-  [10, 26, 140],
-  [42, 79, 216],
-  [238, 243, 255],
+  [3, 14, 54],
+  [9, 44, 139],
+  [39, 104, 219],
+  [237, 245, 255],
 ];
 
 export const SKY_LEVELS = 6;
