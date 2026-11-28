@@ -54,7 +54,7 @@
 	font-weight: 500;
 	line-height: 1;
 	letter-spacing: -0.022em;
-	color: #020838;
+	color: #030e36;
 	text-decoration: none;
 	-webkit-tap-highlight-color: transparent;
 	filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 8px 20px rgba(6, 16, 70, 0.55));
@@ -82,7 +82,7 @@
 	position: absolute;
 	inset: 1px;
 	border-radius: inherit;
-	background: #020838;
+	background: #030e36;
 }
 .pearl-cta-base {
 	position: absolute;

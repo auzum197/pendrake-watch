@@ -3,7 +3,7 @@ import { useLayoutEffect } from "react";
 import "../src/styles/theme.css";
 import "../src/styles/home.css";
 
-const SKY = "#0a1a8c";
+const SKY = "#092c8b";
 
 const withMotion: Decorator = (Story, context) => {
   const on: boolean =
